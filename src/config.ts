@@ -94,8 +94,23 @@ export function port(): number {
   return Number.isFinite(n) && n > 0 ? n : 3000;
 }
 
-export function trustProxy(): boolean {
-  return schalter('TRUST_PROXY', true);
+/**
+ * Welchen Reverse-Proxys der Dienst `X-Forwarded-For` glaubt
+ * (`TRUST_PROXY`): IP-Adressen oder CIDR-Bereiche, durch Komma getrennt.
+ * Leer heißt **keinem** — dann ist `request.ip` der letzte Proxy, und alle
+ * Aufrufer teilen sich einen Rate-Limit-Eimer. Das ist lästig, aber kein Loch.
+ *
+ * Bewusst keine Zahl von Sprüngen, wie Todoteck sie mit `TRUST_PROXY_HOPS`
+ * hat: Fastify nimmt eine Zahl seit Version 5.12 nicht mehr an und vertraut
+ * dann still keinem Proxy (lib/request.js, `getTrustProxyFn`), weil eine
+ * Sprungzahl den unmittelbaren Absender nicht prüfen kann — ein direkter
+ * Aufrufer könnte sich genug Einträge ausdenken. Und bewusst nie `true`: Das
+ * glaubte jedem Aufrufer jede Adresse, und jedes Rate-Limit wäre umgehbar.
+ */
+export function trustProxy(): string[] | false {
+  const text = env('TRUST_PROXY') ?? '';
+  const liste = text.split(/[\s,;]+/).map(t => t.trim()).filter(t => /^[0-9a-fA-F:.]+(\/\d{1,3})?$/.test(t));
+  return liste.length > 0 ? liste : false;
 }
 
 export function dataDir(): string {
@@ -174,6 +189,14 @@ export function siteFeedbackMail(): string | null {
 
 export function apiToken(): string | null {
   return env('API_TOKEN') ?? null;
+}
+
+/**
+ * Pfad zu einer Todoteck-Datenbank (Kopie oder Backup), aus der beim Start
+ * einmalig übernommen wird — siehe `src/import/todoteck.ts`. Leer: kein Import.
+ */
+export function importTodoteckDb(): string | null {
+  return env('IMPORT_TODOTECK_DB') ?? null;
 }
 
 export function version(): { sha: string; builtAt: string } {

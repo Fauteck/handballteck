@@ -7,7 +7,8 @@
  */
 import { runMigrations } from './db/migrate';
 import { buildServer } from './server';
-import { port, syncIntervalMs, teamIds, publicUrl } from './config';
+import { port, syncIntervalMs, teamIds, publicUrl, importTodoteckDb } from './config';
+import { importTodoteck } from './import/todoteck';
 import { syncHandballTeams } from './lib/handballTeam';
 import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
 import { pushHandballSite } from './lib/handballSitePush';
@@ -43,6 +44,24 @@ async function main(): Promise<void> {
   const neu = runMigrations();
   const fastify = await buildServer();
   if (neu.length > 0) fastify.log.info(`Migrationen angewendet: ${neu.join(', ')}`);
+
+  // Übernahme aus Todoteck — einmalig, nur mit IMPORT_TODOTECK_DB, vor dem
+  // ersten Takt (sonst schickte der Bot womöglich, was dort schon raus war).
+  const importQuelle = importTodoteckDb();
+  if (importQuelle) {
+    try {
+      const r = importTodoteck(importQuelle);
+      if (r.status === 'schon_erledigt') fastify.log.info('Übernahme aus Todoteck lief schon — übersprungen. IMPORT_TODOTECK_DB kann aus dem Stack.');
+      else if (r.status === 'quelle_fehlt') fastify.log.error(`Übernahme aus Todoteck: ${importQuelle} nicht gefunden — nichts übernommen`);
+      else {
+        for (const t of r.tabellen) fastify.log.info(`Übernahme ${t.tabelle}: ${t.gelesen} gelesen, ${t.uebernommen} übernommen`);
+        for (const h of r.hinweise) fastify.log.warn(`Übernahme: ${h}`);
+        fastify.log.info(`Übernahme aus Todoteck fertig: ${r.zeilen} Zeilen, VAPID ${r.vapid}`);
+      }
+    } catch (err) {
+      fastify.log.error({ err: err instanceof Error ? err.message : String(err) }, 'Übernahme aus Todoteck gescheitert');
+    }
+  }
   await fastify.listen({ port: port(), host: '0.0.0.0' });
   fastify.log.info(`Handballteck läuft — ${teamIds().length} Mannschaft(en), erreichbar unter ${publicUrl()}`);
 

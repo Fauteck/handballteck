@@ -67,16 +67,26 @@ npm test
 ### Migrating from Todoteck
 
 The Telegram subscribers, the browser subscriptions and the sent-markers cannot be
-re-fetched. Copy them once from the Todoteck database (its tables are called
-`legacy_handball_*` after Todoteck's migration 0105, or still `handball_*` before it):
+re-fetched; they are copied once from the Todoteck database (its tables are called
+`legacy_handball_*` after Todoteck's migration 0105, or still `handball_*` before it).
+The copy also takes the VAPID key pair from Todoteck's `app_settings` — without it every
+browser subscription would silently fail with HTTP 403.
 
-```bash
-npm run import:todoteck -- /path/to/familytodo.db
-```
+In production the import runs **at startup**, because operations go through Portainer
+stacks, not `docker exec`:
 
-The import also copies the VAPID key pair from Todoteck's `app_settings`; without it every
-browser subscription would silently fail with HTTP 403. Configuration (team IDs, colours,
-bot token, microsite switches) does **not** migrate — it lives in `.env` now.
+1. Mount a Todoteck backup snapshot (or its database file) read-only into the container.
+2. Set `IMPORT_TODOTECK_DB` to its path inside the container and redeploy.
+3. Read the log (`Übernahme aus Todoteck fertig: …`), then remove the variable.
+
+The import runs **once**: a marker in `settings` makes every later start skip it, so a
+chat that sent `/stop` after the move is not re-added. The source is copied to
+`DATA_DIR` before reading (a WAL database cannot be opened on a read-only mount) and the
+copy is deleted afterwards. Locally, `npm run import:todoteck -- /path/to/familytodo.db`
+runs the same import without the marker.
+
+Configuration (team IDs, colours, bot token, microsite switches) does **not** migrate —
+it lives in the environment now.
 
 ## Reverse proxy setup
 
@@ -84,7 +94,7 @@ The microsite uses relative links only. To serve it under its own domain, proxy 
 domain root to this container and set `SITE_URL=https://woelfe.example.de` so that
 `webcal://`, the feed and the Open Graph preview point there. Team pages are then
 `https://woelfe.example.de/<team-id>/`; the domain root redirects to the first team.
-Keep `TRUST_PROXY=true` so rate limits see real client addresses.
+Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies in front of the service. Empty trusts none: all clients then share one rate-limit bucket — annoying, not a hole. Never trust all: a client could forge its address with `X-Forwarded-For` and bypass every limit. A hop count is not an option — Fastify ≥ 5.12 ignores it and trusts no proxy.
 
 ## Configuration
 
@@ -107,6 +117,8 @@ See `.env.example` for every variable with its default. The important ones:
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | generated | Web push keys; generated and stored on first use. |
 | `API_TOKEN` | – | Bearer token for `/api/*`; unset means 401 for all of it. |
 | `DATA_DIR` / `DATABASE_PATH` | `./data` | Where the SQLite file lives. |
+| `TRUST_PROXY` | – | Proxy addresses (IP/CIDR list) whose `X-Forwarded-For` is trusted. |
+| `IMPORT_TODOTECK_DB` | – | One-time import from a Todoteck database at startup. |
 
 ## API reference
 
@@ -156,12 +168,13 @@ src/
   config.ts           everything from the environment
   db/                 connection, drizzle schema, migration runner
   routes/             site.ts (microsite), telegram.ts (webhook, inline), api.ts (Todoteck)
+  import/             todoteck.ts (one-time import at startup)
   lib/                handballNetClient, handballTeam (fetch + DB), handballBot,
                       handballTableImage (SVG), handballSite (HTML), handballSitePush,
                       telegramClient, webPush, safeFetch, alerts, …
   __tests__/          vitest
 drizzle/              SQL migrations
-scripts/              build.js, import-todoteck.ts
+scripts/              build.js, import-todoteck.ts (local import)
 assets/fonts/         Barlow, Barlow Condensed (OFL)
 ```
 
