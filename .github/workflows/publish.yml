@@ -1,0 +1,109 @@
+name: Publish Docker Image
+
+# Der einzige Workflow dieses Repos, und er läuft ausschließlich von Hand
+# (`workflow_dispatch`) — kein `push`, kein `pull_request`, kein Zeitplan.
+# Dieselbe Regel wie in Todoteck: Ein Image entsteht nur, wenn es jemand
+# auslöst, und nur nach grünem `quality`-Job. Weitere Prüfungen kommen als
+# Schritt in diesen Job, nicht in eine zweite Workflow-Datei (CLAUDE.md).
+#
+# `gates_only = true` lässt nur die Prüfungen laufen, ohne zu veröffentlichen.
+on:
+  workflow_dispatch:
+    inputs:
+      gates_only:
+        description: 'Nur Typecheck und Tests, kein Image bauen und pushen'
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+concurrency:
+  group: publish-image
+  cancel-in-progress: false
+
+jobs:
+  quality:
+    name: Typecheck, Test, Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # Nur Laufzeit-Abhängigkeiten und nur ab „high": Was im Image landet,
+      # soll keine bekannte schwere Lücke tragen; Werkzeuge der Entwicklung
+      # (vitest, esbuild) kommen nicht ins Image.
+      - name: Dependency audit (runtime, high+)
+        run: npm audit --omit=dev --audit-level=high
+
+  build-and-push:
+    name: Build and Push Image
+    needs: quality
+    if: ${{ !inputs.gates_only }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/handballteck
+          tags: |
+            type=sha,prefix=,format=short
+            type=raw,value=latest
+
+      # Commit-SHA und Bauzeitpunkt wandern als Build-Args ins Image und
+      # erscheinen in /healthz und /api/health — und damit in der
+      # Dienste-Zeile von Todoteck.
+      - name: Versionsinfo berechnen
+        id: version
+        run: |
+          echo "sha_short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ steps.version.outputs.sha_short }}
+            BUILT_AT=${{ steps.version.outputs.built_at }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=min
