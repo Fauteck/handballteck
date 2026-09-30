@@ -190,6 +190,36 @@ describe('Tageslauf', () => {
     expect(apiAufrufe(f)).toBe(0);
   });
 
+  it('holt eine später eingetragene Mannschaft noch am selben Tag', async () => {
+    trageTeamEin();
+    quelle();
+    await mod.syncHandballTeams();
+
+    trageTeamEin(`${TEAM},75796`);
+    const f = quelle([spiel({ id: 600001, local: { id: 75796, name: 'HSG WÖLFE VOREIFEL II' } })]);
+    const r = await mod.syncHandballTeams();
+    expect(r.status).toBe('ok');
+    const teams = f.mock.calls.map(c => String(c[0])).filter(u => u.includes('/matches?')).map(u => new URL(u).searchParams.get('team_id'));
+    // Nur die neue Mannschaft und der Spielplan ihres Gegners — die erste ruht.
+    expect(teams).toEqual(['75796', '96300']);
+    expect(mod.handballOverview().teams.find(t => t.team_id === '75796')?.next_match).toBeTruthy();
+  });
+
+  it('holt die übrigen Mannschaften, wenn eine Team-ID nichts liefert', async () => {
+    trageTeamEin(`11111,${TEAM}`);
+    const sonst = quelle().getMockImplementation()!;
+    const f = vi.fn().mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes('/matches?') && u.includes('team_id=11111')) return Promise.resolve(antwort({ data: [] }));
+      return sonst(url);
+    });
+    global.fetch = f as unknown as typeof fetch;
+    const r = await mod.syncHandballTeams();
+    expect(r.status).toBe('auth_error');
+    expect(r.detail).toContain('11111');
+    expect(mod.handballOverview().teams.find(t => t.team_id === TEAM)?.next_match).toBeTruthy();
+  });
+
   it('fasst am Spieltag nach und holt nach dem Abpfiff die Tabelle einmal neu', async () => {
     trageTeamEin();
     // Der Tageslauf gilt als erledigt (Zeile von heute); das Spiel lief vor einer Stunde an.
