@@ -44,6 +44,7 @@ import {
   fetchMatchEventList,
   HANDBALL_LOGO_HOSTS,
   klassifiziereHandballFehler,
+  HandballEmptyError,
   type HandballMatch,
   type HandballStandingRow,
   type HandballLineupSide,
@@ -1004,15 +1005,29 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
   // `updated_at` ist UTC, `heute` der Berliner Tag — beide im selben
   // Kalender vergleichen, sonst läuft der Tageslauf zwischen 0 und 2 Uhr
   // bei jedem Takt erneut (die Lehre aus lib/dartsFavourites.ts).
-  const heuteSchonGelaufen = alleZeilen.some(r => berlinDay(new Date(r.updated_at)) === heute);
+  // Je Mannschaft: Eine später in TEAM_IDS ergänzte Mannschaft wartet sonst
+  // bis zum nächsten Tag, weil die erste heute schon Zeilen hat.
+  const heuteGeholt = new Set(alleZeilen.filter(r => berlinDay(new Date(r.updated_at)) === heute).map(r => r.team_id));
+  const faellig = force ? teams : teams.filter(t => !heuteGeholt.has(t));
+  // Eine leere Antwort betrifft nur ihre Mannschaft (falsche Team-ID) — die
+  // übrigen werden trotzdem geholt, der Fehler meldet sich danach.
+  let teamFehler: unknown = null;
 
   try {
     // --- Teil 1: der Tageslauf ----------------------------------------------
-    if (force || !heuteSchonGelaufen) {
+    if (faellig.length > 0) {
       const saison = await fetchActiveSeason();
       fetched++;
-      for (const teamId of teams) {
-        const spiele = await fetchTeamMatches(teamId, saison.id);
+      for (const teamId of faellig) {
+        let spiele: HandballMatch[];
+        try {
+          spiele = await fetchTeamMatches(teamId, saison.id);
+        } catch (err) {
+          if (!(err instanceof HandballEmptyError)) throw err;
+          fetched++;
+          teamFehler ??= err;
+          continue;
+        }
         fetched++;
         for (const m of spiele) upsertMatch(teamId, m);
         fetched += await tabellenHolen(teamId);
@@ -1057,6 +1072,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
       // Ein neu beendetes Spiel ändert die Tabelle — einmal nachholen, nicht je Tick.
       if (nachher > vorher) fetched += await tabellenHolen(teamId);
     }
+    if (teamFehler) throw teamFehler;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = klassifiziereHandballFehler(err);
