@@ -9,6 +9,12 @@
  * Dieser Bot schreibt nichts in Todoteck; er kennt nur Chats, die ihn
  * abonniert haben, und redet über öffentliche Daten von handball.net.
  *
+ * **Aufgeteilt** (Oktober 2026): Dieses Modul ist der Kern — Konfiguration,
+ * Abonnenten, Befehle, Sender, Inline-Modus und die Runden von sich aus. Die
+ * reinen Texte und Tastaturen stehen in `handballBotTexts.ts`, die SVG-Bilder
+ * in `handballBotImages.ts`; beide werden hier wieder ausgeführt, damit
+ * `import … from './handballBot'` überall weiter gilt.
+ *
  * Was er von sich aus schickt (je Spiel je einmal, Merker in
  * `handball_bot_sent`):
  * - **Ankündigung** eine Stunde vor dem Anwurf — Gegner, Halle, Anschrift.
@@ -59,32 +65,45 @@
 import crypto from 'node:crypto';
 import { eq, gte, isNull, lt } from 'drizzle-orm';
 import { db } from '../db';
-import { handball_bot_instance, handball_bot_subscriber, handball_bot_sent, handball_bot_feedback, handball_bot_delivery, handball_site_subscription } from '../db/schema';
 import {
-  sendMessage, sendPhotoBytes, sendAnimationBytes, sendDocument, setMessageReaction, answerCallbackQuery, setWebhook, setMyCommands, deleteMyCommands, getMe, escapeHtml, TelegramApiError,
-  sendChatAction, sendVenue, answerInlineQuery, sendMediaGroupPhotos, getWebhookInfo, type TelegramWebhookInfo, setMyDescription, setMyShortDescription, BOT_DESCRIPTION_MAX, BOT_SHORT_DESCRIPTION_MAX,
-  type TelegramUpdate, type TelegramInlineQuery, type BotCommand, type InlineKeyboard, type ChatAction, type InlineQueryResultPhoto, type AnswerInlineQueryOptions,
+  handball_bot_instance, handball_bot_subscriber, handball_bot_sent, handball_bot_feedback, handball_bot_delivery,
+  handball_site_subscription,
+} from '../db/schema';
+import {
+  sendMessage, sendPhotoBytes, sendAnimationBytes, sendDocument, setMessageReaction, answerCallbackQuery, setWebhook, setMyCommands,
+  deleteMyCommands, getMe, escapeHtml, TelegramApiError, sendChatAction, sendVenue, answerInlineQuery, sendMediaGroupPhotos,
+  getWebhookInfo, type TelegramWebhookInfo, setMyDescription, setMyShortDescription, BOT_DESCRIPTION_MAX, BOT_SHORT_DESCRIPTION_MAX,
+  type TelegramUpdate, type TelegramInlineQuery, type BotCommand, type InlineKeyboard, type ChatAction, type InlineQueryResultPhoto,
+  type AnswerInlineQueryOptions,
 } from './telegramClient';
+import { renderPng } from './handballTableImage';
 import {
-  renderStandingsSvg, renderRosterSvg, renderResultSvg, renderFixtureSvg, renderPositionChartSvg, renderScorersSvg, renderPlayerChartSvg, renderSeasonSummarySvg, renderPng, renderGif, logoAccentColor,
-  type ImageBrand,
-} from './handballTableImage';
-import {
-  fetchLineups, fetchMatchEvents, fetchMatchReport, fetchTeamMatches, sourceTimeToUtc,
-  type HandballLineup, type HandballLineupSide, type HandballMatch, type HandballMatchEvents,
+  fetchLineups, fetchMatchEvents, fetchMatchReport, fetchTeamMatches, sourceTimeToUtc, type HandballLineupSide, type HandballMatch,
 } from './handballNetClient';
 import {
-  handballOverview, rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, logoDataUri,
-  backlogFor, getHandballHealth, matchTopScorers, playerMatchLog, playerGames, positionHistory, tendenzReferenz, opponentFormFor,
-  readPalette, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei,
-  type HandballMatchView, type HandballTeamView, type HandballStandingsView, type HandballChangeView, type HandballPlayerStats, type HandballRosterName,
-  type HandballPlayerGame,
+  handballOverview, rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, backlogFor,
+  getHandballHealth, playerGames, opponentFormFor, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei, type HandballMatchView,
+  type HandballTeamView, type HandballStandingsView,
 } from './handballTeam';
 import {
-  botToken as configBotToken, inviteCode as configInviteCode, adminChatIds as configAdminChatIds,
-  botAutoDescription, publicUrl as configPublicUrl,
+  botToken as configBotToken, inviteCode as configInviteCode, adminChatIds as configAdminChatIds, botAutoDescription,
+  publicUrl as configPublicUrl,
 } from '../config';
 import { serviceLog } from './serviceLogger';
+import { spieltagsGrussFaellig, textSpieltag } from './handballBotTexts';
+import {
+  DATUM, ZEIT, ankuendigungTastatur, berichtTastatur, botIdentity, datum, eigeneSeite, endstandTastatur, erinnerungTastatur, gegnerId,
+  gegnerVon, halleAlsOrt, hilfeTastatur, icsKalender, knopf, modusTastatur, namenAus, routenTastatur, spielTastatur, spielerTastatur,
+  spielerTreffer, statusTastatur, tabellenBewegung, teamsTastatur, textAenderung, textAnkuendigung, textAufstellung, textBericht,
+  textEndstand, textErgebnisse, textHalbzeit, textKader, textLive, textRekorde, textSaison, textSpiele, textSpieler, textTabelle,
+  textTeams,
+} from './handballBotTexts';
+import {
+  type EndstandKarteExtras, bildKader, bildSaison, bildSpiel, bildSpieler, bildTabelle, bildTorjaeger, bildVerlauf, endstandAnimation,
+  endstandBild, saisonName, wettbewerbVon,
+} from './handballBotImages';
+export * from './handballBotTexts';
+export * from './handballBotImages';
 
 /** Wie lange nach dem Anwurf `/live` ein angesetztes Spiel noch als laufend nimmt. */
 const LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -239,7 +258,6 @@ export function buildHandballWebhookUrl(pathSecret: string): string {
   return `${publicUrl()}/telegram/webhook/${pathSecret}`;
 }
 
-let botUsername: string | null = null;
 
 /**
  * Wie die letzte Webhook-Registrierung in diesem Prozess ausging — für die
@@ -271,14 +289,14 @@ export async function registerHandballBot(): Promise<{ url: string; username: st
   await setMyCommands(token, BOT_COMMANDS);
   try {
     const ich = await getMe(token);
-    botUsername = ich.username ?? null;
+    botIdentity.username = ich.username ?? null;
     inlineAn = typeof ich.supports_inline_queries === 'boolean' ? ich.supports_inline_queries : null;
   } catch {
-    botUsername = null;
+    botIdentity.username = null;
     inlineAn = null;
   }
   await adminMenueSetzen(token);
-  return { url, username: botUsername };
+  return { url, username: botIdentity.username };
 }
 
 /** Ob der Inline-Modus im BotFather eingeschaltet ist (`getMe`) — null: in diesem Prozess nicht erfragt. */
@@ -358,7 +376,7 @@ export async function registerHandballBotAtBoot(): Promise<
 }
 
 export function getHandballBotUsername(): string | null {
-  return botUsername;
+  return botIdentity.username;
 }
 
 /**
@@ -373,9 +391,9 @@ export function getHandballBotUsername(): string | null {
  * (docs/handball-verfolgung.md §7.2), und wer sie hat, darf auch den Bot.
  */
 export function handballBotLink(): string | null {
-  if (!botUsername) return null;
+  if (!botIdentity.username) return null;
   const code = inviteCode();
-  return `https://t.me/${botUsername}${code ? `?start=${encodeURIComponent(code)}` : ''}`;
+  return `https://t.me/${botIdentity.username}${code ? `?start=${encodeURIComponent(code)}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,772 +488,12 @@ function istAbonnent(chatId: string): boolean {
   return !!db.select().from(handball_bot_subscriber).where(eq(handball_bot_subscriber.chat_id, chatId)).get();
 }
 
-// ---------------------------------------------------------------------------
-// Texte — exportiert, weil sie das sind, was man testet
-// ---------------------------------------------------------------------------
-
-const DATUM = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'Europe/Berlin' });
-const DATUM_MIT_JAHR = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' });
-/** Ab diesem Abstand steht das Jahr dabei — in der Winterpause wird „Sa., 12.09." sonst mehrdeutig. */
-const JAHR_AB_MS = 60 * 24 * 60 * 60 * 1000;
-
-function datum(d: Date, now: Date): string {
-  return Math.abs(d.getTime() - now.getTime()) > JAHR_AB_MS ? DATUM_MIT_JAHR.format(d) : DATUM.format(d);
-}
-const DATUM_LANG = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', timeZone: 'Europe/Berlin' });
-const ZEIT = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
-
-function gegnerVon(m: HandballMatchView): string {
-  return m.is_home ? m.away_name : m.home_name;
-}
-
-function wo(m: HandballMatchView): string {
-  return m.round ? `${m.competition_name}, ${m.round}. Spieltag` : m.competition_name;
-}
-
-function heuteOderDatum(start: Date, now: Date): string {
-  const tag = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-  return tag(start) === tag(now) ? 'heute' : `am ${DATUM_LANG.format(start)}`;
-}
-
-function gegnerId(m: HandballMatchView): string {
-  return m.is_home ? m.away_id : m.home_id;
-}
-
-/**
- * Zwei Zeilen zum Gegner, aus dem, was schon da ist: seine Zeile in der
- * gespeicherten Tabelle, das Hinspiel aus dem eigenen Spielplan — und, wenn
- * der Aufrufer sie mitbringt, seine letzten drei Ergebnisse (ein Abruf seines
- * Spielplans, eine Stunde vor dem Anwurf; nach bestem Bemühen).
- */
-export function gegnerSteckbrief(team: HandballTeamView, m: HandballMatchView, gegnerSpiele: HandballMatch[] | null = null): string[] {
-  const gid = gegnerId(m);
-  const zeilen: string[] = [];
-  const zeile = team.standings.flatMap(s => s.rows).find(r => r.teamId === gid);
-  if (zeile) {
-    zeilen.push(`Gegner: ${zeile.position}. Platz · ${zeile.won}-${zeile.drawn}-${zeile.lost} · ${zeile.goalsFor}:${zeile.goalsAgainst} Tore · ${zeile.points} Pkt`);
-  }
-  if (gegnerSpiele) {
-    const letzte = gegnerSpiele
-      .filter(g => g.status === 'finished' && g.scoreHome !== null && g.scoreAway !== null && g.id !== m.match_id)
-      .sort((a, b) => b.startsAt.localeCompare(a.startsAt))
-      .slice(0, 3)
-      .map(g => {
-        const heim = g.homeId === gid;
-        const eigene = heim ? g.scoreHome! : g.scoreAway!;
-        const andere = heim ? g.scoreAway! : g.scoreHome!;
-        const zeichen = eigene > andere ? '✅' : eigene < andere ? '❌' : '➖';
-        return `${zeichen} ${eigene}:${andere} ${heim ? 'gegen' : 'bei'} ${escapeHtml(heim ? g.awayName : g.homeName)}`;
-      });
-    if (letzte.length > 0) zeilen.push(`Zuletzt: ${letzte.join(' · ')}`);
-  }
-  // Direktvergleich: alle bisherigen Duelle der Saison, nicht nur das Hinspiel.
-  const duelle = team.matches.filter(h => h.match_id !== m.match_id && h.status === 'finished' && gegnerId(h) === gid
-    && h.score_home !== null && h.score_away !== null);
-  if (duelle.length > 0) {
-    const eintrag = duelle.map(h => {
-      const eigene = h.is_home ? h.score_home : h.score_away;
-      const andere = h.is_home ? h.score_away : h.score_home;
-      return `${eigene}:${andere} (${h.is_home ? 'H' : 'A'})`;
-    });
-    zeilen.push(`${duelle.length === 1 ? 'Hinspiel' : 'Bisher'}: ${eintrag.join(' · ')}`);
-  }
-  return zeilen;
-}
-
-export function textAnkuendigung(team: HandballTeamView, m: HandballMatchView, now = new Date(), gegnerSpiele: HandballMatch[] | null = null): string {
-  const start = new Date(m.starts_at);
-  const zeilen = [
-    `🤾 <b>${escapeHtml(team.name)}</b> spielt ${heuteOderDatum(start, now)} um ${ZEIT.format(start)} Uhr`,
-    m.is_home ? `gegen ${escapeHtml(gegnerVon(m))} (Heimspiel)` : `bei ${escapeHtml(gegnerVon(m))}`,
-  ];
-  const halle = [m.venue_name, m.venue_address].filter(Boolean).join(', ');
-  if (halle) zeilen.push(`📍 ${escapeHtml(halle)}`);
-  zeilen.push(escapeHtml(wo(m)));
-  const steckbrief = gegnerSteckbrief(team, m, gegnerSpiele);
-  if (steckbrief.length > 0) zeilen.push('', ...steckbrief);
-  return zeilen.join('\n');
-}
-
-/**
- * Der Routen-Knopf unter der Ankündigung: Koordinaten der Halle, wie die
- * Quelle sie führt; ohne Koordinaten die Anschrift als Suchbegriff. Zwei
- * Ziele, weil nicht jedes Telefon Google Maps hat.
- */
-export function routenTastatur(m: HandballMatchView): InlineKeyboard | null {
-  if (m.venue_lat !== null && m.venue_lon !== null) {
-    const ziel = `${m.venue_lat},${m.venue_lon}`;
-    return { inline_keyboard: [[
-      { text: '🗺 Route (Google Maps)', url: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ziel)}` },
-      { text: 'OpenStreetMap', url: `https://www.openstreetmap.org/?mlat=${m.venue_lat}&mlon=${m.venue_lon}#map=16/${m.venue_lat}/${m.venue_lon}` },
-    ]] };
-  }
-  if (m.venue_address) {
-    return { inline_keyboard: [[
-      { text: '🗺 Route (Google Maps)', url: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(m.venue_address)}` },
-    ]] };
-  }
-  return null;
-}
-
-/** Die Halle eines Spiels als Ort — nur mit Koordinaten; Telegram verlangt Name und Anschrift. */
-export function halleAlsOrt(m: HandballMatchView): HandballVenue | null {
-  if (m.venue_lat === null || m.venue_lon === null) return null;
-  const title = m.venue_name || 'Halle';
-  return { latitude: m.venue_lat, longitude: m.venue_lon, title, address: m.venue_address || title };
-}
-
-/**
- * Der Knopf „📍 Halle" — schickt die Halle als Ort, den das Telefon in der
- * Karten-App öffnet. Mit der Spiel-ID, solange sie in Telegrams 64 Byte
- * passt, sonst ohne (dann gilt das nächste Spiel).
- */
-function halleKnopf(m: HandballMatchView): { text: string; callback_data: string } {
-  const mitId = knopf('📍 Halle', 'halle', m.match_id);
-  return Buffer.byteLength(mitId.callback_data, 'utf8') <= 64 && /^[\w.:-]+$/.test(m.match_id) ? mitId : knopf('📍 Halle', 'halle');
-}
-
-/** Unter der Karte zum nächsten Spiel: Route und, mit Koordinaten, der Halle-Knopf. */
-export function spielTastatur(m: HandballMatchView): InlineKeyboard | null {
-  const route = routenTastatur(m)?.inline_keyboard ?? [];
-  const zeilen = halleAlsOrt(m) ? [...route, [halleKnopf(m)]] : route;
-  return zeilen.length > 0 ? { inline_keyboard: zeilen } : null;
-}
-
-export function textHalbzeit(team: HandballTeamView, m: HandballMatchView, halbzeit: { home: number; away: number }): string {
-  const eigene = m.is_home ? halbzeit.home : halbzeit.away;
-  const andere = m.is_home ? halbzeit.away : halbzeit.home;
-  const lage = eigene > andere ? 'vorn' : eigene < andere ? 'hinten' : 'gleichauf';
-  return `⏸ <b>Halbzeit: ${escapeHtml(team.name)} ${eigene}:${andere}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} — ${lage}`;
-}
-
-export function textAenderung(team: HandballTeamView, m: HandballMatchView, c: HandballChangeView): string {
-  const alt = new Date(c.old_starts_at);
-  const neu = new Date(c.new_starts_at);
-  const wann = (d: Date) => `${DATUM_LANG.format(d)}, ${ZEIT.format(d)} Uhr`;
-  const paarung = `${escapeHtml(team.name)} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}`;
-  if (c.kind === 'cancelled') {
-    return `❌ <b>Spiel abgesetzt:</b> ${paarung}\nwar angesetzt für ${wann(alt)} · ${escapeHtml(wo(m))}`;
-  }
-  if (c.kind === 'postponed') {
-    return `📅 <b>Spiel verschoben:</b> ${paarung}\nwar angesetzt für ${wann(alt)} — ein neuer Termin steht noch nicht fest.`;
-  }
-  const halle = [m.venue_name, m.venue_address].filter(Boolean).join(', ');
-  return [
-    `📅 <b>Spiel verlegt:</b> ${paarung}`,
-    `ursprünglich ${wann(alt)}`,
-    `jetzt <b>${wann(neu)}</b>${halle ? ` · 📍 ${escapeHtml(halle)}` : ''}`,
-  ].join('\n');
-}
-
-/**
- * Der Spielbericht der Quelle als Nachricht: eigene Kopfzeile mit Endstand,
- * die „## "-Zwischenüberschriften fett, am Ende der Spielberichtsbogen.
- */
-/**
- * handball.net schreibt den Bericht in Titelschreibung („Hsg Wölfe Voreifel",
- * „Tv Palmersheim Ii", „Peter-weber-halle Kuchenheim", „B-jugend -
- * Kreisoberliga Mb"). Die richtigen Schreibweisen stehen in der Datenbank:
- * Mannschaften, Halle, Wettbewerb, Altersklasse — hier werden sie
- * unabhängig von Groß/Klein wiederhergestellt. Was die Datenbank nicht
- * kennt, bleibt, wie es kommt.
- */
-export function berichtGlaetten(text: string, m: HandballMatchView, championship: string | null): string {
-  const namen = [m.home_name, m.away_name, m.venue_name, m.competition_name, championship]
-    .filter((n): n is string => !!n && n.length >= 4)
-    .sort((a, b) => b.length - a.length);
-  let out = text;
-  for (const n of namen) {
-    const muster = new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'), 'gi');
-    out = out.replace(muster, n);
-  }
-  return out;
-}
-
-/**
- * Der Bericht in zwei Längen: `kurz` ist Kopfzeile plus der letzte Abschnitt
- * (bei handball.net „Fazit") — am Telefon eine Nachricht statt vier
- * Bildschirme; der Knopf „Ganzer Bericht" (`cmd:bericht:voll`) holt den Rest.
- */
-export function textBericht(team: HandballTeamView, m: HandballMatchView, laenge: 'kurz' | 'voll' = 'voll'): string {
-  const eigene = m.is_home ? m.score_home : m.score_away;
-  const andere = m.is_home ? m.score_away : m.score_home;
-  const kopf = `📰 <b>Spielbericht: ${escapeHtml(team.name)} ${eigene ?? '–'}:${andere ?? '–'} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}</b>`;
-  const roh = berichtGlaetten(m.report_text ?? '', m, team.championship_name).split(/\n\n+/).map(a => a.trim()).filter(Boolean);
-  let auswahl = roh;
-  if (laenge === 'kurz') {
-    // Der letzte Abschnitt ab seiner Überschrift; ohne Überschriften der letzte Absatz.
-    const letzteUeberschrift = roh.map((a, i) => (a.startsWith('## ') ? i : -1)).filter(i => i >= 0).pop();
-    auswahl = letzteUeberschrift !== undefined ? roh.slice(letzteUeberschrift) : roh.slice(-1);
-    if (auswahl.length < roh.length) auswahl = [...auswahl, `<i>Gekürzt — der ganze Bericht über den Knopf.</i>`];
-  }
-  const absaetze = auswahl.map(a => (a.startsWith('<i>') ? a : a.startsWith('## ') ? `<b>${escapeHtml(a.slice(3))}</b>` : escapeHtml(a)));
-  const fuss = m.report_url ? `<a href="${escapeHtml(m.report_url)}">Spielberichtsbogen (PDF)</a>` : `<a href="${m.url}">Spielseite auf handball.net</a>`;
-  return [kopf, ...absaetze, fuss].join('\n\n');
-}
-
-/** Knöpfe unter dem gekürzten Bericht: erst „Ganzer Bericht", dann die übliche Leiste. */
-export function berichtTastatur(m: HandballMatchView, gekuerzt: boolean): InlineKeyboard {
-  const rest = endstandTastatur(m).inline_keyboard;
-  return { inline_keyboard: gekuerzt ? [[knopf('📄 Ganzer Bericht', 'bericht', 'voll')], ...rest] : rest };
-}
-
-function bilanzZeile(p: HandballPlayerStats): string {
-  const teile = [`${p.goals} Tore in ${p.games} Spiel${p.games === 1 ? '' : 'en'}`];
-  if (p.sevenMeterAttempts > 0) teile.push(`${p.sevenMeterGoals}/${p.sevenMeterAttempts} Siebenmeter`);
-  if (p.twoMinutes > 0) teile.push(`${p.twoMinutes}× 2 min`);
-  return teile.join(' · ');
-}
-
-/** Auf wen ein Name passt: Teil des Namens, Groß/Klein egal, oder die Nummer. */
-export function spielerTreffer(stats: HandballPlayerStats[], suche: string): HandballPlayerStats[] {
-  const q = suche.trim().toLowerCase();
-  if (!q) return [];
-  return stats.filter(p => p.playerId === suche.trim() || p.name.toLowerCase().includes(q) || String(p.number) === q);
-}
-
-/**
- * `/spieler` ohne Namen: die Torschützenliste der Saison. Mit Namen: die
- * Bilanz derer, auf die der Name passt (Teil des Namens, Groß/Klein egal) —
- * bei mehreren Treffern alle, kurz.
- */
-export function textSpieler(team: HandballTeamView, stats: HandballPlayerStats[], suche: string): string {
-  if (stats.length === 0) {
-    return `<b>${escapeHtml(team.name)}</b>\nNoch keine Aufstellung gespeichert — sie kommt mit dem nächsten Spiel (und der Altbestand mit dem nächsten Tageslauf).`;
-  }
-  const q = suche.trim().toLowerCase();
-  const schnitt = (p: HandballPlayerStats) => (p.goals / Math.max(1, p.games)).toFixed(1).replace('.', ',');
-  if (!q) {
-    const zeilen = stats.filter(p => p.goals > 0).slice(0, 10)
-      .map((p, i) => `${i + 1}. ${escapeHtml(p.name)} — ${p.goals} (${p.games} Sp., ${schnitt(p)}/Spiel)`);
-    return [
-      `<b>${escapeHtml(team.name)}</b> — Torschützen der Saison`,
-      ...(zeilen.length > 0 ? zeilen : ['Noch kein Tor gespeichert.']),
-      'Für einen Spieler: /spieler Name',
-    ].join('\n');
-  }
-  const treffer = spielerTreffer(stats, suche);
-  if (treffer.length === 0) return `Zu „${escapeHtml(suche.trim())}" habe ich keinen Spieler mit Einsatz in dieser Saison.`;
-  if (treffer.length === 1) {
-    const p = treffer[0];
-    const verlauf = playerMatchLog(team.team_id, p.playerId);
-    const zeilen = [`<b>${escapeHtml(p.name)}</b> (Nr. ${p.number}) — ${escapeHtml(team.name)}`, `${bilanzZeile(p)} · ${schnitt(p)} pro Spiel`];
-    if (verlauf.length > 1) zeilen.push(`Tore je Spiel: ${verlauf.map(v => String(v.goals)).join(' · ')}`);
-    const bestes = [...verlauf].sort((a, b) => b.goals - a.goals)[0];
-    if (bestes && bestes.goals > 0 && verlauf.length > 1) zeilen.push(`Bestes Spiel: ${bestes.goals} ${bestes.isHome ? 'gegen' : 'bei'} ${escapeHtml(bestes.opponent)}`);
-    return zeilen.join('\n');
-  }
-  return treffer.slice(0, 8).map(p => `<b>${escapeHtml(p.name)}</b> — ${bilanzZeile(p)}`).join('\n');
-}
-
-function eigeneSeite(lineup: HandballLineup, teamId: string): HandballLineupSide | null {
-  if (lineup.home.teamId === teamId) return lineup.home;
-  if (lineup.away.teamId === teamId) return lineup.away;
-  return null;
-}
-
-/** Name aus dem Kader über die ID; ohne Treffer bleibt die Nummer. */
-export type NameLookup = (playerId: string) => string | null;
-
-function namenAus(teamId: string): NameLookup {
-  const kader = new Map(rosterFor(teamId).map(r => [r.playerId, r.name]));
-  return id => kader.get(id) ?? null;
-}
-
-function spieler(p: { playerId: string; number: number; isGoalkeeper: boolean; isCaptain: boolean }, name: NameLookup): string {
-  const zusatz = [p.isGoalkeeper ? 'TW' : null, p.isCaptain ? 'C' : null].filter(Boolean).join(', ');
-  const n = name(p.playerId);
-  const kern = n ? `${p.number} ${escapeHtml(n)}` : `Nr. ${p.number}`;
-  return zusatz ? `${kern} (${zusatz})` : kern;
-}
-
-export function textAufstellung(team: HandballTeamView, m: HandballMatchView, seite: HandballLineupSide, name: NameLookup = namenAus(team.team_id)): string {
-  const ohneNamen = seite.players.filter(p => !name(p.playerId)).length;
-  const zeilen = [
-    `📋 <b>Aufstellung ${escapeHtml(team.name)}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}`,
-    seite.players.map(p => spieler(p, name)).join('\n'),
-    `${seite.players.length} Spieler${seite.staffCount > 0 ? `, ${seite.staffCount} an der Bank` : ''}`,
-  ];
-  if (ohneNamen === seite.players.length) {
-    zeilen.push('Namen fehlen noch — der Kader wird beim nächsten Tageslauf geholt.');
-  }
-  return zeilen.join('\n');
-}
-
-/**
- * „Weiter Platz 1, Vorsprung 3 Punkte" / „von 3 auf 2 geklettert" — aus dem
- * Vergleich der gespeicherten Tabelle mit ihrem Stand davor. Null, solange
- * es keinen Vorstand gibt oder die Tabelle sich nicht bewegt hat.
- */
-export function tabellenBewegung(team: HandballTeamView): string | null {
-  const s = team.standings[0];
-  if (!s) return null;
-  // Gemessen am Stand nach dem vorigen Spieltag (`tendenzReferenz`); der
-  // letzte geänderte Abruf bleibt der Rückfall für Tabellen ohne Verlauf.
-  const referenz = tendenzReferenz(s) ?? s.previous_rows;
-  if (!referenz) return null;
-  const jetzt = s.rows.find(r => r.teamId === team.team_id);
-  const davor = referenz.find(r => r.teamId === team.team_id);
-  if (!jetzt || !davor || jetzt.played === davor.played) return null;
-  const teile: string[] = [];
-  if (jetzt.position === davor.position) teile.push(`weiter Platz ${jetzt.position}`);
-  else if (jetzt.position < davor.position) teile.push(`von Platz ${davor.position} auf ${jetzt.position} geklettert`);
-  else teile.push(`von Platz ${davor.position} auf ${jetzt.position} gerutscht`);
-  if (jetzt.position === 1) {
-    const zweiter = s.rows.find(r => r.position === 2);
-    if (zweiter) teile.push(`Vorsprung ${jetzt.points - zweiter.points} Punkt${jetzt.points - zweiter.points === 1 ? '' : 'e'}`);
-  } else {
-    const erster = s.rows.find(r => r.position === 1);
-    if (erster) teile.push(`${erster.points - jetzt.points} Punkt${erster.points - jetzt.points === 1 ? '' : 'e'} hinter Platz 1`);
-  }
-  const text = teile.join(', ');
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-export interface EndstandExtras {
-  /** Bilanz der Spieler **vor** diesem Spiel — für „erstes Saisontor". */
-  vorher?: HandballPlayerStats[] | null;
-  bewegung?: string | null;
-}
-
-export function textEndstand(team: HandballTeamView, m: HandballMatchView, seite: HandballLineupSide | null, name: NameLookup = namenAus(team.team_id), extras: EndstandExtras = {}): string {
-  const eigene = m.is_home ? m.score_home : m.score_away;
-  const gegner = m.is_home ? m.score_away : m.score_home;
-  const stand = `${eigene ?? '–'}:${gegner ?? '–'}`;
-  const ohneStand = eigene === null || gegner === null;
-  const ausgang = ohneStand ? 'Spiel gewertet' : m.won === true ? 'gewinnt' : m.won === false ? 'verliert' : 'spielt unentschieden';
-  const zusatz = m.rated ? ' (gewertet)' : '';
-  const zeilen = [
-    ohneStand
-      ? `🏁 <b>${escapeHtml(team.name)}: Spiel gewertet</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}`
-      : `🏁 <b>${escapeHtml(team.name)} ${ausgang} ${stand}${zusatz}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}`,
-  ];
-  if (m.rated) {
-    zeilen.push(ohneStand
-      ? `handball.net hat das Spiel nicht zu Ende gemeldet („${escapeHtml(m.status_name || m.status)}"), die Tabelle zählt es aber — das Ergebnis steht dort noch nicht.`
-      : `handball.net führt das Spiel als „${escapeHtml(m.status_name || m.status)}", aber mit Ergebnis — Abbruch oder Nichtantreten, von der Spielleitung gewertet.`);
-  }
-  if (m.halftime_home !== null && m.halftime_away !== null) {
-    zeilen.push(`Halbzeit ${m.is_home ? m.halftime_home : m.halftime_away}:${m.is_home ? m.halftime_away : m.halftime_home}`);
-  }
-  const schuetzen = (seite?.players ?? []).filter(p => p.goals > 0).sort((a, b) => b.goals - a.goals || a.number - b.number);
-  const wer = (p: { playerId: string; number: number }) => { const n = name(p.playerId); return n ? escapeHtml(n) : `Nr. ${p.number}`; };
-  if (schuetzen.length > 0) {
-    zeilen.push(`Tore: ${schuetzen.map(p => `${wer(p)} ${p.goals}${p.sevenMeterGoals > 0 ? ` (${p.sevenMeterGoals}× 7m)` : ''}`).join(', ')}`);
-    // Spieler des Spiels: der beste Torschütze, mit Siebenmeter-Quote, wenn er welche hatte.
-    const bester = schuetzen[0];
-    const quote = bester.sevenMeterAttempts > 0 ? `, ${bester.sevenMeterGoals}/${bester.sevenMeterAttempts} Siebenmeter` : '';
-    zeilen.push(`⭐ Spieler des Spiels: ${wer(bester)} mit ${bester.goals} Tor${bester.goals === 1 ? '' : 'en'}${quote}`);
-    if (extras.vorher && extras.vorher.length > 0) {
-      const bisherige = new Map(extras.vorher.map(p => [p.playerId, p.goals]));
-      const erste = schuetzen.filter(p => (bisherige.get(p.playerId) ?? 0) === 0 && bisherige.has(p.playerId)).map(wer);
-      if (erste.length > 0) zeilen.push(`🎯 Erstes Saisontor: ${erste.join(', ')}`);
-    }
-  }
-  if (extras.bewegung) zeilen.push(`📊 ${escapeHtml(extras.bewegung)}`);
-  zeilen.push(escapeHtml(wo(m)));
-  zeilen.push(`<a href="${m.url}">Spielseite auf handball.net</a>`);
-  return zeilen.join('\n');
-}
-
-/**
- * Die Saisonbilanz aus dem gespeicherten Spielplan — Siege, Tore, Heim gegen
- * Auswärts, höchster Sieg, längste Serie. Nichts davon braucht einen Abruf.
- */
-/** Ein Bot-Text ohne Telegram-HTML — für den Cockpit-Tab, der Zeilen statt Markup zeigt. */
-export function alsKlartext(html: string): string[] {
-  return html.replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
-    .split('\n').map(z => z.trimEnd()).filter(z => z.length > 0);
-}
-
-/** 27,7 statt 27.7 — Zahlen im Bot sind deutsch. */
-function komma(n: number): string {
-  return n.toFixed(1).replace('.', ',');
-}
-
-/**
- * `/rekorde`: die Bestmarken der Saison aus dem gespeicherten Spielplan und
- * den aufgehobenen Aufstellungen. Was `/saison` schon nennt (höchster Sieg,
- * längste Serie), steht hier noch einmal — die Liste soll für sich stehen.
- */
-export function textRekorde(team: HandballTeamView, spiele: HandballPlayerGame[], now = new Date()): string {
-  const gespielt = team.matches.filter(m => m.status === 'finished' && m.score_home !== null && m.score_away !== null);
-  if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Spiel in dieser Saison — Rekorde gibt es ab dem ersten.`;
-  const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
-  const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
-  const wann = (m: HandballMatchView) => `${eigene(m)}:${andere(m)} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} (${datum(new Date(m.starts_at), now)})`;
-  const nach = (f: (m: HandballMatchView) => number, richtung: 1 | -1) => [...gespielt].sort((a, b) => richtung * (f(b) - f(a)))[0];
-  const zeilen = [`🏆 <b>${escapeHtml(team.name)}</b> — Rekorde der Saison`];
-  const sieg = nach(m => eigene(m) - andere(m), 1);
-  if (eigene(sieg) > andere(sieg)) zeilen.push(`Höchster Sieg: ${wann(sieg)}`);
-  const niederlage = nach(m => eigene(m) - andere(m), -1);
-  if (eigene(niederlage) < andere(niederlage)) zeilen.push(`Höchste Niederlage: ${wann(niederlage)}`);
-  zeilen.push(`Meiste eigene Tore: ${wann(nach(eigene, 1))}`);
-  zeilen.push(`Wenigste Gegentore: ${wann(nach(andere, -1))}`);
-  const torreich = nach(m => eigene(m) + andere(m), 1);
-  zeilen.push(`Torreichstes Spiel: ${wann(torreich)} — ${eigene(torreich) + andere(torreich)} Tore`);
-  const mitHz = gespielt.filter(m => m.halftime_home !== null && m.halftime_away !== null);
-  if (mitHz.length > 0) {
-    const eigeneHz = (m: HandballMatchView) => (m.is_home ? m.halftime_home! : m.halftime_away!);
-    const andereHz = (m: HandballMatchView) => (m.is_home ? m.halftime_away! : m.halftime_home!);
-    const beste = [...mitHz].sort((a, b) => (eigeneHz(b) - andereHz(b)) - (eigeneHz(a) - andereHz(a)))[0];
-    zeilen.push(`Beste erste Halbzeit: ${eigeneHz(beste)}:${andereHz(beste)} ${beste.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(beste))}`);
-  }
-  const bestes = spiele[0];
-  if (bestes && bestes.goals > 0) {
-    const m = gespielt.find(x => x.match_id === bestes.matchId);
-    zeilen.push(`Meiste Tore eines Spielers: ${bestes.goals} — ${escapeHtml(bestes.name)}${m ? ` ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}` : ''}`);
-  }
-  const siebener = [...spiele].sort((a, b) => b.sevenMeterGoals - a.sevenMeterGoals)[0];
-  if (siebener && siebener.sevenMeterGoals > 1) zeilen.push(`Meiste Siebenmeter-Tore in einem Spiel: ${siebener.sevenMeterGoals} — ${escapeHtml(siebener.name)}`);
-  let serie = 0; let laengste = 0; let ohneNiederlage = 0; let laengsteOhne = 0;
-  for (const m of gespielt) {
-    if (m.won === true) { serie++; laengste = Math.max(laengste, serie); } else serie = 0;
-    if (m.won !== false) { ohneNiederlage++; laengsteOhne = Math.max(laengsteOhne, ohneNiederlage); } else ohneNiederlage = 0;
-  }
-  const laeuft = serie === laengste && laengste > 0;
-  if (laengste > 1) zeilen.push(`Längste Siegesserie: ${laengste} Spiele${laeuft ? ' — läuft noch' : ''}`);
-  if (laengsteOhne > laengste && laengsteOhne > 1) zeilen.push(`Längste Serie ohne Niederlage: ${laengsteOhne} Spiele${ohneNiederlage === laengsteOhne ? ' — läuft noch' : ''}`);
-  return zeilen.join('\n');
-}
-
-export function textSaison(team: HandballTeamView): string {
-  const gespielt = team.matches.filter(m => m.status === 'finished' && m.score_home !== null && m.score_away !== null);
-  if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Spiel in dieser Saison.`;
-  const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
-  const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
-  const bilanz = (spiele: HandballMatchView[]) => {
-    const s = spiele.filter(m => m.won === true).length;
-    const n = spiele.filter(m => m.won === false).length;
-    const u = spiele.length - s - n;
-    const tf = spiele.reduce((a, m) => a + eigene(m), 0);
-    const ta = spiele.reduce((a, m) => a + andere(m), 0);
-    return { s, u, n, tf, ta };
-  };
-  const alle = bilanz(gespielt);
-  const heim = bilanz(gespielt.filter(m => m.is_home));
-  const ausw = bilanz(gespielt.filter(m => !m.is_home));
-  const punkte = alle.s * 2 + alle.u;
-  const bester = [...gespielt].sort((a, b) => (eigene(b) - andere(b)) - (eigene(a) - andere(a)))[0];
-  let serie = 0; let laengste = 0; let laufend = 0;
-  for (const m of gespielt) {
-    if (m.won === true) { serie++; laengste = Math.max(laengste, serie); } else serie = 0;
-  }
-  for (let i = gespielt.length - 1; i >= 0 && gespielt[i].won === true; i--) laufend++;
-  const zeilen = [
-    `<b>${escapeHtml(team.name)}</b> — Saison ${team.championship_name ? escapeHtml(team.championship_name) : ''}`.trimEnd(),
-    `${gespielt.length} Spiel${gespielt.length === 1 ? '' : 'e'}: ${alle.s} Siege, ${alle.u} Unentschieden, ${alle.n} Niederlagen · ${punkte}:${gespielt.length * 2 - punkte} Punkte`,
-    `Tore ${alle.tf}:${alle.ta} · Schnitt ${komma(alle.tf / gespielt.length)} : ${komma(alle.ta / gespielt.length)}`,
-    `Heim ${heim.s}-${heim.u}-${heim.n} (${heim.tf}:${heim.ta}) · Auswärts ${ausw.s}-${ausw.u}-${ausw.n} (${ausw.tf}:${ausw.ta})`,
-  ];
-  // Der Schnitt je Halbzeit — nur aus Spielen, deren Halbzeitstand der Bot gesehen hat.
-  const mitHz = gespielt.filter(m => m.halftime_home !== null && m.halftime_away !== null);
-  if (mitHz.length > 0) {
-    const eigeneHz = (m: HandballMatchView) => (m.is_home ? m.halftime_home! : m.halftime_away!);
-    const andereHz = (m: HandballMatchView) => (m.is_home ? m.halftime_away! : m.halftime_home!);
-    const n = mitHz.length;
-    const hz1 = { f: mitHz.reduce((a, m) => a + eigeneHz(m), 0) / n, a: mitHz.reduce((a, m) => a + andereHz(m), 0) / n };
-    const hz2 = { f: mitHz.reduce((a, m) => a + eigene(m) - eigeneHz(m), 0) / n, a: mitHz.reduce((a, m) => a + andere(m) - andereHz(m), 0) / n };
-    const basis = n < gespielt.length ? ` (${n} Spiel${n === 1 ? '' : 'e'} mit Halbzeitstand)` : '';
-    zeilen.push(`1. Halbzeit Ø ${komma(hz1.f)}:${komma(hz1.a)} · 2. Halbzeit Ø ${komma(hz2.f)}:${komma(hz2.a)}${basis}`);
-  }
-  if (bester && eigene(bester) > andere(bester)) {
-    zeilen.push(`Höchster Sieg: ${eigene(bester)}:${andere(bester)} ${bester.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(bester))}`);
-  }
-  if (laengste > 1) zeilen.push(`Längste Siegesserie: ${laengste} Spiele${laufend === laengste ? ' — und sie läuft noch' : ''}`);
-  else if (laufend === 1) zeilen.push('Das letzte Spiel gewonnen.');
-  const zeile = team.standings.flatMap(s => s.rows).find(r => r.teamId === team.team_id);
-  if (zeile) zeilen.push(`Tabelle: Platz ${zeile.position} mit ${zeile.points} Punkten`);
-  return zeilen.join('\n');
-}
-
-/** `/live`: der Zwischenstand aus der Torfolge, mit Minute und Halbzeit. */
-export function textLive(team: HandballTeamView, m: HandballMatchView, events: HandballMatchEvents): string {
-  if (!events.latest || events.count === 0) {
-    return `⏱ ${escapeHtml(team.name)} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} — die Torfolge ist noch leer, der Zeitnehmer hat noch nichts eingetragen.`;
-  }
-  const eigene = m.is_home ? events.latest.home : events.latest.away;
-  const andere = m.is_home ? events.latest.away : events.latest.home;
-  const minute = events.latestMinute ? `${events.latestMinute.split(':')[0].replace(/^0/, '')}. Minute` : null;
-  const wo = [minute, events.latestBlock].filter(Boolean).join(', ');
-  return `⏱ <b>${escapeHtml(team.name)} ${eigene}:${andere}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}${wo ? ` — ${escapeHtml(wo)}` : ''}${events.halftime ? `\nHalbzeit ${m.is_home ? events.halftime.home : events.halftime.away}:${m.is_home ? events.halftime.away : events.halftime.home}` : ''}`;
-}
-
-/**
- * Der Spielplan als Kalenderdatei (RFC 5545), zum Import ins Telefon. Eine
- * neue Datei bei jedem `/kalender`; wer sie nach einer Verlegung erneut
- * holt, bekommt dieselben UIDs mit höherer SEQUENCE, und der Kalender
- * ersetzt den Termin statt ihn zu verdoppeln.
- */
-export function icsKalender(team: HandballTeamView): string {
-  const stamp = (iso: string) => iso.replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const esc = (t: string) => t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-  const zeilen = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Handballteck//Bot//DE', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${esc(team.name)}`];
-  for (const m of team.matches) {
-    if (m.status === 'cancelled') continue;
-    const start = new Date(m.starts_at);
-    const ende = new Date(start.getTime() + 75 * 60 * 1000);
-    const titel = `${m.home_name} – ${m.away_name}${m.status === 'postponed' ? ' (verschoben)' : ''}`;
-    const ort = [m.venue_name, m.venue_address].filter(Boolean).join(', ');
-    zeilen.push(
-      'BEGIN:VEVENT',
-      `UID:handball-${m.match_id}@todoteck`,
-      `DTSTAMP:${stamp(new Date().toISOString())}`,
-      `DTSTART:${stamp(start.toISOString())}`,
-      `DTEND:${stamp(ende.toISOString())}`,
-      `SUMMARY:${esc(titel)}`,
-      ...(ort ? [`LOCATION:${esc(ort)}`] : []),
-      `DESCRIPTION:${esc(`${wo(m)}\n${m.url}`)}`,
-      `SEQUENCE:${Math.floor(Date.now() / 60000) % 100000}`,
-      'END:VEVENT',
-    );
-  }
-  zeilen.push('END:VCALENDAR');
-  return zeilen.join('\r\n') + '\r\n';
-}
-
-export function textSpiele(teams: HandballTeamView[], now = new Date()): string {
-  const bloecke = teams.map(team => {
-    const kommend = team.matches
-      .filter(m => (m.status === 'scheduled' || m.status === 'live') && Date.parse(m.starts_at) > now.getTime() - 3 * 60 * 60 * 1000)
-      .slice(0, 5);
-    if (kommend.length === 0) return `<b>${escapeHtml(team.name)}</b>\nKein Spiel angesetzt.`;
-    const zeilen = kommend.map(m => {
-      const start = new Date(m.starts_at);
-      const ort = m.is_home ? 'H' : 'A';
-      const halle = m.venue_name ? ` · ${escapeHtml(m.venue_name)}` : '';
-      return `${datum(start, now)} ${ZEIT.format(start)} ${ort} ${escapeHtml(gegnerVon(m))}${halle}${m.status === 'live' ? ' · läuft' : ''}`;
-    });
-    return `<b>${escapeHtml(team.name)}</b> — nächste Spiele\n${zeilen.join('\n')}`;
-  });
-  return bloecke.join('\n\n');
-}
-
-export function textErgebnisse(teams: HandballTeamView[], now = new Date(), schuetzen: (teamId: string) => Map<string, { name: string; goals: number }> = matchTopScorers): string {
-  const bloecke = teams.map(team => {
-    const gespielt = team.matches.filter(m => m.status === 'finished').slice(-5).reverse();
-    if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Ergebnis in dieser Saison.`;
-    const beste = schuetzen(team.team_id);
-    const zeilen = gespielt.map(m => {
-      const eigene = m.is_home ? m.score_home : m.score_away;
-      const gegner = m.is_home ? m.score_away : m.score_home;
-      const zeichen = m.won === true ? '✅' : m.won === false ? '❌' : '➖';
-      const hz = m.halftime_home !== null && m.halftime_away !== null
-        ? ` (HZ ${m.is_home ? m.halftime_home : m.halftime_away}:${m.is_home ? m.halftime_away : m.halftime_home})` : '';
-      const b = beste.get(m.match_id);
-      const bester = b ? ` · ${escapeHtml(b.name.split(' ').slice(-1)[0])} ${b.goals}` : '';
-      return `${zeichen} ${datum(new Date(m.starts_at), now)} ${m.is_home ? 'H' : 'A'} ${escapeHtml(gegnerVon(m))} ${eigene ?? '–'}:${gegner ?? '–'}${hz}${bester}`;
-    });
-    return `<b>${escapeHtml(team.name)}</b> — letzte Ergebnisse\n${zeilen.join('\n')}`;
-  });
-  return bloecke.join('\n\n');
-}
-
-export function textTabelle(team: HandballTeamView, standings: HandballStandingsView): string {
-  const breite = Math.min(22, Math.max(8, ...standings.rows.map(r => r.teamName.length)));
-  const meiste = Math.max(0, ...standings.rows.map(r => r.played));
-  const zeilen = standings.rows.map(r => {
-    const name = r.teamName.length > breite ? `${r.teamName.slice(0, breite - 1)}…` : r.teamName.padEnd(breite);
-    const marker = r.teamId === team.team_id ? '▶' : ' ';
-    const nachzuholen = r.played < meiste ? '*' : ' ';
-    return `${marker}${String(r.position).padStart(2)} ${name} ${String(r.played).padStart(2)}${nachzuholen}${`${r.goalsFor}:${r.goalsAgainst}`.padStart(7)} ${String(r.points).padStart(3)}`;
-  });
-  const spieltag = standings.rows[0]?.round;
-  const teile = [
-    `<b>${escapeHtml(standings.competition_name)}</b>${spieltag ? ` — nach dem ${spieltag}. Spieltag` : ''}`,
-    `<pre>${escapeHtml([` #  ${'Mannschaft'.padEnd(breite)} Sp    Tore Pkt`, ...zeilen].join('\n'))}</pre>`,
-  ];
-  if (standings.rows.some(r => r.played < meiste)) teile.push('* weniger Spiele als die Spitze — der Spieltag ist noch nicht komplett.');
-  return teile.join('\n');
-}
-
-export function textKader(team: HandballTeamView): string {
-  const kader = rosterFor(team.team_id);
-  if (kader.length === 0) return `<b>${escapeHtml(team.name)}</b>\nKader noch nicht geholt — der nächste Tageslauf bringt ihn.`;
-  const spieler = kader.filter(r => r.role === 'player');
-  const stab = kader.filter(r => r.role === 'staff');
-  const zeilen = spieler.map(r => `${r.number !== null ? String(r.number).padStart(2, ' ') : ' –'}${r.numberSource === 'lineup' ? '*' : ' '} ${escapeHtml(r.name)}${r.goalkeeper ? ' (TW)' : ''}`);
-  const teile = [`<b>${escapeHtml(team.name)}</b> — Kader (${spieler.length} Spieler)`, `<pre>${zeilen.join('\n')}</pre>`];
-  if (stab.length > 0) teile.push(`Trainer: ${stab.map(r => escapeHtml(r.name)).join(', ')}`);
-  teile.push(kaderFussnote(spieler));
-  return teile.join('\n');
-}
-
-function kaderFussnote(spieler: HandballRosterName[]): string {
-  const ausAufstellung = spieler.filter(r => r.numberSource === 'lineup').length;
-  return ausAufstellung > 0
-    ? `Nummern laut Kader — am Spieltag werden sie manchmal getauscht. ${ausAufstellung === 1 ? 'Eine Nummer (*)' : `${ausAufstellung} Nummern (*)`} fehlen im Kader und stammen aus der letzten Aufstellung.`
-    : 'Nummern laut Kader — am Spieltag werden sie manchmal getauscht.';
-}
 
 /**
  * Die Tabelle als Bild — am Telefon bleibt sie so eine Tabelle, als
  * Festbreitentext bricht Telegram sie um. Schlägt Rendern oder Senden fehl,
  * kommt die Textfassung; ein Befehl ohne Antwort wäre der schlechtere Fall.
  */
-/** Fußzeile aller Bilder: Stand und der Bot, der sie schickt. */
-function bildMarke(now = new Date()): ImageBrand {
-  return { botHandle: botUsername ? `@${botUsername}` : null, stand: `${DATUM.format(now)} ${ZEIT.format(now)}` };
-}
-
-/** Der Wettbewerb einer Mannschaft — aus der Tabelle, sonst aus dem ersten Spiel. */
-function wettbewerbVon(team: HandballTeamView): string | null {
-  return team.standings[0]?.competition_name ?? team.matches[0]?.competition_name ?? null;
-}
-
-// ---------------------------------------------------------------------------
-// Die Bilder — je eines für Bot und Cockpit-Tab (routes/handball.ts).
-// Jede Funktion liefert das SVG oder null, wenn es nichts zu zeichnen gibt;
-// die Sender fallen dann auf den Text zurück, die Route antwortet 404.
-// ---------------------------------------------------------------------------
-
-/** Die Tabelle einer Staffel, mit Tendenz, nächstem Gegner und Logos. */
-export function bildTabelle(team: HandballTeamView, s: HandballStandingsView): string {
-  const spieltag = s.rows[0]?.round;
-  return renderStandingsSvg({
-    competitionName: s.competition_name,
-    ownTeamId: team.team_id,
-    rows: s.rows,
-    subtitle: [team.championship_name, spieltag ? `nach dem ${spieltag}. Spieltag` : null].filter(Boolean).join(' · ') || null,
-    logo: logoDataUri(team.team_id),
-    previousRows: tendenzReferenz(s),
-    nextOpponentId: team.next_match && team.next_match.status !== 'live' ? gegnerId(team.next_match) : null,
-    logos: Object.fromEntries(s.rows.map(r => [r.teamId, logoDataUri(r.teamId)])),
-    brand: bildMarke(),
-    palette: readPalette(),
-  });
-}
-
-/** Der Kader als Mannschaftsbogen — null ohne gespeicherten Kader. */
-export function bildKader(team: HandballTeamView): string | null {
-  const kader = rosterFor(team.team_id);
-  const spieler = kader.filter(r => r.role === 'player');
-  if (spieler.length === 0) return null;
-  const ausAufstellung = spieler.filter(r => r.numberSource === 'lineup').length;
-  return renderRosterSvg({
-    teamName: team.name,
-    subtitle: [team.championship_name, wettbewerbVon(team)].filter(Boolean).join(' · ') || null,
-    players: spieler.map(r => ({ number: r.number, name: r.name, numberFromLineup: r.numberSource === 'lineup', goalkeeper: r.goalkeeper, captain: r.captain })),
-    staff: kader.filter(r => r.role === 'staff').map(r => r.name),
-    footnote: ausAufstellung > 0 ? 'Dunkles Trikot: Nummer aus der letzten Aufstellung' : null,
-    logo: logoDataUri(team.team_id),
-    brand: bildMarke(),
-    palette: readPalette(),
-  });
-}
-
-/** Das nächste Spiel als Karte, mit der Farbe des Gegners aus seinem Logo. */
-export async function bildSpiel(m: HandballMatchView): Promise<string> {
-  const start = new Date(m.starts_at);
-  return renderFixtureSvg({
-    competitionName: m.competition_name,
-    subtitle: m.round ? `${m.round}. Spieltag` : null,
-    homeName: m.home_name, awayName: m.away_name, ownIsHome: m.is_home,
-    dateLabel: DATUM_KURZ.format(start), timeLabel: `${ZEIT.format(start)} Uhr`,
-    venue: [m.venue_name, m.venue_address].filter(Boolean).join(', ') || null,
-    homeLogo: logoDataUri(m.home_id), awayLogo: logoDataUri(m.away_id),
-    opponentColor: await logoAccentColor(logoDataUri(gegnerId(m))),
-    brand: bildMarke(),
-    palette: readPalette(),
-  });
-}
-
-/** Der Tabellenplatz-Verlauf — null, solange die Historie keine zwei Spieltage hat. */
-export function bildVerlauf(team: HandballTeamView): string | null {
-  const staffel = team.standings.find(s => positionHistory(s, team.team_id).length >= 2);
-  if (!staffel) return null;
-  const punkte = positionHistory(staffel, team.team_id);
-  const spieltage = team.matches.filter(m => m.competition_name === staffel.competition_name && m.status !== 'cancelled').length;
-  return renderPositionChartSvg({
-    teamName: team.name,
-    subtitle: [staffel.competition_name, 'Tabellenplatz je Spieltag'].join(' · '),
-    logo: logoDataUri(team.team_id),
-    points: punkte,
-    totalRounds: spieltage > 0 ? spieltage : null,
-    nextOpponent: team.next_match ? { name: gegnerVon(team.next_match), logo: logoDataUri(gegnerId(team.next_match)) } : null,
-    brand: bildMarke(),
-    palette: readPalette(),
-  });
-}
-
-/** Die Torjäger als Balken — null ohne ein gespeichertes Tor. */
-export function bildTorjaeger(team: HandballTeamView, stats: HandballPlayerStats[] = playerStats(team.team_id)): string | null {
-  const mitTor = stats.filter(p => p.goals > 0);
-  if (mitTor.length === 0) return null;
-  const tore = stats.reduce((a, p) => a + p.goals, 0);
-  const spiele = new Set(playerGames(team.team_id).map(g => g.matchId)).size;
-  return renderScorersSvg({
-    teamName: team.name,
-    subtitle: [team.championship_name, `Torjäger der Saison · ${tore} Tore in ${spiele} Spiel${spiele === 1 ? '' : 'en'}`].filter(Boolean).join(' · '),
-    logo: logoDataUri(team.team_id),
-    scorers: mitTor.map(p => ({ name: p.name, number: p.number, goals: p.goals, sevenMeterGoals: p.sevenMeterGoals, games: p.games })),
-    totalGoals: tore,
-    brand: bildMarke(),
-    palette: readPalette(),
-  });
-}
-
-/** Die Tore je Spiel eines Spielers — null unter zwei Spielen. */
-export function bildSpieler(team: HandballTeamView, p: HandballPlayerStats, now = new Date()): string | null {
-  const verlauf = playerMatchLog(team.team_id, p.playerId);
-  if (verlauf.length < 2) return null;
-  return renderPlayerChartSvg({
-    name: p.name,
-    number: p.number,
-    teamName: team.name,
-    subtitle: [team.name, 'Tore je Spiel'].join(' · '),
-    logo: logoDataUri(team.team_id),
-    games: verlauf.map(v => ({ opponent: v.opponent, dateLabel: v.startsAt ? datum(new Date(v.startsAt), now) : '', goals: v.goals, isHome: v.isHome, logo: v.opponentId ? logoDataUri(v.opponentId) : null })),
-    brand: bildMarke(),
-    palette: readPalette(),
-  });
-}
-
-/** „2026/27" aus der Saison-ID der Quelle („2627") — sonst null. */
-function saisonName(seasonId: number | undefined): string | null {
-  const s = String(seasonId ?? '');
-  return /^\d{4}$/.test(s) ? `20${s.slice(0, 2)}/${s.slice(2)}` : null;
-}
-
-/**
- * Die Saisonabschluss-Karte: Endplatz, Bilanz, Tore, Torschützenkönig,
- * höchster Sieg, Verlauf klein. Null, solange kein Spiel gewertet ist —
- * `/saisonkarte` zeigt sie auch mitten in der Saison, dann ausdrücklich als
- * **Zwischenbilanz** (ohne „Endplatz" und ohne Meister-Pille): Nach drei
- * Spieltagen auf Platz 1 stand bis zum 27.09.2026 „Meister" auf der Karte.
- */
-export function bildSaison(team: HandballTeamView, now = new Date()): string | null {
-  const gespielt = team.matches.filter(m => (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null);
-  if (gespielt.length === 0) return null;
-  const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
-  const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
-  const s = gespielt.filter(m => m.won === true).length;
-  const n = gespielt.filter(m => m.won === false).length;
-  const u = gespielt.length - s - n;
-  const staffel = team.standings[0];
-  const zeile = staffel?.rows.find(r => r.teamId === team.team_id);
-  const bester = [...gespielt].sort((a, b) => (eigene(b) - andere(b)) - (eigene(a) - andere(a)))[0];
-  const koenig = playerStats(team.team_id).find(p => p.goals > 0);
-  return renderSeasonSummarySvg({
-    teamName: team.name,
-    competitionName: staffel?.competition_name ?? wettbewerbVon(team) ?? '',
-    subtitle: [team.championship_name, saisonName(team.matches[0]?.season_id) ? `Saison ${saisonName(team.matches[0]?.season_id)}` : null].filter(Boolean).join(' · ') || null,
-    position: zeile?.position ?? null,
-    teams: staffel ? staffel.rows.length : null,
-    won: s, drawn: u, lost: n,
-    goalsFor: gespielt.reduce((a, m) => a + eigene(m), 0),
-    goalsAgainst: gespielt.reduce((a, m) => a + andere(m), 0),
-    points: zeile?.points ?? s * 2 + u,
-    topScorer: koenig ? `${koenig.name} · ${koenig.goals} Tor${koenig.goals === 1 ? '' : 'e'}` : null,
-    biggestWin: bester && eigene(bester) > andere(bester) ? `${eigene(bester)}:${andere(bester)} ${bester.is_home ? 'gegen' : 'bei'} ${gegnerVon(bester)}` : null,
-    positions: staffel ? positionHistory(staffel, team.team_id).map(p => ({ round: p.round, position: p.position })) : null,
-    logo: logoDataUri(team.team_id),
-    brand: bildMarke(),
-    palette: readPalette(),
-    zwischenstand: !saisonVorbei(team, now).vorbei,
-  });
-}
 
 async function tabelleSenden(chatId: string, team: HandballTeamView, s: HandballStandingsView, deps: HandballBotDeps): Promise<void> {
   if (deps.sendPhoto) {
@@ -1274,7 +532,6 @@ async function kaderSenden(chatId: string, team: HandballTeamView, deps: Handbal
   await deps.send(chatId, textKader(team));
 }
 
-const DATUM_KURZ = new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' });
 
 /**
  * Ein Bild mit dem Text als Unterschrift — passt er nicht in eine (1024
@@ -1353,169 +610,6 @@ async function spielerSenden(chatId: string, team: HandballTeamView, suche: stri
 
 /** Telegrams Obergrenze für eine Bildunterschrift, mit Luft für Entities. */
 const CAPTION_MAX_CHARS = 1000;
-
-/**
- * Der Endstand als Karte (seit 27.09.2026): die Logos beider Vereine, der
- * Stand groß, Halbzeit, Sieg/Niederlage als Pille — im Vereins-CD. Keine
- * Torschützen im Bild, die stehen im Text darunter: Der bisherige Text wird
- * zur Bildunterschrift; ist er zu lang
- * für eine (1024 Zeichen), geht er als zweite Nachricht hinterher. Ohne
- * Bild-Weg oder bei einem Fehlschlag kommt der Text allein.
- */
-export interface EndstandKarteExtras {
-  /** „Eskil Lieck · 12 Tore" */
-  playerOfMatch?: string | null;
-}
-
-/** Wie viele Siege in Folge, das genannte Spiel eingeschlossen — null unter zwei. */
-function siegesserie(team: HandballTeamView, m: HandballMatchView): string | null {
-  const gespielt = team.matches.filter(x => x.status === 'finished' && x.score_home !== null && x.score_away !== null);
-  const bis = gespielt.findIndex(x => x.match_id === m.match_id);
-  if (bis < 0 || gespielt[bis].won !== true) return null;
-  let n = 0;
-  for (let i = bis; i >= 0 && gespielt[i].won === true; i--) n++;
-  return n >= 2 ? `${n}. Sieg in Folge` : null;
-}
-
-/** „Platz 1 · 6:0 Punkte" aus der gespeicherten Tabelle. */
-function tabellenStand(team: HandballTeamView): string | null {
-  const zeile = team.standings.flatMap(s => s.rows).find(r => r.teamId === team.team_id);
-  return zeile ? `Platz ${zeile.position} · ${zeile.points}:${zeile.played * 2 - zeile.points} Punkte` : null;
-}
-
-function endstandEingabe(team: HandballTeamView, m: HandballMatchView, extras: EndstandKarteExtras, opponentColor: string | null) {
-  const start = new Date(m.starts_at);
-  return {
-    competitionName: m.competition_name,
-    subtitle: m.round ? `${m.round}. Spieltag` : null,
-    dateLabel: `${DATUM_KURZ.format(start)} · ${ZEIT.format(start)}`,
-    homeName: m.home_name,
-    awayName: m.away_name,
-    scoreHome: m.score_home ?? 0,
-    scoreAway: m.score_away ?? 0,
-    halftime: m.halftime_home !== null && m.halftime_away !== null ? { home: m.halftime_home, away: m.halftime_away } : null,
-    ownIsHome: m.is_home,
-    outcome: (m.won === true ? 'win' : m.won === false ? 'loss' : 'draw') as 'win' | 'loss' | 'draw',
-    venue: m.venue_name,
-    homeLogo: logoDataUri(m.home_id),
-    awayLogo: logoDataUri(m.away_id),
-    opponentColor,
-    playerOfMatch: extras.playerOfMatch ?? null,
-    streak: siegesserie(team, m),
-    standing: tabellenStand(team),
-    brand: bildMarke(),
-    palette: readPalette(),
-  };
-}
-
-/** Die Endstand-Karte als SVG — fertig, ohne Animation. */
-export async function endstandBild(team: HandballTeamView, m: HandballMatchView, extras: EndstandKarteExtras = {}): Promise<string> {
-  return renderResultSvg(endstandEingabe(team, m, extras, await logoAccentColor(logoDataUri(gegnerId(m)))));
-}
-
-/** Bilder je Animationsschritt der Endstand-Karte; das GIF baut `renderGif` daraus. */
-const ENDSTAND_FRAMES = 12;
-const ENDSTAND_FRAME_MS = 90;
-const ENDSTAND_HOLD_MS = 3500;
-
-/**
- * Die Endstand-Karte als Animation: die Zahlen zählen hoch (schnell am
- * Anfang, langsam am Ende), Halbzeit, Ausgang und Glanz erscheinen mit dem
- * letzten Bild, das dann stehen bleibt. Ein Sieg, den man beim Aufzählen
- * kommen sieht, ist ein anderes Gefühl als eine Zahl.
- */
-export async function endstandAnimation(team: HandballTeamView, m: HandballMatchView, extras: EndstandKarteExtras = {}): Promise<Buffer> {
-  const eingabe = endstandEingabe(team, m, extras, await logoAccentColor(logoDataUri(gegnerId(m))));
-  const frames: string[] = [];
-  for (let i = 0; i <= ENDSTAND_FRAMES; i++) {
-    const t = i / ENDSTAND_FRAMES;
-    const ease = 1 - Math.pow(1 - t, 3);
-    frames.push(renderResultSvg({
-      ...eingabe,
-      frame: { scoreHome: Math.round(eingabe.scoreHome * ease), scoreAway: Math.round(eingabe.scoreAway * ease), final: i === ENDSTAND_FRAMES },
-    }));
-  }
-  return renderGif(frames, { delayMs: ENDSTAND_FRAME_MS, holdLastMs: ENDSTAND_HOLD_MS });
-}
-
-/** Ein Knopf, der einen Befehl auslöst — Callback `cmd:<befehl>[:<argument>]`, unter 64 Byte. */
-function knopf(text: string, befehl: string, argument?: string): { text: string; callback_data: string } {
-  return { text, callback_data: `cmd:${befehl}${argument ? `:${argument}` : ''}` };
-}
-
-export function hilfeTastatur(): InlineKeyboard {
-  return { inline_keyboard: [
-    [knopf('📅 Spiele', 'spiele'), knopf('📊 Tabelle', 'tabelle'), knopf('👥 Kader', 'kader')],
-    [knopf('🥇 Torjäger', 'torjaeger'), knopf('📈 Saison', 'saison'), knopf('🏆 Rekorde', 'rekorde')],
-    [knopf('📰 Bericht', 'bericht'), knopf('🗓 Kalender', 'kalender'), knopf('⏰ Erinnerung', 'erinnerung')],
-    [knopf('🔔 Modus', 'modus')],
-  ] };
-}
-
-/**
- * Unter den Torjägern ein Knopf je Spieler mit Einsatz — Nummer und
- * Nachname, drei je Zeile —, der seine Bilanz holt. Der Rückruf trägt die
- * Spieler-ID, nicht den Namen: kurz genug für Telegrams 64 Byte, und
- * eindeutig, auch wenn zwei Spieler denselben Nachnamen tragen.
- */
-export function spielerTastatur(stats: HandballPlayerStats[]): InlineKeyboard | null {
-  const spieler = stats.filter(p => p.games > 0).sort((a, b) => a.number - b.number);
-  if (spieler.length === 0) return null;
-  const knoepfe = spieler.map(p => knopf(`${p.number} ${p.name.split(' ').slice(-1)[0]}`, 'spieler', p.playerId));
-  const zeilen: InlineKeyboard['inline_keyboard'] = [];
-  for (let i = 0; i < knoepfe.length; i += 3) zeilen.push(knoepfe.slice(i, i + 3));
-  return { inline_keyboard: zeilen };
-}
-
-/** Unter `/status`: ein Knopf je offener Rückmeldung, der sie als erledigt markiert. */
-export function statusTastatur(offene: Array<{ id: number }>): InlineKeyboard | null {
-  if (offene.length === 0) return null;
-  return { inline_keyboard: offene.slice(0, 5).map(f => [knopf(`✓ #${f.id} erledigt`, 'erledigt', String(f.id))]) };
-}
-
-/** Was ein Chat verfolgt — die Antwort auf `/teams`. */
-export function textTeams(alle: HandballTeamView[], gewaehlt: string[] | null): string {
-  const eigene = gewaehlt ? alle.filter(t => gewaehlt.includes(t.team_id)) : alle;
-  const namen = eigene.map(t => t.label).join(', ');
-  if (alle.length > 1 && eigene.length === 0) {
-    return 'Welche Mannschaften willst du verfolgen? Tipp sie unten an — gern mehrere. Bis du eine gewählt hast, schicke ich dir nichts.';
-  }
-  return alle.length > 1
-    ? `Du verfolgst ${gewaehlt ? '' : '<b>alle</b> Mannschaften: '}<b>${escapeHtml(namen)}</b>.\nAntippen wählt eine Mannschaft an oder ab; Meldungen und Befehle gelten dann nur für die gewählten.`
-    : `Es gibt nur eine Mannschaft: <b>${escapeHtml(namen)}</b>.`;
-}
-
-/** Ein Knopf je Mannschaft mit Haken, dazu „alle" — die Auswahl je Chat. */
-export function teamsTastatur(alle: HandballTeamView[], gewaehlt: string[] | null): InlineKeyboard | null {
-  if (alle.length < 2) return null;
-  const zeilen = alle.map(t => [{ text: `${!gewaehlt || gewaehlt.includes(t.team_id) ? '✅' : '▫️'} ${t.label}`, callback_data: `cmd:teams:${t.team_id}` }]);
-  if (gewaehlt) zeilen.push([{ text: 'Alle Mannschaften', callback_data: 'cmd:teams:alle' }]);
-  return { inline_keyboard: zeilen };
-}
-
-export function erinnerungTastatur(): InlineKeyboard {
-  return { inline_keyboard: [[
-    knopf('1 Stunde', 'erinnerung', '1h'), knopf('3 Stunden', 'erinnerung', '3h'),
-    knopf('Vorabend', 'erinnerung', 'abend'), knopf('Aus', 'erinnerung', 'aus'),
-  ]] };
-}
-
-export function modusTastatur(): InlineKeyboard {
-  return { inline_keyboard: [[knopf('Alles', 'modus', 'alles'), knopf('Nur Ergebnisse', 'modus', 'ergebnisse')]] };
-}
-
-export function endstandTastatur(m: HandballMatchView): InlineKeyboard {
-  const zeilen: InlineKeyboard['inline_keyboard'] = [[knopf('📊 Tabelle', 'tabelle'), knopf('📰 Bericht', 'bericht'), knopf('🥇 Torjäger', 'torjaeger')]];
-  const links = [{ text: 'Spielseite', url: m.url }, ...(m.report_url ? [{ text: 'Bogen (PDF)', url: m.report_url }] : [])];
-  zeilen.push(links);
-  return { inline_keyboard: zeilen };
-}
-
-export function ankuendigungTastatur(m: HandballMatchView): InlineKeyboard {
-  const route = routenTastatur(m)?.inline_keyboard ?? [];
-  const unten = [knopf('👥 Kader', 'kader'), knopf('📊 Tabelle', 'tabelle'), knopf('📈 Saison', 'saison')];
-  return { inline_keyboard: [...route, halleAlsOrt(m) ? [halleKnopf(m), ...unten] : unten] };
-}
 
 /**
  * `/halle` und der Knopf „📍 Halle": die Halle als Ort. Mit Spiel-ID die
@@ -1744,7 +838,7 @@ export function textStatus(sicht: ReturnType<typeof handballOverview>, now = new
   const bilanz = zustellBilanz(now);
   const namen = new Map(abos.map(a => [a.chatId, a.name]));
   const zeilen = [
-    `🛠 <b>Betriebsstand</b>${botUsername ? ` @${escapeHtml(botUsername)}` : ''}`,
+    `🛠 <b>Betriebsstand</b>${botIdentity.username ? ` @${escapeHtml(botIdentity.username)}` : ''}`,
     `Abonnenten: ${abos.length}${gruppen ? ` (davon ${gruppen} Gruppe${gruppen === 1 ? '' : 'n'})` : ''}${nurErgebnisse ? `, ${nurErgebnisse} nur Ergebnisse` : ''}${abos.some(a => a.teamIds?.length) ? `, ${abos.filter(a => a.teamIds?.length).length} mit Mannschaftsauswahl` : ''}${abos.some(a => a.teamIds?.length === 0) ? `, ${abos.filter(a => a.teamIds?.length === 0).length} noch ohne Auswahl` : ''}`,
     `Letzter Abruf: ${stand}`,
     `Letzter Fehler: ${fehler ? escapeHtml(fehler) : 'keiner'}`,
@@ -2125,7 +1219,7 @@ function schonGesehen(updateId: number): boolean {
 /** Nur für Tests. */
 export function __resetHandballBotForTests(): void {
   gesehen.clear();
-  botUsername = null;
+  botIdentity.username = null;
   webhookZustand = null;
   inlineAn = null;
   webhookInfo = null;
@@ -2625,7 +1719,7 @@ async function inlineStandErfragen(): Promise<void> {
   if (!token) return;
   try {
     const ich = await getMe(token);
-    if (!botUsername && ich.username) botUsername = ich.username;
+    if (!botIdentity.username && ich.username) botIdentity.username = ich.username;
     inlineAn = typeof ich.supports_inline_queries === 'boolean' ? ich.supports_inline_queries : null;
   } catch { /* bleibt „unbekannt" */ }
 }
@@ -2964,6 +2058,29 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
             try { await deps.sendVenue(abo.chatId, ort); } catch (err) {
               serviceLog.warn({ chat: abo.chatId, err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Halle als Ort nicht zustellbar');
             }
+          }
+        }
+        if (n > 0) { out.messages++; out.recipients += n; }
+      }
+
+      // --- Spieltagsgruß — am Morgen eines Spieltags, einmal je Chat und Spiel ---
+      // Nur, wer Ankündigungen will (nicht „keine") und alles; wer die Ankündigung
+      // dieses Spiels schon bekommen hat (Vorabend, drei Stunden), braucht keinen Gruß.
+      if (m.status === 'scheduled' && start > jetzt && spieltagsGrussFaellig(m, now)) {
+        const text = textSpieltag(team, m, opponentFormFor(gegnerId(m))?.matches ?? null);
+        let n = 0;
+        for (const abo of listSubscribers()) {
+          if (abo.mode !== 'all' || abo.lead === 'aus' || !verfolgt(abo, team.team_id)) continue;
+          const key = schluessel(`morning:${abo.chatId}`);
+          if (schonGeschickt(key) || schonGeschickt(schluessel(`upcoming:${abo.chatId}`))) continue;
+          merke(key);
+          try {
+            await deps.send(abo.chatId, text, routenTastatur(m));
+            n++;
+            protokolliere(abo.chatId, 'ankuendigung', true);
+          } catch (err) {
+            protokolliere(abo.chatId, 'ankuendigung', false, err);
+            zustellungGescheitert(abo.chatId, err);
           }
         }
         if (n > 0) { out.messages++; out.recipients += n; }
