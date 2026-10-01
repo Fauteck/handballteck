@@ -56,6 +56,20 @@ jobs:
       - name: Dependency audit (runtime, high+)
         run: npm audit --omit=dev --audit-level=high
 
+      # Ein zweiter, unabhängiger Blick: Trivy liest die Lockdatei gegen seine
+      # eigene Schwachstellen-Datenbank (nicht nur die von npm) und sucht
+      # nebenbei nach versehentlich eingecheckten Geheimnissen. Nur behebbare
+      # Funde ab „high" brechen den Lauf ab.
+      - name: Trivy (Abhängigkeiten und Geheimnisse)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          skip-dirs: node_modules
+
   build-and-push:
     name: Build and Push Image
     needs: quality

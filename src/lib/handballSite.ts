@@ -42,7 +42,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { siteEnabled, sitePlayers, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail } from '../config';
 import {
-  handballOverview, logoDataUri, playerGames, playerStats, readPalette, changesFor, tendenzReferenz, opponentFormFor,
+  handballOverview, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   type HandballTeamView, type HandballMatchView,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, type FullPalette } from './handballTableImage';
@@ -51,6 +51,9 @@ import {
   textSaison, alsKlartext, icsKalender, handballBotLink, getHandballBotUsername,
 } from './handballBot';
 import type { HandballStandingRow } from './handballNetClient';
+import { siteCss, inhaltsHash, SITE_SW_JS, SITE_APP_JS } from './handballSiteAssets';
+
+export { SITE_SW_JS, SITE_APP_JS };
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -230,7 +233,15 @@ export async function siteImagePng(team: HandballTeamView, art: SiteImageArt, ma
  * und Benachrichtigung — aus dem gespeicherten Logo, sonst ein Kreis in der
  * Vereinsfarbe mit den Initialen. Gecacht wie die anderen Bilder.
  */
-export async function siteLogoPng(team: HandballTeamView, palette: FullPalette): Promise<Buffer> {
+export async function siteLogoPng(team: HandballTeamView, palette: FullPalette, groesse: 192 | 512 = 512): Promise<Buffer> {
+  if (groesse === 192) {
+    const key192 = `${team.team_id}:logo192`;
+    const treffer = bildCache.get(key192);
+    if (treffer && Date.now() - treffer.at < 6 * 60 * 60 * 1000) return treffer.png;
+    const klein = await sharp(await siteLogoPng(team, palette, 512)).resize(192, 192).png().toBuffer();
+    bildCache.set(key192, { stand: '', at: Date.now(), png: klein });
+    return klein;
+  }
   const key = `${team.team_id}:logo`;
   const hit = bildCache.get(key);
   if (hit && Date.now() - hit.at < 6 * 60 * 60 * 1000) return hit.png;
@@ -323,156 +334,17 @@ function betreiberZeile(): string {
   return `<div class="betreiber">${teile.join(' ')}</div>`;
 }
 
-function css(p: FullPalette): string {
-  const grund = p.primary.toLowerCase() === '#003e51' ? '#001f2b' : p.primary;
-  return `
-:root{--p:${p.primary};--s:${p.secondary};--a:${p.accent};--ad:${p.accentDark};--g:${grund};--bg:#f2f6f7;--card:#ffffff;--text:#10262c;--muted:#5d7178;--line:#dde6e9;--win:#1f9d55;--loss:#c9403a;--draw:#7a8a90}
-@font-face{font-family:'Barlow Condensed';font-weight:700;font-display:swap;src:url(./fonts/BarlowCondensed-Bold.ttf) format('truetype')}
-@font-face{font-family:'Barlow Condensed';font-weight:600;font-display:swap;src:url(./fonts/BarlowCondensed-SemiBold.ttf) format('truetype')}
-@font-face{font-family:'Barlow';font-weight:400;font-display:swap;src:url(./fonts/Barlow-Regular.ttf) format('truetype')}
-@font-face{font-family:'Barlow';font-weight:500;font-display:swap;src:url(./fonts/Barlow-Medium.ttf) format('truetype')}
-@font-face{font-family:'Barlow';font-weight:600;font-display:swap;src:url(./fonts/Barlow-SemiBold.ttf) format('truetype')}
-*{box-sizing:border-box}
-[hidden]{display:none !important}
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
-a{color:var(--ad)}
-h1,h2,h3{font-family:'Barlow Condensed','Barlow',system-ui,sans-serif;letter-spacing:.01em;margin:0}
-h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--p);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
-.hero{background:linear-gradient(135deg,var(--g) 0%,var(--p) 45%,var(--s) 100%);color:#fff;position:relative;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-55deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px);pointer-events:none}
-.hero::after{content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;border:38px solid rgba(255,255,255,.05);pointer-events:none}
-.hero .wrap{position:relative;padding-top:28px;padding-bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 20px;align-items:center}
-.hero img.logo{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
-.hero .initialen{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-size:2.4rem;font-weight:700;color:var(--a)}
-.hero h1{font-size:clamp(2rem,6vw,3.4rem);font-weight:700;line-height:1;text-transform:uppercase}
-.hero .sub{margin-top:6px;color:rgba(255,255,255,.82);font-size:1rem}
-.teamwahl{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.72)}
-.teamwahl select{font:inherit;font-size:1rem;letter-spacing:0;text-transform:none;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);border-radius:10px;padding:6px 10px;max-width:70vw}
-.teamwahl select option{color:#111}
-.hero .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:4px}
-.stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;min-width:0}
-.stat b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;font-weight:700;line-height:1;color:#fff;white-space:nowrap}
-.stat b.a{color:var(--a)}
-.stat b small{font-size:1rem;font-weight:600;color:rgba(255,255,255,.7);margin-left:4px}
-.stat span{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.72);margin-top:5px}
-.form{display:inline-flex;gap:5px;align-items:center;height:1.75rem}
-.form i{display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--draw)}
-.form i.w{background:var(--win)}.form i.l{background:var(--loss)}
-main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,1fr)}
-.col{display:contents}
-.s-next{order:1}.s-push{order:2}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-team{order:7}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,38,44,.04);min-width:0}
-.card.dark{background:linear-gradient(135deg,var(--g),var(--p) 60%,var(--s));color:#fff;border-color:transparent}
-.card.dark h2{color:var(--a)}
-.card.dark a{color:#fff}
-.card h2{margin-bottom:10px}
-.card img.bild{display:block;width:100%;height:auto;border-radius:12px;background:#0b2a33}
-.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:var(--a);color:var(--g);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
-.badge.live{background:var(--loss);color:#fff;animation:puls 1.6s ease-in-out infinite}
-@keyframes puls{50%{opacity:.6}}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--p);font:inherit;font-weight:600;text-decoration:none;cursor:pointer;line-height:1.1}
-.btn:hover{border-color:var(--ad)}
-.btn.primary{background:var(--a);border-color:var(--a);color:var(--g)}
-.btn.ghost{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#fff}
-.btn[disabled]{opacity:.55;cursor:default}
-.muted{color:var(--muted)}
-.dark .muted{color:rgba(255,255,255,.72)}
-.small{font-size:.9rem}
-.next .info{display:grid;gap:4px;margin-top:12px;font-size:1.05rem}
-.next .info b{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;text-transform:uppercase}
-.result .stand{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:700;line-height:1}
-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
-th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
-th{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;font-size:.9rem;color:var(--muted);letter-spacing:.03em}
-td.name,th.name{text-align:left;white-space:normal;width:100%}
-tr.own td{background:color-mix(in srgb,var(--a) 14%,#fff);font-weight:600}
-tr.own td:first-child{box-shadow:inset 4px 0 0 var(--a)}
-td.pos{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;color:var(--p)}
-td.pkt{font-weight:700}
-.t i{font-style:normal;font-size:.75rem;margin-left:4px}
-.t i.up{color:var(--win)}.t i.down{color:var(--loss)}
-.legend{margin:10px 0 0;font-size:.85rem;color:var(--muted)}
-.plan{list-style:none;margin:0;padding:0;display:grid}
-.plan li{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
-.plan li:last-child{border-bottom:0}
-.plan .d{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--muted);line-height:1.1}
-.plan .d small{display:block;font-weight:500}
-.plan .g{min-width:0}
-.plan .g .ha{color:var(--muted);font-size:.85rem}
-.plan .e{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.35rem;padding:2px 10px;border-radius:8px;background:var(--bg);color:var(--text)}
-.plan .e.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--win)}
-.plan .e.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--loss)}
-.plan .e.o{color:var(--muted);font-weight:500;font-size:.95rem;background:transparent}
-.plan li.next{background:color-mix(in srgb,var(--a) 10%,#fff);border-radius:10px;padding-left:8px;padding-right:8px;margin:0 -8px}
-.lines{margin:0;padding-left:0;list-style:none;display:grid;gap:6px}
-.lines li{padding-left:14px;position:relative}
-.lines li::before{content:"";position:absolute;left:0;top:.55em;width:6px;height:6px;border-radius:50%;background:var(--a)}
-.season .body{display:grid;gap:14px}
-fieldset{border:0;padding:0;margin:0 0 10px}
-legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;font-size:.95rem;color:var(--a);margin-bottom:6px}
-.opts{display:flex;gap:8px;flex-wrap:wrap}
-.opts label{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.3);cursor:pointer;font-size:.95rem}
-.opts input{accent-color:var(--a)}
-.opts label:has(input:checked){background:rgba(255,255,255,.14);border-color:var(--a)}
-.status{margin:6px 0 10px;font-weight:500}
-.lead{margin:0 0 12px;color:rgba(255,255,255,.8)}
-.channels{display:grid;gap:10px}
-.channel{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff}
-.channel[open]{border-color:rgba(255,255,255,.24)}
-.channel summary{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
-.channel summary::-webkit-details-marker{display:none}
-.channel summary::after{content:"▾";font-size:1.1rem;color:var(--a);transition:transform .15s}
-.channel[open] summary::after{transform:rotate(180deg)}
-.channel .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--a);color:var(--g)}
-.channel .ico svg{width:22px;height:22px;fill:currentColor}
-.channel .ico.tg{background:#29a9eb;color:#fff}
-.channel .ico.rss{background:#f28a1a;color:#fff}
-.channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.channel .body{margin-top:10px}
-.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
-.channel a.open{display:inline-block;margin-top:8px;color:var(--a);font-weight:600;text-decoration:none}
-.channel a.open:hover{text-decoration:underline}
-.gegner{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:grid;gap:8px}
-.gegner .kopf{display:flex;gap:12px;align-items:center}
-.gegner .kopf img,.gegner .kopf .ini{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain;flex:none}
-.gegner .kopf .ini{display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--p);background:rgba(255,255,255,.85)}
-.gegner .kopf b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.gegner .kopf span{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
-.gegner .zeile{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:.95rem}
-.gegner .zeile .lbl{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.8rem;color:var(--a);min-width:92px}
-.gegner .form i{width:11px;height:11px}
-.gegner .res{color:rgba(255,255,255,.85)}
-details.more{grid-column:1/-1;margin-top:6px}
-details.more summary{cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:.9rem;color:var(--ad);list-style:none;display:inline-flex;align-items:center;gap:6px}
-details.more summary::-webkit-details-marker{display:none}
-details.more summary::before{content:"";width:0;height:0;border-left:6px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
-details.more[open] summary::before{transform:rotate(90deg)}
-.verlauf{margin:10px 0 4px}
-.verlauf svg{display:block;width:100%;height:auto}
-.torfolge{margin:6px 0 0;font-size:.85rem;color:var(--muted);line-height:1.6}
-.torfolge b{color:var(--text)}
-.bericht{margin-top:10px;font-size:.98rem;line-height:1.55}
-.bericht h4{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;text-transform:uppercase;color:var(--p);margin:12px 0 4px}
-.bericht p{margin:0 0 8px}
-.bericht .quelle{font-size:.85rem;color:var(--muted)}
-footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid;gap:6px}
-footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
-@media (max-width:600px){.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px}.plan li{grid-template-columns:78px 1fr auto}}
-@media (min-width:960px){
-main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
-.col{display:grid;gap:22px;min-width:0}
-.hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto minmax(0,1fr) auto;gap:16px 28px}
-.hero img.logo,.hero .initialen{width:120px;height:120px}
-.hero .stats{grid-column:auto;grid-template-columns:repeat(3,minmax(110px,1fr));margin-top:0}
-.season .body{grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:start}
-.season .body .lines{margin-top:0}
-.card{padding:22px}
-}
-@media (prefers-color-scheme:dark){:root{--bg:#0c1a1f;--card:#12262c;--text:#e6f0f2;--muted:#9bb0b6;--line:#1f3840}.btn{background:#12262c;color:#e6f0f2}.plan .e{background:#0c1a1f;color:#e6f0f2}tr.own td{background:color-mix(in srgb,var(--a) 22%,#12262c)}.plan li.next{background:color-mix(in srgb,var(--a) 14%,#12262c)}.plan .e.w{background:color-mix(in srgb,var(--win) 24%,#12262c)}.plan .e.l{background:color-mix(in srgb,var(--loss) 22%,#12262c)}}
-`;
+let cssCache: { schluessel: string; text: string; hash: string } | null = null;
+
+/** Der Stil der Seite samt Hash — nur neu gebaut, wenn sich die Vereinsfarben ändern. */
+export function siteCssText(): { text: string; hash: string } {
+  const palette = vervollstaendigePalette(readPalette());
+  const schluessel = JSON.stringify(palette);
+  if (!cssCache || cssCache.schluessel !== schluessel) {
+    const text = siteCss(palette);
+    cssCache = { schluessel, text, hash: inhaltsHash(text) };
+  }
+  return cssCache;
 }
 
 /** Inline-Icons für die Kanäle — `currentColor`, damit sie die Farbe der Kachel nehmen. */
@@ -528,13 +400,15 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   if (form) kacheln.push(`<div class="stat"><b>${form}</b><span>Form</span></div>`);
   if (naechstes) {
     const start = new Date(naechstes.starts_at);
-    kacheln.push(`<div class="stat"><b class="a">${naechstes.status === 'live' ? 'Jetzt' : h(inTagen(start, now))}</b><span>${naechstes.status === 'live' ? 'Spiel läuft' : `Nächstes Spiel · ${h(DATUM_KURZ.format(start))}`}</span></div>`);
+    kacheln.push(`<div class="stat"><b class="a"${naechstes.status === 'live' ? '' : ` data-countdown="${h(naechstes.starts_at)}"`}>${naechstes.status === 'live' ? 'Jetzt' : h(inTagen(start, now))}</b><span>${naechstes.status === 'live' ? 'Spiel läuft' : `Nächstes Spiel · ${h(DATUM_KURZ.format(start))}`}</span></div>`);
   }
-  // Das Dropdown der Mannschaften des Vereins — nur, wenn es mehr als eine
-  // gibt. Ein `<select>` mit relativen Zielen; das Umschalten macht `app.js`
-  // (kein Inline-JS, siehe CSP), ohne Skript bleibt es ein Formular ohne Wirkung.
+  // Die Mannschaften des Vereins als Schaltflächen — nur, wenn es mehr als eine
+  // gibt. Reine Verweise (`../<Team-ID>/`), kein Skript nötig; die Seite
+  // der gewählten Mannschaft ist markiert.
   const wahl = mannschaften.length > 1
-    ? `<label class="teamwahl"><span>Mannschaft</span><select data-teams aria-label="Mannschaft wählen">${mannschaften.map(t => `<option value="${h(t.url)}"${t.id === team.team_id ? ' selected' : ''}>${h(t.label)}</option>`).join('')}</select></label>`
+    ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${mannschaften.map(t => t.id === team.team_id
+      ? `<a href="${h(t.url)}" aria-current="page">${h(t.label)}</a>`
+      : `<a href="${h(t.url)}">${h(t.label)}</a>`).join('')}</nav>`
     : '';
   return `<header class="hero"><div class="wrap">
   ${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}
@@ -675,7 +549,7 @@ function naechstesSpielHtml(team: HandballTeamView, now: Date): string {
   const routen = routenLinks(m);
   const heute = tageBis(start, now) <= 0;
   return `<section class="card dark next s-next" id="naechstes">
-  <h2>${live ? 'Läuft gerade <span class="badge live">Live</span>' : `Nächstes Spiel <span class="badge">${h(inTagen(start, now))}</span>`}</h2>
+  <h2>${live ? 'Läuft gerade <span class="badge live">Live</span>' : `Nächstes Spiel <span class="badge" data-countdown="${h(m.starts_at)}">${h(inTagen(start, now))}</span>`}</h2>
   ${!live ? `<img class="bild" src="./bild/spiel.png" width="800" height="450" alt="${h(`${m.home_name} gegen ${m.away_name}`)}" loading="eager">` : ''}
   <div class="info">
     <b>${m.is_home ? `gegen ${h(gegnerVon(m))}` : `bei ${h(gegnerVon(m))}`}${live && m.score_home !== null ? ` · ${m.score_home}:${m.score_away}` : ''}</b>
@@ -779,7 +653,8 @@ function spielplanHtml(team: HandballTeamView, now: Date, players: boolean): str
     } else {
       ergebnis = `<span class="e o">${h(ZEIT.format(start))} Uhr</span>`;
     }
-    return `<li${m.match_id === naechstesId ? ' class="next"' : ''}>
+    const gespieltEintrag = mitStand && m.status !== 'live';
+    return `<li${m.match_id === naechstesId ? ' class="next"' : ''} data-ha="${m.is_home ? 'heim' : 'aus'}" data-st="${gespieltEintrag ? 'gespielt' : 'kommend'}">
       <span class="d">${h(datumKurz(start, now))}<small>${m.round ? `${m.round}. Spieltag` : h(ZEIT.format(start))}</small></span>
       <span class="g"><a href="${h(m.url)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${h(gegnerVon(m))}</a><div class="ha">${m.is_home ? 'Heim' : 'Auswärts'}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}${status && mitStand ? ` · ${h(status)}` : ''}</div></span>
       ${ergebnis}
@@ -787,7 +662,12 @@ function spielplanHtml(team: HandballTeamView, now: Date, players: boolean): str
     </li>`;
   }).join('');
   const bilanz = gespielt(team);
-  return `<section class="card s-plan" id="spielplan"><h2>Spielplan${bilanz.length > 0 ? ` <span class="muted small" style="font-family:'Barlow',sans-serif;text-transform:none;font-weight:500">${bilanz.length} von ${team.matches.length} gespielt</span>` : ''}</h2><ul class="plan">${items}</ul></section>`;
+  return `<section class="card s-plan" id="spielplan"><h2>Spielplan${bilanz.length > 0 ? ` <span class="muted small" style="font-family:'Barlow',sans-serif;text-transform:none;font-weight:500">${bilanz.length} von ${team.matches.length} gespielt</span>` : ''}</h2>
+  <div class="filter" data-filter-bar role="group" aria-label="Spielplan filtern" hidden>
+    ${[['alle', 'Alle'], ['heim', 'Heim'], ['aus', 'Auswärts'], ['kommend', 'Kommend'], ['gespielt', 'Gespielt']].map(([k, l]) => `<button type="button" data-filter="${k}" aria-pressed="${k === 'alle'}">${l}</button>`).join('')}
+    ${naechstesId ? '<button type="button" data-jump class="jump">Zum nächsten Spiel ↓</button>' : ''}
+  </div>
+  <ul class="plan">${items}</ul></section>`;
 }
 
 function saisonHtml(team: HandballTeamView, players: boolean): string {
@@ -804,13 +684,45 @@ function saisonHtml(team: HandballTeamView, players: boolean): string {
 </section>`;
 }
 
+const TOR_FARBEN = ['var(--p)', 'var(--ad)', '#e0891a', '#8a63d2', '#c9403a'];
+
+/**
+ * Die Tore der besten Torschützen über die Saison — je Spieler eine
+ * Linie mit der Summe nach jedem gespielten Spiel. Nur mit Spielernamen
+ * (die Legende nennt sie); null unter zwei Spielen oder ohne Tore.
+ */
+export function torverlaufHtml(team: HandballTeamView): string | null {
+  const top = playerStats(team.team_id).filter(p => p.goals > 0).slice(0, 5);
+  const spiele = gespielt(team);
+  if (top.length === 0 || spiele.length < 2) return null;
+  const reihen = top.map(p => {
+    const je = new Map(playerMatchLog(team.team_id, p.playerId).map(l => [l.matchId, l.goals]));
+    let summe = 0;
+    return { p, werte: spiele.map(m => (summe += je.get(m.match_id) ?? 0)) };
+  });
+  const maximum = Math.max(...reihen.map(r => r.werte[r.werte.length - 1]), 1);
+  const W = 600, H = 180, L = 30, R = 14, T = 12, B = 24;
+  const x = (i: number) => L + (i / (spiele.length - 1)) * (W - L - R);
+  const y = (v: number) => T + ((maximum - v) / maximum) * (H - T - B);
+  const linien = reihen.map((r, i) => `<path d="${r.werte.map((v, k) => `${k === 0 ? 'M' : 'L'} ${x(k).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')}" fill="none" stroke="${TOR_FARBEN[i]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
+  const achse = [0, Math.round(maximum / 2), maximum].map(v => `<line x1="${L}" y1="${y(v).toFixed(1)}" x2="${W - R}" y2="${y(v).toFixed(1)}" stroke="var(--line)"/><text x="${L - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`).join('');
+  const marken = spiele.map((_, i) => (i === 0 || i === spiele.length - 1 || (i + 1) % 5 === 0)
+    ? `<text x="${x(i).toFixed(1)}" y="${H - 7}" text-anchor="middle" font-size="11" fill="var(--muted)">${i + 1}</text>` : '').join('');
+  const legende = reihen.map((r, i) => `<li><i style="background:${TOR_FARBEN[i]}"></i>${h(r.p.name)} <b>${r.p.goals}</b></li>`).join('');
+  return `<div class="verlauf"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tore der besten Torschützen je Spiel, aufsummiert">${achse}${linien}${marken}</svg></div>
+  <ul class="legende">${legende}</ul>
+  <p class="muted small" style="margin:4px 0 0">Summe der Tore nach dem n-ten Spiel</p>`;
+}
+
 function spielerHtml(team: HandballTeamView): string {
   const stats = playerStats(team.team_id);
   const torjaeger = stats.some(p => p.goals > 0);
   const kader = bildKader(team) !== null;
+  const verlauf = torverlaufHtml(team);
   if (!torjaeger && !kader) return '';
   return `<section class="card s-team" id="mannschaft">
   <h2>Mannschaft</h2>
+  ${verlauf ? `<h3 class="unter">Tore im Saisonverlauf</h3>${verlauf}` : ''}
   ${torjaeger ? `<img class="bild" src="./bild/torjaeger.png" alt="Torschützen der Saison" loading="lazy" width="800">` : ''}
   ${kader ? `<img class="bild" src="./bild/kader.png" alt="Kader" loading="lazy" width="800" height="450" style="margin-top:14px">` : ''}
 </section>`;
@@ -828,12 +740,12 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
   <h2>Nichts verpassen</h2>
   <p class="lead">Ohne App, ohne Konto — such dir den Weg aus, der zu dir passt.</p>
   <div class="channels">
-    <details class="channel push">
-      <summary><span class="ico">${ICON.bell}</span><b>Im Browser</b></summary>
+    <details class="channel push" data-key="browser">
+      <summary><span class="ico">${ICON.bell}</span><b>Im Browser <span class="chip" data-aktiv hidden>Aktiv</span></b></summary>
       <div class="body">
         <span class="desc">Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.</span>
         <div class="inner">
-          <p class="status" data-status>${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — die anderen Wege gehen trotzdem.'}</p>
+          <p class="status" data-status role="status" aria-live="polite">${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — die anderen Wege gehen trotzdem.'}</p>
           <form data-form hidden>
             <fieldset>
               <legend>Ankündigung</legend>
@@ -860,21 +772,21 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
         </div>
       </div>
     </details>
-    ${telegram ? `<details class="channel">
+    ${telegram ? `<details class="channel" data-key="telegram">
       <summary><span class="ico tg">${ICON.send}</span><b>Telegram-Bot</b></summary>
       <div class="body">
         <span class="desc">${h(telegram.handle)} · Ankündigung, Halbzeit, Endstand mit Torschützen — und Tabelle, Kader, Spielplan auf Zuruf.</span>
         <a class="open" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer">Bot öffnen →</a>
       </div>
     </details>` : ''}
-    <details class="channel">
+    <details class="channel" data-key="kalender">
       <summary><span class="ico">${ICON.calendar}</span><b>Kalender-Abo</b></summary>
       <div class="body">
         <span class="desc">Alle Spiele im eigenen Kalender. Verlegungen wandern von selbst mit.</span>
         <a class="open" href="${h(webcal)}">Kalender abonnieren →</a>
       </div>
     </details>
-    <details class="channel">
+    <details class="channel" data-key="rss">
       <summary><span class="ico rss">${ICON.rss}</span><b>RSS-Feed</b></summary>
       <div class="body">
         <span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader.</span>
@@ -920,6 +832,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
 <meta name="description" content="${h(beschreibung)}">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="${palette.primary}">
+<meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="${h(team.name)}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -932,11 +845,13 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <link rel="icon" href="./logo.png" type="image/png">
 <link rel="apple-touch-icon" href="./logo.png">
 <link rel="alternate" type="application/rss+xml" title="${h(team.name)} — Ergebnisse" href="./feed.xml">
-<style>${css(palette)}</style>
+<link rel="stylesheet" href="./site.css?v=${siteCssText().hash}">
 </head>
-<body>
+<body${naechstes?.status === 'live' ? ' data-live="1"' : ''}>
+<a class="skip" href="#inhalt">Zum Inhalt</a>
+<div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
 ${heroHtml(team, logo, now, opts.teams ?? [])}
-<main class="wrap">
+<main class="wrap" id="inhalt">
 <div class="col main">
 ${naechstesSpielHtml(team, now)}
 ${letztesSpielHtml(team, opts.players)}
@@ -954,7 +869,7 @@ ${spielplanHtml(team, now, opts.players)}
   Spielzeiten in deutscher Ortszeit.</div>
   ${betreiberZeile()}
 </footer>
-<script src="./app.js" defer></script>
+<script src="./app.js?v=${inhaltsHash(SITE_APP_JS)}" defer></script>
 </body>
 </html>
 `;
@@ -976,169 +891,18 @@ export function renderManifest(team: HandballTeamView): Record<string, unknown> 
     background_color: palette.primary,
     theme_color: palette.primary,
     lang: 'de',
+    id: './',
     icons: [
+      { src: './logo-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: './logo.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    ],
+    shortcuts: [
+      { name: 'Nächstes Spiel', url: './#naechstes' },
+      { name: 'Tabelle', url: './#tabelle' },
+      { name: 'Spielplan', url: './#spielplan' },
     ],
   };
 }
-
-/**
- * Der Service Worker der Microsite: zeigt den Push und öffnet beim Antippen
- * die Seite. Kein Caching — die Seite soll immer den Stand des Servers
- * zeigen, und offline gibt es nichts Sinnvolles zu zeigen. Relativ zum
- * Scope, damit er auch unter einer eigenen Domain funktioniert.
- */
-export const SITE_SW_JS = `/* Handball-Microsite: Push-Empfang. Kein Cache. */
-self.addEventListener('install', function () { self.skipWaiting(); });
-self.addEventListener('activate', function (event) { event.waitUntil(self.clients.claim()); });
-self.addEventListener('push', function (event) {
-  var payload = {};
-  try { payload = event.data ? event.data.json() : {}; } catch (e) { payload = { title: 'Handball', body: event.data ? event.data.text() : '' }; }
-  var scope = self.registration.scope;
-  var options = {
-    body: payload.body || '',
-    icon: new URL('logo.png', scope).href,
-    badge: new URL('logo.png', scope).href,
-    tag: payload.tag || 'handball',
-    renotify: !!payload.renotify,
-    data: { url: payload.url ? new URL(payload.url, scope).href : scope }
-  };
-  if (payload.image) options.image = new URL(payload.image, scope).href;
-  event.waitUntil(self.registration.showNotification(payload.title || 'Handball', options));
-});
-self.addEventListener('notificationclick', function (event) {
-  event.notification.close();
-  var url = (event.notification.data && event.notification.data.url) || self.registration.scope;
-  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
-    for (var i = 0; i < list.length; i++) {
-      if (list[i].url.indexOf(self.registration.scope) === 0 && 'focus' in list[i]) { list[i].navigate(url); return list[i].focus(); }
-    }
-    return self.clients.openWindow(url);
-  }));
-});
-`;
-
-/**
- * Das Skript der Seite: prüft, ob der Browser Push kann, meldet den Service
- * Worker an, holt den VAPID-Schlüssel von `./push` und trägt die
- * Subscription mit Vorlauf und Modus ein. Ohne Push (kein VAPID, Safari
- * außerhalb des Home-Bildschirms) bleibt der Kalender.
- */
-export const SITE_APP_JS = `(function () {
-  // Das Dropdown der Mannschaften: Auswahl wechselt zur Seite der Mannschaft.
-  var teams = document.querySelector('select[data-teams]');
-  if (teams) teams.addEventListener('change', function () { if (teams.value) location.href = teams.value; });
-
-  var root = document.getElementById('push');
-  if (!root) return;
-  var status = root.querySelector('[data-status]');
-  var form = root.querySelector('[data-form]');
-  var btnOn = root.querySelector('[data-subscribe]');
-  var btnOff = root.querySelector('[data-unsubscribe]');
-  var iosHint = root.querySelector('[data-ios]');
-  var say = function (text) { status.textContent = text; };
-  var isIos = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
-  var supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-
-  if (root.getAttribute('data-push') !== '1') return;
-  if (!supported) {
-    if (isIos && !standalone) { say('Auf diesem Gerät geht das nur vom Home-Bildschirm aus.'); iosHint.hidden = false; }
-    else say('Dieser Browser kann keine Benachrichtigungen — der Kalender unten geht trotzdem.');
-    return;
-  }
-
-  var KEY = 'handball-site-push';
-  function gemerkt() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
-  function merken(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
-  function wahl() {
-    var lead = form.querySelector('input[name=lead]:checked');
-    var mode = form.querySelector('input[name=mode]:checked');
-    return { lead: lead ? lead.value : '1h', mode: mode ? mode.value : 'all' };
-  }
-  function setzeWahl(v) {
-    if (!v) return;
-    var l = form.querySelector('input[name=lead][value="' + v.lead + '"]');
-    var m = form.querySelector('input[name=mode][value="' + v.mode + '"]');
-    if (l) l.checked = true;
-    if (m) m.checked = true;
-  }
-  function bytes(base64) {
-    var padding = '='.repeat((4 - (base64.length % 4)) % 4);
-    var raw = atob((base64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
-    var out = new Uint8Array(raw.length);
-    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-    return out;
-  }
-  function zeige(sub) {
-    form.hidden = false;
-    if (sub) {
-      btnOn.textContent = 'Auswahl speichern';
-      btnOff.hidden = false;
-      var w = wahl();
-      say(w.lead === 'aus' && w.mode === 'results' ? 'Eingeschaltet: nur Endstände und Verlegungen.' : 'Eingeschaltet auf diesem Gerät.');
-    } else {
-      btnOn.textContent = 'Benachrichtigungen einschalten';
-      btnOff.hidden = true;
-      say(Notification.permission === 'denied'
-        ? 'Benachrichtigungen sind für diese Seite blockiert — in den Browser-Einstellungen wieder erlauben.'
-        : 'Noch nicht eingeschaltet.');
-    }
-  }
-
-  var reg = null;
-  var config = null;
-  navigator.serviceWorker.register('./sw.js', { scope: './' })
-    .then(function (r) { reg = r; return fetch('./push', { credentials: 'omit' }); })
-    .then(function (res) { return res.json(); })
-    .then(function (cfg) {
-      config = cfg;
-      if (!cfg.enabled || !cfg.public_key) { say('Benachrichtigungen sind auf diesem Server nicht eingerichtet — der Kalender geht trotzdem.'); return null; }
-      return navigator.serviceWorker.ready.then(function () { return reg.pushManager.getSubscription(); });
-    })
-    .then(function (sub) {
-      if (!config || !config.enabled) return;
-      setzeWahl(gemerkt());
-      zeige(sub);
-    })
-    .catch(function () { say('Benachrichtigungen lassen sich gerade nicht einrichten.'); });
-
-  form.addEventListener('submit', function (ev) {
-    ev.preventDefault();
-    if (!reg || !config) return;
-    btnOn.disabled = true;
-    say('Einen Moment …');
-    Promise.resolve(Notification.permission === 'granted' ? 'granted' : Notification.requestPermission())
-      .then(function (perm) {
-        if (perm !== 'granted') { zeige(null); throw new Error('abgelehnt'); }
-        return reg.pushManager.getSubscription().then(function (sub) {
-          return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: bytes(config.public_key) });
-        });
-      })
-      .then(function (sub) {
-        var w = wahl();
-        return fetch('./push', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
-          body: JSON.stringify({ subscription: sub.toJSON(), lead: w.lead, mode: w.mode })
-        }).then(function (res) { if (!res.ok) throw new Error('server'); merken(w); zeige(sub); });
-      })
-      .catch(function (err) { if (err && err.message !== 'abgelehnt') say('Das hat nicht geklappt — bitte noch einmal versuchen.'); })
-      .then(function () { btnOn.disabled = false; });
-  });
-
-  btnOff.addEventListener('click', function () {
-    if (!reg) return;
-    btnOff.disabled = true;
-    reg.pushManager.getSubscription().then(function (sub) {
-      if (!sub) return null;
-      return fetch('./push', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, credentials: 'omit', body: JSON.stringify({ endpoint: sub.endpoint }) })
-        .catch(function () {})
-        .then(function () { return sub.unsubscribe(); });
-    }).then(function () { zeige(null); say('Ausgeschaltet.'); }).catch(function () { say('Abmelden hat nicht geklappt.'); })
-      .then(function () { btnOff.disabled = false; });
-  });
-})();
-`;
 
 // ---------------------------------------------------------------------------
 // RSS-Feed

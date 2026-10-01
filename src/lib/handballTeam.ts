@@ -32,7 +32,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
-import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig } from '../config';
+import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs } from '../config';
 import {
   HANDBALL_KIND,
   fetchActiveSeason,
@@ -60,6 +60,36 @@ export const HANDBALL_LABEL = 'Handball (handball.net)';
 
 /** Ab wann nach dem Anwurf nachgefasst wird: 2 × 25 Minuten plus Pause, minus etwas Luft. */
 const NACHFASSEN_AB_MS = 45 * 60 * 1000;
+/** Im Live-Takt (`SYNC_LIVE_INTERVAL_MS`) schon fünf Minuten vor dem Anwurf. */
+const LIVE_VORLAUF_MS = 5 * 60 * 1000;
+
+function nachfassenAb(): number {
+  return syncLiveIntervalMs() > 0 ? -LIVE_VORLAUF_MS : NACHFASSEN_AB_MS;
+}
+
+/**
+ * Ob gerade ein Spiel läuft oder gleich beginnt — dann tickt der Dienst im
+ * Live-Takt, falls einer eingestellt ist. Liest nur die gespeicherten Spiele.
+ */
+export function liveFensterOffen(now = Date.now()): boolean {
+  const teams = readTeamIds();
+  return db.select().from(handball_team_match).all().some(r =>
+    teams.includes(r.team_id)
+    && (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
+    && now - Date.parse(r.starts_at) >= -LIVE_VORLAUF_MS
+    && now - Date.parse(r.starts_at) < NACHFASSEN_BIS_MS);
+}
+
+/**
+ * Der Abstand bis zum nächsten Takt: der normale, oder — mit
+ * `SYNC_LIVE_INTERVAL_MS` und solange ein Spiel läuft oder gleich beginnt —
+ * der kurze Live-Takt.
+ */
+export function naechsterAbstandMs(now = Date.now()): number {
+  const live = syncLiveIntervalMs();
+  return live > 0 && liveFensterOffen(now) ? Math.min(live, syncIntervalMs()) : syncIntervalMs();
+}
+
 /** Bis wann: Ein Spiel, das sechs Stunden nach Anwurf nicht beendet ist, holt der nächste Tageslauf. */
 const NACHFASSEN_BIS_MS = 6 * 60 * 60 * 1000;
 /** Wie viele beendete Spiele ohne gespeicherte Aufstellung ein Tageslauf nachholt — Altbestand in Häppchen. */
@@ -1055,7 +1085,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
     const nachzufassen = [...new Set(
       db.select().from(handball_team_match).all()
         .filter(r => (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
-          && jetzt - Date.parse(r.starts_at) >= NACHFASSEN_AB_MS
+          && jetzt - Date.parse(r.starts_at) >= nachfassenAb()
           && jetzt - Date.parse(r.starts_at) < NACHFASSEN_BIS_MS)
         .map(r => r.team_id),
     )].filter(teamId => teams.includes(teamId));

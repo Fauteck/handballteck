@@ -106,6 +106,8 @@ See `.env.example` for every variable with its default. The important ones:
 | `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the dropdown derives one from league and team name (`1. Herren`, `mB-Jugend`). |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
+| `SYNC_LIVE_INTERVAL_MS` | `0` (off) | Tick while a match is live (min 20 s); also polls from kick-off instead of kick-off + 45 min. Feeds the page's live mode. |
+| `SITE_PUSH_MAX` | `2000` | Maximum number of browser push subscriptions; the subscribe route answers 503 above it. |
 | `TELEGRAM_BOT_TOKEN` | – | Enables the bot. |
 | `TELEGRAM_INVITE_CODE` | – | Restricts `/start` to invitees. |
 | `TELEGRAM_ADMIN_CHAT_IDS` | – | Operator chats (status, broadcast, feedback, alerts). |

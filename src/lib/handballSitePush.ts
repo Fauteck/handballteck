@@ -118,6 +118,10 @@ export function saveSiteSubscription(teamId: string, input: SiteSubscriptionInpu
   return alsAbonnent(row);
 }
 
+export function siteSubscriptionExists(endpoint: string): boolean {
+  return !!db.select({ id: handball_site_subscription.id }).from(handball_site_subscription).where(eq(handball_site_subscription.endpoint, endpoint)).get();
+}
+
 export function deleteSiteSubscription(endpoint: string): number {
   return db.delete(handball_site_subscription).where(eq(handball_site_subscription.endpoint, endpoint)).run().changes;
 }
@@ -292,6 +296,8 @@ export async function pushHandballSite(now = new Date(), deps: SitePushDeps = DE
         const text = textEndstand(team, m, null, () => null, { bewegung: tabellenBewegung(team) });
         const payload = alsPush(text, {
           tag: `handball-${m.match_id}`, renotify: true, url: './',
+          // Ein Sieg vibriert wie ein Torjubel, eine Niederlage einmal lang.
+          vibrate: m.won === true ? [200, 100, 200, 100, 400] : m.won === false ? [400] : [150, 80, 150],
           image: mitStand ? `bild/endstand.png?match=${encodeURIComponent(m.match_id)}` : undefined,
         });
         const n = await anAlle(alle, payload, deps);

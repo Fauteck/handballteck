@@ -127,12 +127,14 @@ describe('Handball-Microsite', () => {
     const html = res.body;
     expect(html).toContain('HSG Wölfe Voreifel');
     expect(html).toContain('HV Erftstadt');
-    expect(html).toContain('<script src="./app.js" defer></script>');
+    expect(html).toMatch(/<script src="\.\/app\.js\?v=[0-9a-f]{10}" defer><\/script>/);
+    expect(html).toMatch(/<link rel="stylesheet" href="\.\/site\.css\?v=[0-9a-f]{10}">/);
+    expect(html).not.toContain('<style>');
     expect(html).toContain('./bild/spiel.png');
     expect(html).toContain('./bild/endstand.png?match=m2');
     expect(html).toContain('<meta name="robots" content="noindex, nofollow">');
     expect(html).toContain('webcal://todo.test.local/96254/kalender.ics');
-    expect(html).toContain('--p:#003e51');
+    expect((await get(`/${TEAM}/site.css`)).body).toContain('--p:#003e51');
     // Kein Inline-Skript (CSP), kein Todoteck.
     expect(html).not.toMatch(/<script>/);
     expect(html).not.toContain('Todoteck');
@@ -229,8 +231,8 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('<meta property="og:image" content="https://woelfe.example.de/96254/bild/spiel.png">');
   });
 
-  it('zeigt bei mehreren Mannschaften ein Dropdown mit relativen Zielen, die Wurzel führt zur ersten', async () => {
-    expect((await get(`/${TEAM}/`)).body).not.toContain('data-teams');
+  it('zeigt bei mehreren Mannschaften Schaltflächen mit relativen Zielen, die Wurzel führt zur ersten', async () => {
+    expect((await get(`/${TEAM}/`)).body).not.toContain('class="teamwahl"');
     setConfig({ site_enabled: 'true', team_ids: '96254=B-Jugend,96300=C-Jugend' });
     db.insert(schema.handball_team_match).values({
       id: '96300:c1', team_id: '96300', match_id: 'c1', season_id: 2627, starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
@@ -240,15 +242,100 @@ describe('Handball-Microsite', () => {
     } as never).run();
     try {
       const html = (await get(`/${TEAM}/`)).body;
-      expect(html).toContain('<select data-teams');
-      expect(html).toContain('<option value="../96254/" selected>B-Jugend</option>');
-      expect(html).toContain('<option value="../96300/">C-Jugend</option>');
+      expect(html).toContain('<a href="../96254/" aria-current="page">B-Jugend</a>');
+      expect(html).toContain('<a href="../96300/">C-Jugend</a>');
       expect((await get('/96300/')).statusCode).toBe(200);
       const wurzel = await get('/');
       expect(wurzel.statusCode).toBe(302);
       expect(wurzel.headers.location).toBe('96254/');
     } finally {
       db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
+    }
+  });
+
+  it('liefert Stil und Skript mit ETag und, bei passendem Hash, dauerhaft zwischenspeicherbar', async () => {
+    const html = (await get(`/${TEAM}/`)).body;
+    const cssUrl = /href="\.\/(site\.css\?v=[0-9a-f]{10})"/.exec(html)![1];
+    const css = await get(`/${TEAM}/${cssUrl}`);
+    expect(css.statusCode).toBe(200);
+    expect(css.headers['content-type']).toContain('text/css');
+    expect(css.headers['cache-control']).toContain('immutable');
+    expect(css.body).toContain('--p:#003e51');
+    const etag = String(css.headers.etag);
+    const nochmal = await fastify.inject({ method: 'GET', url: `/${TEAM}/${cssUrl}`, headers: { 'if-none-match': etag } });
+    expect(nochmal.statusCode).toBe(304);
+    // Ohne oder mit falschem Hash: kurze Frist, kein immutable.
+    expect((await get(`/${TEAM}/site.css`)).headers['cache-control']).not.toContain('immutable');
+    const js = await get(`/${TEAM}/app.js?v=falsch`);
+    expect(js.headers['cache-control']).not.toContain('immutable');
+  });
+
+  it('baut die Bedienung der Seite ein: Kacheln mit Schlüssel, Countdown, Spielplan-Filter, Überspringen', async () => {
+    const html = (await get(`/${TEAM}/`)).body;
+    expect(html).toContain('<details class="channel push" data-key="browser">');
+    expect(html).toContain('data-key="kalender"');
+    expect(html).toContain('data-key="rss"');
+    expect(html).toContain('data-aktiv hidden');
+    expect(html).toMatch(/data-countdown="\d{4}-\d\d-\d\dT/);
+    expect(html).toContain('data-filter-bar');
+    expect(html).toContain('data-filter="heim"');
+    expect(html).toContain('data-jump');
+    expect(html).toMatch(/<li[^>]* data-ha="(heim|aus)" data-st="(gespielt|kommend)">/);
+    expect(html).toContain('<a class="skip" href="#inhalt">');
+    expect(html).toContain('<meta name="color-scheme" content="light dark">');
+    expect(html).toContain('role="status" aria-live="polite"');
+    expect(html).not.toContain('data-live');
+  });
+
+  it('hält die Seite offline vor und liefert ein installierbares Manifest', async () => {
+    const sw = await get(`/${TEAM}/sw.js`);
+    expect(sw.body).toContain("addEventListener('fetch'");
+    expect(sw.body).toContain('vibrate');
+    const manifest = (await get(`/${TEAM}/manifest.webmanifest`)).json();
+    expect(manifest.id).toBe('./');
+    expect(manifest.icons.map((i: { sizes: string }) => i.sizes)).toEqual(['192x192', '512x512']);
+    expect(manifest.shortcuts.map((x: { url: string }) => x.url)).toEqual(['./#naechstes', './#tabelle', './#spielplan']);
+    const klein = await get(`/${TEAM}/logo-192.png`);
+    expect(klein.statusCode).toBe(200);
+    expect(klein.headers['content-type']).toBe('image/png');
+    const app = await get(`/${TEAM}/app.js`);
+    expect(app.body).toContain('data-live');
+    expect(app.body).toContain('handball-site-open');
+  });
+
+  it('zeigt den Live-Modus nur bei laufendem Spiel — und lässt die Seite dann nur kurz liegen', async () => {
+    const id = `${TEAM}:m3`;
+    db.update(schema.handball_team_match).set({ status: 'live', score_home: 3, score_away: 2 }).where(eq(schema.handball_team_match.id, id)).run();
+    try {
+      const res = await get(`/${TEAM}/`);
+      expect(res.body).toContain('<body data-live="1">');
+      expect(res.headers['cache-control']).toBe('public, max-age=15');
+    } finally {
+      db.update(schema.handball_team_match).set({ status: 'scheduled', score_home: null, score_away: null }).where(eq(schema.handball_team_match.id, id)).run();
+    }
+    const ruhig = await get(`/${TEAM}/`);
+    expect(ruhig.body).not.toContain('data-live');
+    expect(ruhig.headers['cache-control']).toBe('public, max-age=60');
+  });
+
+  it('zeichnet den Torverlauf der besten Schützen — nur mit Spielernamen', async () => {
+    const jetzt = new Date().toISOString();
+    const zeile = (matchId: string, playerId: string, nummer: number, tore: number) => ({
+      id: `${TEAM}:${matchId}:${playerId}`, team_id: TEAM, match_id: matchId, player_id: playerId, number: nummer, goals: tore, updated_at: jetzt,
+    });
+    db.insert(schema.handball_match_player).values([
+      zeile('m1', 'p1', 7, 9), zeile('m2', 'p1', 7, 4), zeile('m1', 'p2', 11, 3), zeile('m2', 'p2', 11, 6),
+    ] as never).run();
+    try {
+      expect((await get(`/${TEAM}/`)).body).not.toContain('Tore im Saisonverlauf');
+      setConfig({ site_enabled: 'true', site_players: 'true' });
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toContain('Tore im Saisonverlauf');
+      expect(html).toContain('aria-label="Tore der besten Torschützen je Spiel, aufsummiert"');
+      expect(html).toContain('<li><i style="background:var(--p)"></i>Nr. 7 <b>13</b></li>');
+      expect(html).toContain('Nr. 11 <b>9</b>');
+    } finally {
+      db.delete(schema.handball_match_player).run();
     }
   });
 
@@ -351,6 +438,19 @@ describe('Handball-Microsite', () => {
       // Unbekannter Vorlauf fällt auf den Standard zurück statt abzulehnen.
       const res = await post({ subscription: { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/def' }, lead: 'sofort', mode: 'egal' });
       expect(res.json()).toEqual({ ok: true, lead: '1h', mode: 'all' });
+    });
+
+    it('nimmt über der Obergrenze keine neue Anmeldung mehr an — wer drin ist, darf ändern', async () => {
+      process.env.SITE_PUSH_MAX = '1';
+      try {
+        const neu = await post({ subscription: { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/voll' }, lead: '1h', mode: 'all' });
+        expect(neu.statusCode).toBe(503);
+        expect(neu.json().error).toBe('push_full');
+        expect(neu.headers['retry-after']).toBe('3600');
+        expect((await post({ subscription: sub, lead: '1h', mode: 'all' })).statusCode).toBe(200);
+      } finally {
+        delete process.env.SITE_PUSH_MAX;
+      }
     });
 
     it('trägt wieder aus', async () => {

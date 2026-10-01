@@ -8,7 +8,7 @@
  * `app.js` ist eine eigene Route), Stile dürfen inline stehen, Bilder als
  * Data-URI (die Logos sind eingebettet). Ein Fremdziel hat die Seite nicht.
  */
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type RouteOptions } from 'fastify';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { trustProxy, version } from './config';
@@ -28,7 +28,13 @@ export function logUrl(url: string): string {
     .replace(/([?&]t=)[^&#]*/g, '$1***');
 }
 
-export async function buildServer(opts: { logger?: boolean | object } = {}): Promise<FastifyInstance> {
+/**
+ * Was der Browser auf dieser Seite nie braucht — Kamera, Standort, Zahlung
+ * und die Werbe-Kohorten von Chrome. Helmet setzt diesen Kopf nicht.
+ */
+export const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
+
+export async function buildServer(opts: { logger?: boolean | object; onRoute?: (route: RouteOptions) => void } = {}): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: opts.logger ?? {
       level: process.env.LOG_LEVEL || 'info',
@@ -46,6 +52,8 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
     bodyLimit: 256 * 1024,
   });
   setServiceLogger(fastify.log);
+  // Für den Rate-Limit-Audit der Tests: jede Route zeigen, die registriert wird.
+  if (opts.onRoute) fastify.addHook('onRoute', opts.onRoute);
 
   await fastify.register(helmet, {
     contentSecurityPolicy: {
@@ -64,6 +72,9 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
     // Die Microsite wird per Link in WhatsApp und Telegram geteilt; deren
     // Vorschau holt `og:image` über denselben Host — kein Cross-Origin-Zwang.
     crossOriginResourcePolicy: { policy: 'same-site' },
+  });
+  fastify.addHook('onSend', async (_request, reply) => {
+    reply.header('Permissions-Policy', PERMISSIONS_POLICY);
   });
   await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
 
