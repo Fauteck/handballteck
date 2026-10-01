@@ -34,10 +34,11 @@ import {
 import { readPalette, handballOverview } from '../lib/handballTeam';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
+import { isPushServiceUrl } from '../lib/ssrf';
 
 const subscribeSchema = z.object({
   subscription: z.object({
-    endpoint: z.string().url().max(1000).refine(u => u.startsWith('https://'), 'https only'),
+    endpoint: z.string().url().max(1000).refine(isPushServiceUrl, 'kein bekannter Push-Dienst'),
     keys: z.object({ p256dh: z.string().min(16).max(256), auth: z.string().min(8).max(128) }),
   }),
   lead: z.string().optional(),

@@ -311,7 +311,7 @@ describe('Handball-Microsite', () => {
   });
 
   describe('Web-Push ohne Konto', () => {
-    const sub = { endpoint: 'https://push.example/abc', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
+    const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
     const post = (payload: Record<string, unknown>) => fastify.inject({ method: 'POST', url: `/${TEAM}/push`, payload });
     const deps = { send: (t: PushTarget, p: PushPayload): Promise<PushResult> => sendPush(t, p) as Promise<PushResult> };
 
@@ -340,13 +340,24 @@ describe('Handball-Microsite', () => {
     it('weist Unvollständiges und http-Endpoints ab', async () => {
       expect((await post({})).statusCode).toBe(400);
       expect((await post({ subscription: { endpoint: 'http://push.example/x', keys: sub.keys } })).statusCode).toBe(400);
+      // SEC-1-001: Nur die Push-Dienste der Browser — kein internes Ziel, kein fremder Host.
+      for (const endpoint of [
+        'https://192.168.1.10/x', 'https://router.fritz.box/x', 'https://push.example/x',
+        'https://fcm.googleapis.com:8443/x', 'https://fcm.googleapis.com.evil.example/x', 'https://evilpush.apple.com/x',
+      ]) {
+        expect((await post({ subscription: { endpoint, keys: sub.keys } })).statusCode, endpoint).toBe(400);
+      }
+      for (const endpoint of ['https://updates.push.services.mozilla.com/wpush/v2/x', 'https://wns2-db5p.notify.windows.com/w/?token=x', 'https://web.push.apple.com/x']) {
+        expect((await post({ subscription: { endpoint, keys: sub.keys } })).statusCode, endpoint).toBe(200);
+        await fastify.inject({ method: 'DELETE', url: `/${TEAM}/push`, payload: { endpoint } });
+      }
       // Unbekannter Vorlauf fällt auf den Standard zurück statt abzulehnen.
-      const res = await post({ subscription: { ...sub, endpoint: 'https://push.example/def' }, lead: 'sofort', mode: 'egal' });
+      const res = await post({ subscription: { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/def' }, lead: 'sofort', mode: 'egal' });
       expect(res.json()).toEqual({ ok: true, lead: '1h', mode: 'all' });
     });
 
     it('trägt wieder aus', async () => {
-      const res = await fastify.inject({ method: 'DELETE', url: `/${TEAM}/push`, payload: { endpoint: 'https://push.example/def' } });
+      const res = await fastify.inject({ method: 'DELETE', url: `/${TEAM}/push`, payload: { endpoint: 'https://fcm.googleapis.com/fcm/send/def' } });
       expect(res.json()).toEqual({ ok: true, removed: 1 });
       expect(sitePush.listSiteSubscribers(TEAM).map(s => s.endpoint)).toEqual([sub.endpoint]);
     });
@@ -354,7 +365,7 @@ describe('Handball-Microsite', () => {
     it('schickt den frischen Endstand genau einmal — und löscht tote Abonnenten', async () => {
       sitePush.resetSiteSent();
       // Der Abonnent von oben will nur Ergebnisse; ein zweiter alles.
-      sitePush.saveSiteSubscription(TEAM, { endpoint: 'https://push.example/tot', p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
+      sitePush.saveSiteSubscription(TEAM, { endpoint: 'https://fcm.googleapis.com/fcm/send/tot', p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
       sendPush.mockImplementation(async (target: { endpoint: string }) => (target.endpoint.endsWith('/tot') ? { status: 'gone', reason: 'HTTP 410' } : { status: 'sent' }));
 
       const r = await sitePush.pushHandballSite(new Date(), deps);

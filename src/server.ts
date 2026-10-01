@@ -17,9 +17,31 @@ import { telegramRoutes } from './routes/telegram';
 import { apiRoutes } from './routes/api';
 import { setServiceLogger } from './lib/serviceLogger';
 
+/**
+ * Die URL, wie sie ins Log geht: ohne das Pfadgeheimnis des Webhooks und
+ * ohne die Signatur der Inline-Bilder. Beides wäre sonst im Klartext in jedem
+ * Container-Log — und wer das Log liest, könnte den Webhook ansprechen.
+ */
+export function logUrl(url: string): string {
+  return url
+    .replace(/^\/telegram\/webhook\/[^/?#]+/, '/telegram/webhook/***')
+    .replace(/([?&]t=)[^&#]*/g, '$1***');
+}
+
 export async function buildServer(opts: { logger?: boolean | object } = {}): Promise<FastifyInstance> {
   const fastify = Fastify({
-    logger: opts.logger ?? { level: process.env.LOG_LEVEL || 'info' },
+    logger: opts.logger ?? {
+      level: process.env.LOG_LEVEL || 'info',
+      serializers: {
+        req: (request: { method: string; url: string; host?: string; ip?: string; socket?: { remotePort?: number } }) => ({
+          method: request.method,
+          url: logUrl(request.url),
+          host: request.host,
+          remoteAddress: request.ip,
+          remotePort: request.socket?.remotePort,
+        }),
+      },
+    },
     trustProxy: trustProxy(),
     bodyLimit: 256 * 1024,
   });
@@ -45,7 +67,22 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
   });
   await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
 
-  fastify.get('/healthz', { config: { rateLimit: false } }, async (_request, reply) => {
+  // SEC-1-002: Ohne TRUST_PROXY sieht der Dienst hinter einem Reverse Proxy
+  // nur dessen Adresse — dann teilen sich alle Besucher jedes Rate-Limit,
+  // und ein einzelner Aufrufer sperrt die Seite für alle. Kommt ein
+  // X-Forwarded-For an, obwohl kein Proxy eingetragen ist, einmal warnen.
+  if (!trustProxy()) {
+    let gewarnt = false;
+    fastify.addHook('onRequest', async (request) => {
+      if (gewarnt || request.headers['x-forwarded-for'] === undefined) return;
+      gewarnt = true;
+      request.log.warn({ proxy: request.ip }, 'X-Forwarded-For ohne TRUST_PROXY — alle Besucher teilen sich ein Rate-Limit. TRUST_PROXY auf die Adresse des Reverse Proxys setzen.');
+    });
+  }
+
+  // Der Healthcheck kommt alle 30 Sekunden; mit `warn` schreibt er keine
+  // Zeile pro Abruf, ein Fehler landet trotzdem im Log.
+  fastify.get('/healthz', { logLevel: 'warn', config: { rateLimit: false } }, async (_request, reply) => {
     return reply.header('Cache-Control', 'no-store').send({ ok: true, ...version() });
   });
   fastify.get('/robots.txt', async (_request, reply) => {

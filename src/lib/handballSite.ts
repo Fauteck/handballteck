@@ -167,7 +167,10 @@ export function istBildArt(art: string, players: boolean): art is SiteImageArt {
     || (players && (SITE_IMAGES_PLAYERS as readonly string[]).includes(art));
 }
 
-const BILD_CACHE_MAX = 48;
+// PRF-3-002: Platz für jede Bildart jeder Mannschaft samt Logo und einigen
+// Endständen (8 × 12); bei rund 200 KB je PNG etwa 20 MB. Mit 48 verdrängten
+// sich die Bilder von acht Mannschaften gegenseitig und wurden neu gerendert.
+const BILD_CACHE_MAX = 96;
 const BILD_CACHE_TTL_MS = 10 * 60 * 1000;
 const bildCache = new Map<string, { stand: string; at: number; png: Buffer }>();
 

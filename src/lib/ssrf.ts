@@ -63,3 +63,25 @@ export function isSafeExternalUrl(raw: string, opts: { requireHttps?: boolean } 
   if (isPrivateHost(parsed.hostname)) return false;
   return true;
 }
+
+/**
+ * SEC-1-001: Die Push-Dienste der Browser, an die eine Web-Push-Anmeldung
+ * zeigen darf. Den Endpoint schickt der Browser, also jeder, der die
+ * Microsite aufruft — ohne diese Liste wäre `POST /<Team>/push` ein
+ * Werkzeug, mit dem der Server beliebige HTTPS-Ziele anspricht (auch im
+ * eigenen Netz) und bei jeder Meldung an alle eingetragenen Ziele sendet.
+ *
+ * Chrome, Opera, Samsung Internet, Brave → FCM; Firefox → Mozilla Autopush;
+ * Edge → WNS; Safari (macOS, iOS ab 16.4) → Apple. Ein Browser mit einem
+ * anderen Dienst kommt hier mit 400 an und taucht dann im Log auf.
+ */
+const PUSH_HOSTS_EXAKT = new Set(['fcm.googleapis.com']);
+const PUSH_HOSTS_ENDUNG = ['.push.services.mozilla.com', '.notify.windows.com', '.push.apple.com'];
+
+export function isPushServiceUrl(raw: string): boolean {
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { return false; }
+  if (parsed.protocol !== 'https:' || parsed.port !== '' || parsed.username || parsed.password) return false;
+  const host = parsed.hostname.toLowerCase();
+  return PUSH_HOSTS_EXAKT.has(host) || PUSH_HOSTS_ENDUNG.some(e => host.endsWith(e));
+}
