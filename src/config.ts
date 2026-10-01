@@ -27,7 +27,7 @@ function schalter(name: string, standard: boolean): boolean {
 
 export interface TeamEntry {
   id: string;
-  /** Ein Name aus der Konfiguration (`96254=B-Jugend`); null heißt: die Altersklasse der Quelle. */
+  /** Ein Name aus der Konfiguration (`96254=B-Jugend`); null heißt: automatisch aus Liga und Name (`automatischesLabel`). */
   label: string | null;
 }
 

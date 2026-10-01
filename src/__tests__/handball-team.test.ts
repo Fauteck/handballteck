@@ -665,12 +665,32 @@ describe('Vereinsfarben und Mannschaften aus der Umgebung', () => {
     expect(parseTeamEntries('96254 96300')).toEqual([{ id: '96254', label: null }, { id: '96300', label: null }]);
     trageTeamEin('96254,96300');
     legeSpiel({ championship_name: 'B-Jugend' });
-    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', championship_name: 'C-Jugend' });
+    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', competition_name: 'Kreisliga mC', championship_name: 'C-Jugend' });
     const sicht = mod.handballOverview();
-    expect(sicht.teams.map(t => t.label)).toEqual(['B-Jugend', 'C-Jugend']);
+    expect(sicht.teams.map(t => t.label)).toEqual(['mB-Jugend', 'mC-Jugend']);
     // Gleicher Vereinsname: der Name der Mannschaft trägt die Altersklasse, damit /spiele sie unterscheidet.
-    expect(sicht.teams.map(t => t.name)).toEqual(['HSG Wölfe Voreifel B-Jugend', 'HSG Wölfe Voreifel C-Jugend']);
+    expect(sicht.teams.map(t => t.name)).toEqual(['HSG Wölfe Voreifel mB-Jugend', 'HSG Wölfe Voreifel mC-Jugend']);
     trageTeamEin('96254=Wölfe B, 96300');
-    expect(mod.handballOverview().teams.map(t => t.label)).toEqual(['Wölfe B', 'C-Jugend']);
+    expect(mod.handballOverview().teams.map(t => t.label)).toEqual(['Wölfe B', 'mC-Jugend']);
+  });
+
+  it('benennt Mannschaften automatisch nach Liga und Nummer', () => {
+    const r = (competition_name: string, championship_name: string | null = null) => ({ competition_name, championship_name });
+    expect(mod.automatischesLabel('Wölfe Voreifel', [r('Testspiele Senioren m/w'), r('Oberliga Männer Gr. 1'), r('Oberliga Männer Gr. 1')])).toBe('1. Herren');
+    expect(mod.automatischesLabel('Wölfe Voreifel III', [r('Kreisoberliga Männer')])).toBe('3. Herren');
+    expect(mod.automatischesLabel('TV Musterstadt 2', [r('Landesliga Frauen')])).toBe('2. Damen');
+    expect(mod.automatischesLabel('HSG Wölfe Voreifel', [r('Kreisoberliga mB', 'B-Jugend')])).toBe('mB-Jugend');
+    expect(mod.automatischesLabel('HSG Wölfe Voreifel', [r('Regionalliga männliche Jugend A', 'A-Jugend')])).toBe('mA-Jugend');
+    expect(mod.automatischesLabel('HSG Wölfe Voreifel', [r('Oberliga weibliche Jugend C', 'C-Jugend')])).toBe('wC-Jugend');
+    expect(mod.automatischesLabel('HSG Wölfe Voreifel', [r('Kreisliga', 'D-Jugend')])).toBe('D-Jugend');
+    expect(mod.automatischesLabel('HSG Wölfe Voreifel', [r('Testspiele Senioren m/w')])).toBeNull();
+    expect(mod.automatischesLabel('HSG Wölfe Voreifel', [])).toBeNull();
+  });
+
+  it('fällt bei zwei gleichen automatischen Labels auf die Altersklasse zurück', () => {
+    trageTeamEin('96254,96300');
+    legeSpiel({ championship_name: 'B-Jugend' });
+    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', championship_name: 'B-Jugend 2' });
+    expect(mod.handballOverview().teams.map(t => t.label)).toEqual(['B-Jugend', 'B-Jugend 2']);
   });
 });

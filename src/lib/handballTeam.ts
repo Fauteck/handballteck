@@ -1169,8 +1169,9 @@ export interface HandballTeamView {
   name: string;
   /**
    * Wie die Mannschaft neben den anderen des Vereins heißt — im Dropdown der
-   * Microsite und in der Auswahl des Bots: der Name aus `TEAM_IDS`, sonst die
-   * Altersklasse der Quelle („B-Jugend"), sonst der Mannschaftsname.
+   * Microsite und in der Auswahl des Bots: der Name aus `TEAM_IDS`, sonst
+   * `automatischesLabel` („2. Herren", „mB-Jugend"), sonst die Altersklasse
+   * der Quelle („B-Jugend"), sonst der Mannschaftsname.
    * Tragen zwei Mannschaften verschiedene Namen (zweite Mannschaft), steht
    * der Name davor.
    */
@@ -1254,6 +1255,39 @@ function sicht(r: typeof handball_team_match.$inferSelect, rated = false): Handb
   };
 }
 
+const ROEMISCH: Record<string, number> = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
+
+/**
+ * Der Name im Dropdown, aus den Daten der Quelle gelesen — so, wie der Verein
+ * seine Mannschaften nennt: „1. Herren", „3. Damen", „mB-Jugend", „wC-Jugend".
+ *
+ * Maßgeblich ist der Wettbewerb mit den meisten Spielen, nicht das erste
+ * Spiel: Vor der Saison steht oft ein Testspiel vorn („Testspiele Senioren
+ * m/w"), und das sagt weder Geschlecht noch Liga. Die Nummer einer
+ * Erwachsenenmannschaft kommt aus dem Namen („Wölfe Voreifel III"), ohne
+ * Zusatz ist es die erste. null, wenn die Quelle nichts Eindeutiges sagt —
+ * dann bleibt es bei Altersklasse oder Vereinsname.
+ */
+export function automatischesLabel(name: string, rows: Array<{ competition_name: string; championship_name: string | null }>): string | null {
+  const zaehler = new Map<string, number>();
+  for (const r of rows) zaehler.set(r.competition_name, (zaehler.get(r.competition_name) ?? 0) + 1);
+  const wettbewerb = [...zaehler.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!wettbewerb) return null;
+  const altersklasse = rows.find(r => r.competition_name === wettbewerb)?.championship_name ?? null;
+
+  const jugend = /\b(männlich|weiblich)e?\s+Jugend\s+([A-E])\b/i.exec(wettbewerb)
+    ?? /\b([mw])J?([A-E])\b/.exec(wettbewerb);
+  if (jugend) return `${jugend[1][0].toLowerCase()}${jugend[2].toUpperCase()}-Jugend`;
+  const klasse = /\b([A-E])-?Jugend\b/i.exec(`${wettbewerb} ${altersklasse ?? ''}`);
+  if (klasse) return `${klasse[1].toUpperCase()}-Jugend`;
+
+  const geschlecht = /\b(Männer|Herren)\b/i.test(wettbewerb) ? 'Herren' : /\b(Frauen|Damen)\b/i.test(wettbewerb) ? 'Damen' : null;
+  if (!geschlecht) return null;
+  const zusatz = /\s(II|III|IV|V|VI|VII|VIII|IX|X|\d{1,2})$/.exec(name.trim())?.[1];
+  const nummer = zusatz ? (ROEMISCH[zusatz] ?? Number(zusatz)) : 1;
+  return `${nummer}. ${geschlecht}`;
+}
+
 /**
  * Der Tab liest ausschließlich die Datenbank — **kein** Aufruf nach draußen.
  * Gefüllt hat sie der Job; steht dort nichts, sagt der Tab das.
@@ -1299,7 +1333,7 @@ export function handballOverview(): HandballOverview {
     return {
       team_id: teamId,
       name,
-      label: teamLabelAusConfig(teamId) ?? erste?.championship_name ?? name,
+      label: teamLabelAusConfig(teamId) ?? automatischesLabel(name, meine) ?? erste?.championship_name ?? name,
       championship_name: erste?.championship_name ?? null,
       next_match: naechstes ? sicht(naechstes) : null,
       last_match: zuletzt.length > 0 ? sicht(zuletzt[zuletzt.length - 1], gewertet.has(zuletzt[zuletzt.length - 1].match_id)) : null,
@@ -1312,11 +1346,25 @@ export function handballOverview(): HandballOverview {
   // („HSG Wölfe Voreifel") und unterscheiden sich nur in der Altersklasse:
   // Der Name bekommt dann das Label dazu, damit `/spiele` und die Kopfzeile
   // der Seite sie auseinanderhalten. Heißen sie verschieden („… II"), trägt
-  // das Label den Namen, denn „B-Jugend" allein sagte nicht, welche.
+  // das Label den Namen, denn „B-Jugend" allein sagte nicht, welche — es sei
+  // denn, das automatische Label unterscheidet sie schon („2. Herren").
+  // Zwei gleiche automatische Labels (zwei mB-Jugenden) unterscheiden nichts —
+  // dann zurück zur Altersklasse der Quelle bzw. zum Namen.
+  const doppelt = new Map<string, number>();
+  for (const v of views) doppelt.set(v.label, (doppelt.get(v.label) ?? 0) + 1);
+  for (const v of views) {
+    if ((doppelt.get(v.label) ?? 0) > 1 && !teamLabelAusConfig(v.team_id)) v.label = v.championship_name ?? v.name;
+  }
   const gleich = new Map<string, number>();
   for (const v of views) gleich.set(v.name, (gleich.get(v.name) ?? 0) + 1);
+  const labels = new Map<string, number>();
+  for (const v of views) labels.set(v.label, (labels.get(v.label) ?? 0) + 1);
   if (gleich.size > 1) {
-    for (const v of views) if (!teamLabelAusConfig(v.team_id)) v.label = v.championship_name ? `${v.name} · ${v.championship_name}` : v.name;
+    for (const v of views) {
+      if (teamLabelAusConfig(v.team_id)) continue;
+      if (v.label !== v.championship_name && v.label !== v.name && labels.get(v.label) === 1) continue;
+      v.label = v.championship_name ? `${v.name} · ${v.championship_name}` : v.name;
+    }
   }
   for (const v of views) if ((gleich.get(v.name) ?? 0) > 1 && v.label !== v.name) v.name = `${v.name} ${v.label}`;
   return { configured: true, teams: views, updated_at: updatedAt };

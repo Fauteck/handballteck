@@ -84,7 +84,7 @@ describe('API für das Cockpit: Bilder und Details', () => {
     const overview = await get('/api/overview');
     expect(overview.statusCode).toBe(200);
     expect(overview.json()).toMatchObject({ configured: true, bot: { enabled: false, subscribers: 0 } });
-    expect(overview.json().teams[0]).toMatchObject({ team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'B-Jugend' });
+    expect(overview.json().teams[0]).toMatchObject({ team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'mB-Jugend' });
     expect(overview.json().site[0]).toMatchObject({ team_id: TEAM, enabled: true, url: `https://todo.test.local/${TEAM}/`, players: false, subscribers: 0 });
     const health = await get('/api/health');
     expect(health.statusCode).toBe(200);
