@@ -196,15 +196,29 @@ function defsDark(th: Theme): string {
     + `<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${th.D.bg1}"/><stop offset="0.55" stop-color="${th.D.bg0}"/><stop offset="1" stop-color="${th.D.bg2}"/></linearGradient>`
     + `<linearGradient id="trikot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${th.D.bg2}"/><stop offset="1" stop-color="${th.D.accent}"/></linearGradient>`
     + `<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="${th.D.accent}" stop-opacity="0.55"/><stop offset="0.6" stop-color="${th.D.accent}" stop-opacity="0.12"/><stop offset="1" stop-color="${th.D.accent}" stop-opacity="0"/></radialGradient>`
-    + `<pattern id="streifen" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="14" stroke="${th.D.text}" stroke-width="1" opacity="0.05"/></pattern>`
     + `</defs>`;
 }
 
 /** Hintergrund einer dunklen Karte: Verlauf, Streifen, Hallenmotiv. */
 function dunklerGrund(th: Theme, height: number, halleX: number, halleY: number, halleR: number): string {
   return `<rect width="${WIDTH}" height="${height}" fill="url(#bg)"/>`
-    + `<rect width="${WIDTH}" height="${height}" fill="url(#streifen)"/>`
+    + diagonalStreifen(th, height)
     + halle(th, halleX, halleY, halleR);
+}
+
+/**
+ * Feine 45°-Streifen als ein einziger Pfad. Früher ein `<pattern>` mit
+ * `patternTransform="rotate(45)"` — librsvg rastert das Kachel für Kachel
+ * und brauchte dafür rund 85 % der Renderzeit einer Karte (über eine halbe
+ * Sekunde bei doppelter Auflösung). Gleiche Linien: x + y = k · 14·√2.
+ */
+function diagonalStreifen(th: Theme, height: number): string {
+  const abstand = 14 * Math.SQRT2;
+  const d: string[] = [];
+  for (let c = 0; c < WIDTH + height; c += abstand) {
+    d.push(`M${c.toFixed(1)} 0L${(c - height).toFixed(1)} ${height}`);
+  }
+  return `<path d="${d.join('')}" stroke="${th.D.text}" stroke-width="1" stroke-opacity="0.05" fill="none"/>`;
 }
 
 /**
