@@ -208,6 +208,36 @@ describe('Abonnieren', () => {
     expect(gesendet[0].text).toContain('/tabelle');
   });
 
+  it('fragt bei mehreren Mannschaften zuerst, welche — und meldet bis dahin nichts', async () => {
+    trageTeamEin({ team_ids: `${TEAM},75796` });
+    const { deps, gesendet } = sammler();
+    await bot.handleHandballUpdate(update('/start'), deps);
+    expect(bot.listSubscribers()[0].teamIds).toEqual([]);
+    expect(bot.verfolgt(bot.listSubscribers()[0], TEAM)).toBe(false);
+    expect(gesendet[1].text).toContain('Welche Mannschaften willst du verfolgen?');
+    const knoepfe = (gesendet[1].keyboard as { inline_keyboard: Array<Array<{ text: string }>> } | undefined)?.inline_keyboard.flat().map(k => k.text) ?? [];
+    expect(knoepfe.filter(t => t.startsWith('▫️'))).toHaveLength(2);
+
+    // Ein Befehl ohne Auswahl bringt die Auswahl, /hilfe nicht.
+    await bot.handleHandballUpdate(update('/tabelle'), deps);
+    expect(gesendet.at(-1)?.text).toContain('Welche Mannschaften');
+    await bot.handleHandballUpdate(update('/hilfe'), deps);
+    expect(gesendet.at(-1)?.text).toContain('/tabelle');
+
+    await bot.handleHandballUpdate(update(`/teams ${TEAM}`), deps);
+    expect(bot.listSubscribers()[0].teamIds).toEqual([TEAM]);
+    expect(bot.verfolgt(bot.listSubscribers()[0], TEAM)).toBe(true);
+    expect(bot.verfolgt(bot.listSubscribers()[0], '75796')).toBe(false);
+  });
+
+  it('lässt bestehende Abonnenten ohne Auswahl bei allen Mannschaften', async () => {
+    trageTeamEin({ team_ids: `${TEAM},75796` });
+    dbRef.insert(schemaRef.handball_bot_subscriber).values({ chat_id: '4711', name: 'Alt', subscribed_at: '2026-09-01T00:00:00Z', last_seen_at: '2026-09-01T00:00:00Z' }).run();
+    const { deps } = sammler();
+    await bot.handleHandballUpdate(update('/start'), deps);
+    expect(bot.listSubscribers()[0].teamIds).toBeNull();
+  });
+
   it('verlangt den Einladungscode, wenn einer gesetzt ist', async () => {
     process.env.TELEGRAM_INVITE_CODE = 'woelfe';
     const { deps, gesendet } = sammler();
