@@ -152,3 +152,13 @@ describe('API für das Cockpit: Bilder und Details', () => {
     }
   }, 30_000);
 });
+
+describe('Log ohne Geheimnisse', () => {
+  it('schwärzt Webhook-Pfad und Inline-Signatur, lässt den Rest stehen', async () => {
+    const { logUrl } = await import('../server');
+    expect(logUrl('/telegram/webhook/uStXFk7Gb15PqXlgdMY-WM9wvGRjyKXR')).toBe('/telegram/webhook/***');
+    expect(logUrl('/inline/tabelle.jpg?team=96254&exp=123&t=abcdef&vorschau=1'))
+      .toBe('/inline/tabelle.jpg?team=96254&exp=123&t=***&vorschau=1');
+    expect(logUrl('/75796/bild/endstand.png?match=379369')).toBe('/75796/bild/endstand.png?match=379369');
+  });
+});
