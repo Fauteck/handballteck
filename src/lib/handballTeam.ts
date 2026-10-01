@@ -618,6 +618,8 @@ async function gegnerSpielplanHolen(teamId: string, seasonId: number): Promise<n
     .sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
   if (!naechstes) return 0;
   const gegner = naechstes.home_id === teamId ? naechstes.away_id : naechstes.home_id;
+  // Testspiele gegen Mannschaften außerhalb von handball.net tragen die ID 0 — die Quelle antwortet darauf mit 422.
+  if (!gegner || gegner === '0') return 0;
   try {
     const spiele = await fetchTeamMatches(gegner, seasonId);
     const now = new Date().toISOString();

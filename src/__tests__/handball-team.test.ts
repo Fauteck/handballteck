@@ -205,6 +205,13 @@ describe('Tageslauf', () => {
     expect(mod.handballOverview().teams.find(t => t.team_id === '75796')?.next_match).toBeTruthy();
   });
 
+  it('fragt keinen Spielplan für einen Gegner ohne ID ab (Testspiel)', async () => {
+    trageTeamEin();
+    const f = quelle([spiel({ visitor: { id: 0, name: 'GASTMANNSCHAFT' } })]);
+    expect((await mod.syncHandballTeams()).status).toBe('ok');
+    expect(f.mock.calls.map(c => String(c[0])).filter(u => u.includes('team_id=0&'))).toEqual([]);
+  });
+
   it('holt die übrigen Mannschaften, wenn eine Team-ID nichts liefert', async () => {
     trageTeamEin(`11111,${TEAM}`);
     const sonst = quelle().getMockImplementation()!;
