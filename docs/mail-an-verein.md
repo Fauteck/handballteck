@@ -9,14 +9,15 @@ Entwurf zum Anpassen. Platzhalter in `[eckigen Klammern]` vor dem Versand ersetz
 
 Hallo [Name],
 
-mein Name ist Niklas Fauteck, ich bin [Spielervater / Mitglied / Fan] der HSG Wölfe
-Voreifel und verfolge [unsere Mannschaft / die Spiele meines Sohnes / meiner Tochter]
-schon eine ganze Weile. Beruflich und privat beschäftige ich mich gern mit
-Digitalisierung — und in letzter Zeit vor allem mit „Vibecoding“, also dem
-Programmieren zusammen mit einer KI.
+mein Name ist Niklas Fauteck. Ich war vor einiger Zeit als Zuschauer bei einem eurer
+Spiele und fand es so mitreißend, dass ich danach online auf dem Laufenden bleiben
+wollte. Auf handball.net habe ich mich allerdings schwergetan: Spielplan, Tabelle und
+Ergebnisse sind dort ziemlich verstreut und unübersichtlich.
 
-Aus reinem Spaß daran ist dabei eine kleine Seite für unsere Mannschaften
-entstanden, die ich euch gern zeigen möchte:
+Beruflich und privat beschäftige ich mich gern mit Digitalisierung — und in letzter
+Zeit vor allem mit „Vibecoding“, also dem Programmieren zusammen mit einer KI. Aus
+reinem Spaß daran ist so eine kleine Seite für eure Mannschaften entstanden, die alles
+übersichtlich an einem Ort zeigt. Die möchte ich euch gern vorstellen:
 
 👉 **[Link zur Seite, z. B. https://woelfe.example.de/]**
 
@@ -34,7 +35,7 @@ entstanden, die ich euch gern zeigen möchte:
 - **Benachrichtigungen:** Wer möchte, bekommt Ankündigung, Halbzeit- und Endstand als
   Push-Nachricht im Browser oder über einen Telegram-Bot.
 - **Zum Teilen gemacht:** Teilen-Knopf und schöne Vorschaubilder für WhatsApp & Co. —
-  in unseren Vereinsfarben.
+  in euren Vereinsfarben.
 
 **Was die Seite nicht tut**
 
@@ -64,7 +65,8 @@ Hättet ihr Lust, die Seite für den Verein zu nutzen? Zum Beispiel:
 
 Ich freue mich über ehrliche Rückmeldung — auch wenn ihr Wünsche habt, was fehlt, was
 anders aussehen soll, oder wenn ihr lieber darauf verzichten möchtet. Gern zeige ich
-euch die Seite auch kurz persönlich, z. B. am Rand eines Heimspiels.
+euch die Seite auch kurz persönlich, z. B. am Rand eines Heimspiels — dann bin ich
+endlich mal wieder in der Halle.
 
 Sportliche Grüße
 Niklas Fauteck
@@ -77,7 +79,6 @@ Niklas Fauteck
 
 - [ ] Link zur Seite und zum Repo eingesetzt; Repo ist **öffentlich** (sonst Absatz
       „Offen und nachvollziehbar“ streichen).
-- [ ] Eigene Rolle im Verein eingesetzt.
 - [ ] `SITE_OPERATOR` und `SITE_FEEDBACK_MAIL` in der `.env` gesetzt, damit im Footer
       ein Ansprechpartner steht.
 - [ ] `SITE_PLAYERS=false` gelassen, solange der Verein nicht zugestimmt hat.
