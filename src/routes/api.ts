@@ -13,6 +13,7 @@
 import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { apiToken, version, teamIds } from '../config';
+import { getHandballNetStats } from '../lib/handballNetClient';
 import { handballOverview, syncHandballTeams, playerStats, playerGames, getHandballHealth, type HandballTeamView } from '../lib/handballTeam';
 import {
   getHandballBotUsername, isHandballBotEnabled, listSubscribers, pushHandballBot, getHandballBotHealth, refreshHandballWebhookInfo,
@@ -57,6 +58,7 @@ export async function apiRoutes(fastify: FastifyInstance) {
         last_error: getHandballHealth().lastError,
         last_success_at: snapshot?.lastSuccessAt ? new Date(snapshot.lastSuccessAt).toISOString() : null,
         consecutive_failures: snapshot?.consecutiveFailures ?? 0,
+        source: getHandballNetStats(),
         backoff_until: snapshot?.nextAllowedAt && snapshot.nextAllowedAt > Date.now() ? new Date(snapshot.nextAllowedAt).toISOString() : null,
       },
       bot: {

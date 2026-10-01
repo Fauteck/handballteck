@@ -388,6 +388,54 @@ describe('Meldungen', () => {
     expect(zweiter.messages).toBe(0);
   });
 
+  it('grüßt am Spieltagsmorgen — nach acht Uhr, einmal je Chat, nicht ohne Ankündigungswunsch', async () => {
+    abonniere('1'); abonniere('2');
+    dbRef.update(schemaRef.handball_bot_subscriber).set({ lead: 'aus' }).where(eq(schemaRef.handball_bot_subscriber.chat_id, '2')).run();
+    // Anwurf 17:00 Uhr Ortszeit (Sommerzeit: 15:00 UTC).
+    legeSpiel({ starts_at: '2026-10-10T15:00:00.000Z' });
+    const { deps, gesendet } = sammler();
+
+    // 7:30 Uhr: zu früh.
+    await bot.pushHandballBot(new Date('2026-10-10T05:30:00.000Z'), deps);
+    expect(gesendet).toHaveLength(0);
+
+    // 9:00 Uhr: der Gruß an den Chat, der Ankündigungen will — nicht an den mit „keine".
+    const r = await bot.pushHandballBot(new Date('2026-10-10T07:00:00.000Z'), deps);
+    expect(r.recipients).toBe(1);
+    expect(gesendet).toHaveLength(1);
+    expect(gesendet[0].chatId).toBe('1');
+    expect(gesendet[0].text).toContain('☀️ <b>Spieltag!</b> HSG Wölfe Voreifel spielt heute um 17:00 Uhr');
+    expect(gesendet[0].text).toContain('gegen HV Erftstadt (Heimspiel)');
+    expect(gesendet[0].text).toContain('📍 Sporthalle Heimerzheim');
+
+    // Noch einmal im nächsten Takt: nichts.
+    await bot.pushHandballBot(new Date('2026-10-10T07:15:00.000Z'), deps);
+    expect(gesendet).toHaveLength(1);
+
+    // Kurz vor dem Anwurf (16:00 Uhr) übernimmt die Ankündigung, kein zweiter Gruß.
+    await bot.pushHandballBot(new Date('2026-10-10T14:05:00.000Z'), deps);
+    expect(gesendet.filter(g => g.text.includes('Spieltag!'))).toHaveLength(1);
+  });
+
+  it('lässt den Gruß aus, wenn die Ankündigung ohnehin binnen zwei Stunden kommt', async () => {
+    abonniere('drei');
+    dbRef.update(schemaRef.handball_bot_subscriber).set({ lead: '3h' }).where(eq(schemaRef.handball_bot_subscriber.chat_id, 'drei')).run();
+    // Anwurf 13:00 Uhr Ortszeit, Ankündigung „3h" um 10:00 — um 9:00 Uhr kein Gruß mehr.
+    legeSpiel({ starts_at: '2026-10-10T11:00:00.000Z' });
+    const { deps, gesendet } = sammler();
+    await bot.pushHandballBot(new Date('2026-10-10T07:00:00.000Z'), deps);
+    expect(gesendet.filter(g => g.text.includes('Spieltag!'))).toHaveLength(0);
+  });
+
+  it('grüßt nicht, wenn die Ankündigung des Spiels schon raus ist oder der Anwurf zu nah liegt', () => {
+    const spiel = (startsAt: string) => ({ starts_at: startsAt, is_home: true, away_name: 'Gegner', home_name: 'HSG', venue_name: null, venue_address: null, away_id: '1', home_id: '2' }) as never;
+    // Anwurf 12:00 Uhr, jetzt 9:00 Uhr: nur drei Stunden — zu knapp für einen Gruß.
+    expect(bot.spieltagsGrussFaellig(spiel('2026-10-10T10:00:00.000Z'), new Date('2026-10-10T07:00:00.000Z'))).toBe(false);
+    // Anderer Kalendertag.
+    expect(bot.spieltagsGrussFaellig(spiel('2026-10-11T15:00:00.000Z'), new Date('2026-10-10T07:00:00.000Z'))).toBe(false);
+    expect(bot.spieltagsGrussFaellig(spiel('2026-10-10T15:00:00.000Z'), new Date('2026-10-10T07:00:00.000Z'))).toBe(true);
+  });
+
   it('schickt die Aufstellung, sobald sie da ist, und nicht vorher', async () => {
     abonniere();
     legeSpiel({ starts_at: new Date(Date.now() + 2 * 60 * 1000).toISOString() });

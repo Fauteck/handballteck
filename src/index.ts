@@ -7,9 +7,9 @@
  */
 import { runMigrations } from './db/migrate';
 import { buildServer } from './server';
-import { port, syncIntervalMs, teamIds, publicUrl, importTodoteckDb, apiToken } from './config';
+import { port, teamIds, publicUrl, importTodoteckDb, apiToken } from './config';
 import { importTodoteck } from './import/todoteck';
-import { syncHandballTeams } from './lib/handballTeam';
+import { syncHandballTeams, naechsterAbstandMs } from './lib/handballTeam';
 import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
 import { pushHandballSite } from './lib/handballSitePush';
 import { serviceLog } from './lib/serviceLogger';
@@ -75,15 +75,18 @@ async function main(): Promise<void> {
     })
     .catch(err => fastify.log.error({ err: err instanceof Error ? err.message : String(err) }, 'Telegram-Bot konnte nicht registriert werden'));
 
-  const takt = setInterval(() => { void einTakt(); }, syncIntervalMs());
-  const start = setTimeout(() => { void einTakt(); }, STARTUP_DELAY_MS);
-
   let shuttingDown = false;
+  let taktTimer: NodeJS.Timeout | null = null;
+  const planen = () => {
+    taktTimer = setTimeout(() => { void einTakt().finally(() => { if (!shuttingDown) planen(); }); }, naechsterAbstandMs());
+  };
+  const start = setTimeout(() => { void einTakt().finally(() => { if (!shuttingDown) planen(); }); }, STARTUP_DELAY_MS);
+
   const stop = async (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
     fastify.log.info(`${signal} — fahre herunter`);
-    clearInterval(takt);
+    if (taktTimer) clearTimeout(taktTimer);
     clearTimeout(start);
     await fastify.close();
     process.exit(0);

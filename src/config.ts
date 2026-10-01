@@ -129,6 +129,18 @@ export function syncIntervalMs(): number {
   return Math.max(n, 5 * 60 * 1000);
 }
 
+/**
+ * Takt während eines laufenden Spiels (Millisekunden). 0, der Standard: aus —
+ * dann gilt `SYNC_INTERVAL_MS` und am Spieltag wird erst ab Anwurf plus 45
+ * Minuten nachgefragt. Gesetzt (mindestens 20 s): Von fünf Minuten vor dem
+ * Anwurf an fragt der Dienst in diesem Takt nach — für den Live-Modus der Seite.
+ */
+export function syncLiveIntervalMs(): number {
+  const n = Number.parseInt(env('SYNC_LIVE_INTERVAL_MS') || '', 10);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.max(n, 20 * 1000);
+}
+
 // --- Telegram ---------------------------------------------------------------
 
 export function botToken(): string | null {
@@ -175,6 +187,12 @@ export function siteUrl(): string | null {
   } catch {
     return null;
   }
+}
+
+/** Wie viele Browser-Anmeldungen die Seite insgesamt annimmt — danach 503, bis Platz ist. */
+export function sitePushMax(): number {
+  const n = Number.parseInt(env('SITE_PUSH_MAX') || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 2000;
 }
 
 export function siteOperator(): string | null {

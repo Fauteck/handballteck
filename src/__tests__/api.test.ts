@@ -80,6 +80,14 @@ describe('API für das Cockpit: Bilder und Details', () => {
     expect((await fastify.inject({ method: 'GET', url: '/healthz' })).statusCode).toBe(200);
   });
 
+  it('meldet auf /healthz den Zustand des Abrufs — ohne Fehlertext', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/healthz' });
+    const body = res.json();
+    expect(body.ok).toBe(true);
+    expect(body.sync).toMatchObject({ consecutive_failures: 0, source: { requests: expect.any(Number), failures: expect.any(Number) } });
+    expect(JSON.stringify(body)).not.toContain('last_error');
+  });
+
   it('liefert Übersicht und Gesundheit', async () => {
     const overview = await get('/api/overview');
     expect(overview.statusCode).toBe(200);

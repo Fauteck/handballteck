@@ -246,6 +246,68 @@ describe('Tageslauf', () => {
     expect(zeile.score_home).toBe(31);
   });
 
+  it('fragt während des Spiels erst im Live-Takt nach — sonst erst 45 Minuten nach Anwurf', async () => {
+    trageTeamEin();
+    legeSpiel({ starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() });
+    const f = quelle([spiel({ id: 'm1', date: quellzeit(Date.now() - 10 * 60 * 1000), status: { id: 3, name: 'En juego', is_live: true, is_finished: false }, result: { local: 4, visitor: 3 } })]);
+    await mod.syncHandballTeams();
+    expect(apiAufrufe(f)).toBe(0);
+    process.env.SYNC_LIVE_INTERVAL_MS = '60000';
+    try {
+      await mod.syncHandballTeams();
+      expect(apiAufrufe(f)).toBeGreaterThan(0);
+      const zeile = dbRef.select().from(schemaRef.handball_team_match).all()[0];
+      expect(zeile.status).toBe('live');
+      expect(zeile.score_home).toBe(4);
+    } finally {
+      delete process.env.SYNC_LIVE_INTERVAL_MS;
+    }
+  });
+
+  it('wählt den Live-Takt nur, solange ein Spiel läuft oder gleich beginnt', () => {
+    trageTeamEin();
+    expect(mod.naechsterAbstandMs()).toBe(15 * 60 * 1000);
+    process.env.SYNC_LIVE_INTERVAL_MS = '60000';
+    try {
+      // Kein Spiel in Reichweite: der normale Takt.
+      legeSpiel({ starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString() });
+      expect(mod.naechsterAbstandMs()).toBe(15 * 60 * 1000);
+      dbRef.delete(schemaRef.handball_team_match).run();
+      // In drei Minuten Anwurf: Live-Takt. Und Zehntausend Millisekunden werden auf 20 Sekunden angehoben.
+      legeSpiel({ starts_at: new Date(Date.now() + 3 * 60 * 1000).toISOString() });
+      expect(mod.naechsterAbstandMs()).toBe(60 * 1000);
+      process.env.SYNC_LIVE_INTERVAL_MS = '10000';
+      expect(mod.naechsterAbstandMs()).toBe(20 * 1000);
+      // Drei Stunden nach Anwurf und noch nicht beendet: zurück zum normalen Takt.
+      dbRef.delete(schemaRef.handball_team_match).run();
+      legeSpiel({ starts_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() });
+      expect(mod.naechsterAbstandMs()).toBe(15 * 60 * 1000);
+    } finally {
+      delete process.env.SYNC_LIVE_INTERVAL_MS;
+    }
+  });
+
+  it('holt die Tabelle einer gemeinsamen Staffel nur einmal', async () => {
+    trageTeamEin('96254,96300');
+    const f = quelle([spiel()]);
+    const r = await mod.syncHandballTeams();
+    expect(r.status).toBe('ok');
+    expect(f.mock.calls.filter(c => String(c[0]).includes('/standings?'))).toHaveLength(1);
+    // Beide Mannschaften haben ihre Spiele bekommen.
+    expect(new Set(dbRef.select().from(schemaRef.handball_team_match).all().map(z => z.team_id))).toEqual(new Set(['96254', '96300']));
+  });
+
+  it('fasst gleichzeitige Abrufe desselben Pfads zu einem zusammen', async () => {
+    const f = quelle();
+    const client = await import('../lib/handballNetClient');
+    const [a, b] = await Promise.all([client.fetchActiveSeason(), client.fetchActiveSeason()]);
+    expect(a).toEqual(b);
+    expect(f.mock.calls.filter(c => String(c[0]).includes('/seasons'))).toHaveLength(1);
+    // Danach ist der Pfad wieder frei: ein neuer Aufruf geht neu raus.
+    await client.fetchActiveSeason();
+    expect(f.mock.calls.filter(c => String(c[0]).includes('/seasons'))).toHaveLength(2);
+  });
+
   it('meldet null Spiele als Ausfall — nicht als spielfreie Saison', async () => {
     trageTeamEin();
     erlaube();

@@ -32,7 +32,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
-import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig } from '../config';
+import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs } from '../config';
 import {
   HANDBALL_KIND,
   fetchActiveSeason,
@@ -60,6 +60,50 @@ export const HANDBALL_LABEL = 'Handball (handball.net)';
 
 /** Ab wann nach dem Anwurf nachgefasst wird: 2 × 25 Minuten plus Pause, minus etwas Luft. */
 const NACHFASSEN_AB_MS = 45 * 60 * 1000;
+/** Im Live-Takt (`SYNC_LIVE_INTERVAL_MS`) schon fünf Minuten vor dem Anwurf. */
+const LIVE_VORLAUF_MS = 5 * 60 * 1000;
+/**
+ * Und nur so lange, wie ein Spiel samt Verzug dauert: zweieinhalb Stunden nach
+ * Anwurf. Danach gilt wieder der normale Takt — sonst hinge ein Spiel, das die
+ * Quelle nie auf „beendet" setzt, sechs Stunden lang im Minutentakt an ihr.
+ */
+const LIVE_BIS_MS = 150 * 60 * 1000;
+
+function nachfassenAb(): number {
+  return syncLiveIntervalMs() > 0 ? -LIVE_VORLAUF_MS : NACHFASSEN_AB_MS;
+}
+
+/**
+ * Ob gerade ein Spiel läuft oder gleich beginnt — dann tickt der Dienst im
+ * Live-Takt, falls einer eingestellt ist. Liest nur die gespeicherten Spiele.
+ */
+export function liveFensterOffen(now = Date.now()): boolean {
+  const teams = readTeamIds();
+  return db.select().from(handball_team_match).all().some(r =>
+    teams.includes(r.team_id)
+    && (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
+    && now - Date.parse(r.starts_at) >= -LIVE_VORLAUF_MS
+    && now - Date.parse(r.starts_at) < LIVE_BIS_MS);
+}
+
+/**
+ * Der Abstand bis zum nächsten Takt: der normale, oder — mit
+ * `SYNC_LIVE_INTERVAL_MS` und solange ein Spiel läuft oder gleich beginnt —
+ * der kurze Live-Takt.
+ */
+export function naechsterAbstandMs(now = Date.now()): number {
+  const live = syncLiveIntervalMs();
+  if (live <= 0) return syncIntervalMs();
+  // Der Takt plant sich nach jedem Lauf selbst neu — scheitert der Blick in die
+  // Datenbank, darf die Kette nicht abreißen: dann eben der normale Takt.
+  try {
+    return liveFensterOffen(now) ? Math.min(live, syncIntervalMs()) : syncIntervalMs();
+  } catch (err) {
+    serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[sync] Live-Fenster nicht lesbar — normaler Takt');
+    return syncIntervalMs();
+  }
+}
+
 /** Bis wann: Ein Spiel, das sechs Stunden nach Anwurf nicht beendet ist, holt der nächste Tageslauf. */
 const NACHFASSEN_BIS_MS = 6 * 60 * 60 * 1000;
 /** Wie viele beendete Spiele ohne gespeicherte Aufstellung ein Tageslauf nachholt — Altbestand in Häppchen. */
@@ -610,7 +654,7 @@ async function berichteNachholen(teamId: string, now = Date.now()): Promise<numb
  * stehen, wenn der Abruf scheitert (nach bestem Bemühen, wie in der
  * Ankündigung des Bots).
  */
-async function gegnerSpielplanHolen(teamId: string, seasonId: number): Promise<number> {
+async function gegnerSpielplanHolen(teamId: string, seasonId: number, schon: Set<string> = new Set()): Promise<number> {
   const jetzt = Date.now();
   const naechstes = db.select().from(handball_team_match)
     .where(eq(handball_team_match.team_id, teamId)).all()
@@ -620,6 +664,9 @@ async function gegnerSpielplanHolen(teamId: string, seasonId: number): Promise<n
   const gegner = naechstes.home_id === teamId ? naechstes.away_id : naechstes.home_id;
   // Testspiele gegen Mannschaften außerhalb von handball.net tragen die ID 0 — die Quelle antwortet darauf mit 422.
   if (!gegner || gegner === '0') return 0;
+  // Derselbe Gegner zweier Mannschaften (oder zweimal im selben Lauf): einmal holen.
+  if (schon.has(gegner)) return 0;
+  schon.add(gegner);
   try {
     const spiele = await fetchTeamMatches(gegner, seasonId);
     const now = new Date().toISOString();
@@ -702,9 +749,16 @@ function phasenVon(teamId: string): Array<{ phaseId: number; seasonId: number; n
   return [...out.values()];
 }
 
-async function tabellenHolen(teamId: string): Promise<number> {
+/**
+ * `schon`: die Staffeln, die dieser Lauf bereits geholt hat. Spielen zwei
+ * Mannschaften des Vereins in derselben Staffel, ist die Tabelle dieselbe —
+ * ein Abruf genügt.
+ */
+async function tabellenHolen(teamId: string, schon: Set<number> = new Set()): Promise<number> {
   let fetched = 0;
   for (const phase of phasenVon(teamId)) {
+    if (schon.has(phase.phaseId)) continue;
+    schon.add(phase.phaseId);
     try {
       const { current, history } = await fetchStandingsWithHistory(phase.phaseId, phase.seasonId);
       fetched++;
@@ -1020,6 +1074,8 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
     if (faellig.length > 0) {
       const saison = await fetchActiveSeason();
       fetched++;
+      const tabellenSchon = new Set<number>();
+      const gegnerSchon = new Set<string>();
       for (const teamId of faellig) {
         let spiele: HandballMatch[];
         try {
@@ -1032,9 +1088,9 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
         }
         fetched++;
         for (const m of spiele) upsertMatch(teamId, m);
-        fetched += await tabellenHolen(teamId);
+        fetched += await tabellenHolen(teamId, tabellenSchon);
         fetched += await kaderHolen(teamId, saison.id);
-        fetched += await gegnerSpielplanHolen(teamId, saison.id);
+        fetched += await gegnerSpielplanHolen(teamId, saison.id, gegnerSchon);
         fetched += await berichteNachholen(teamId, jetzt);
       }
     }
@@ -1055,11 +1111,12 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
     const nachzufassen = [...new Set(
       db.select().from(handball_team_match).all()
         .filter(r => (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
-          && jetzt - Date.parse(r.starts_at) >= NACHFASSEN_AB_MS
+          && jetzt - Date.parse(r.starts_at) >= nachfassenAb()
           && jetzt - Date.parse(r.starts_at) < NACHFASSEN_BIS_MS)
         .map(r => r.team_id),
     )].filter(teamId => teams.includes(teamId));
 
+    const nachSchon = new Set<number>();
     for (const teamId of nachzufassen) {
       const saisonId = db.select({ s: handball_team_match.season_id }).from(handball_team_match)
         .where(eq(handball_team_match.team_id, teamId)).get()?.s;
@@ -1072,7 +1129,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
       const nachher = db.select().from(handball_team_match)
         .where(and(eq(handball_team_match.team_id, teamId), eq(handball_team_match.status, 'finished'))).all().length;
       // Ein neu beendetes Spiel ändert die Tabelle — einmal nachholen, nicht je Tick.
-      if (nachher > vorher) fetched += await tabellenHolen(teamId);
+      if (nachher > vorher) fetched += await tabellenHolen(teamId, nachSchon);
     }
     if (teamFehler) throw teamFehler;
   } catch (err) {
@@ -1168,7 +1225,7 @@ export interface HandballTeamView {
   team_id: string;
   name: string;
   /**
-   * Wie die Mannschaft neben den anderen des Vereins heißt — im Dropdown der
+   * Wie die Mannschaft neben den anderen des Vereins heißt — in der Mannschaftswahl der
    * Microsite und in der Auswahl des Bots: der Name aus `TEAM_IDS`, sonst
    * `automatischesLabel` („2. Herren", „mB-Jugend"), sonst die Altersklasse
    * der Quelle („B-Jugend"), sonst der Mannschaftsname.
@@ -1258,7 +1315,7 @@ function sicht(r: typeof handball_team_match.$inferSelect, rated = false): Handb
 const ROEMISCH: Record<string, number> = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
 
 /**
- * Der Name im Dropdown, aus den Daten der Quelle gelesen — so, wie der Verein
+ * Der Name in der Mannschaftswahl, aus den Daten der Quelle gelesen — so, wie der Verein
  * seine Mannschaften nennt: „1. Herren", „3. Damen", „mB-Jugend", „wC-Jugend".
  *
  * Maßgeblich ist der Wettbewerb mit den meisten Spielen, nicht das erste

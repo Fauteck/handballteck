@@ -8,7 +8,7 @@
  * `app.js` ist eine eigene Route), Stile dürfen inline stehen, Bilder als
  * Data-URI (die Logos sind eingebettet). Ein Fremdziel hat die Seite nicht.
  */
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type RouteOptions } from 'fastify';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { trustProxy, version } from './config';
@@ -16,6 +16,8 @@ import { siteRoutes } from './routes/site';
 import { telegramRoutes } from './routes/telegram';
 import { apiRoutes } from './routes/api';
 import { setServiceLogger } from './lib/serviceLogger';
+import { getBackoffSnapshot } from './lib/pollerBackoff';
+import { getHandballNetStats } from './lib/handballNetClient';
 
 /**
  * Die URL, wie sie ins Log geht: ohne das Pfadgeheimnis des Webhooks und
@@ -28,7 +30,13 @@ export function logUrl(url: string): string {
     .replace(/([?&]t=)[^&#]*/g, '$1***');
 }
 
-export async function buildServer(opts: { logger?: boolean | object } = {}): Promise<FastifyInstance> {
+/**
+ * Was der Browser auf dieser Seite nie braucht — Kamera, Standort, Zahlung
+ * und die Werbe-Kohorten von Chrome. Helmet setzt diesen Kopf nicht.
+ */
+export const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
+
+export async function buildServer(opts: { logger?: boolean | object; onRoute?: (route: RouteOptions) => void } = {}): Promise<FastifyInstance> {
   const fastify = Fastify({
     logger: opts.logger ?? {
       level: process.env.LOG_LEVEL || 'info',
@@ -46,6 +54,8 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
     bodyLimit: 256 * 1024,
   });
   setServiceLogger(fastify.log);
+  // Für den Rate-Limit-Audit der Tests: jede Route zeigen, die registriert wird.
+  if (opts.onRoute) fastify.addHook('onRoute', opts.onRoute);
 
   await fastify.register(helmet, {
     contentSecurityPolicy: {
@@ -65,6 +75,9 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
     // Vorschau holt `og:image` über denselben Host — kein Cross-Origin-Zwang.
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
+  fastify.addHook('onSend', async (_request, reply) => {
+    reply.header('Permissions-Policy', PERMISSIONS_POLICY);
+  });
   await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
 
   // SEC-1-002: Ohne TRUST_PROXY sieht der Dienst hinter einem Reverse Proxy
@@ -83,7 +96,21 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
   // Der Healthcheck kommt alle 30 Sekunden; mit `warn` schreibt er keine
   // Zeile pro Abruf, ein Fehler landet trotzdem im Log.
   fastify.get('/healthz', { logLevel: 'warn', config: { rateLimit: false } }, async (_request, reply) => {
-    return reply.header('Cache-Control', 'no-store').send({ ok: true, ...version() });
+    // `ok` bleibt wahr, solange der Prozess antwortet — ein Ausfall der Quelle ist
+    // kein Grund, den Container neu zu starten. Wer ihn überwachen will, liest
+    // `sync` (ohne Fehlertext; der steht nur hinter dem Token in /api/health).
+    const snapshot = getBackoffSnapshot('handball', 'team');
+    const letzter = snapshot?.lastSuccessAt ?? null;
+    return reply.header('Cache-Control', 'no-store').send({
+      ok: true,
+      ...version(),
+      sync: {
+        last_success_at: letzter ? new Date(letzter).toISOString() : null,
+        last_success_age_s: letzter ? Math.round((Date.now() - letzter) / 1000) : null,
+        consecutive_failures: snapshot?.consecutiveFailures ?? 0,
+        source: getHandballNetStats(),
+      },
+    });
   });
   fastify.get('/robots.txt', async (_request, reply) => {
     return reply.header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nDisallow: /\n');

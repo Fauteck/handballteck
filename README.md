@@ -17,10 +17,11 @@ service's `/api/*`.
 | Feature | What it does |
 |---|---|
 | Fetch | Once per calendar day: season, schedule, standings (with per-matchday history), roster, logos, opponent form. On match day: follow-up from throw-off + 45 min until the final score, then the standings once. Backfill of lineups, logos, event lists and match reports in small batches per tick. |
-| Microsite | `/<team-id>/` — next match with opponent profile, last result, standings with trend arrows, schedule with match timelines, season chart, squad (names only with `SITE_PLAYERS`). A dropdown at the top switches between all teams of the club. Push bell, `webcal://` subscription, RSS feed, share button, PWA manifest. No inline JavaScript (CSP). |
-| Telegram bot | Announcement (lead time per chat), lineup, half-time, final score as an animated card, match report, postponements, season card; commands `/spiele` `/ergebnisse` `/tabelle` `/kader` `/torjaeger` `/spieler` `/saison` `/rekorde` `/bericht` `/live` `/kalender` `/halle` `/erinnerung` `/modus` `/teams` `/feedback`; inline mode; groups; admin chats with `/status`, `/rundruf`, `/erledigt`. **`/teams`** lets every subscriber pick which teams of the club they follow — messages and commands are filtered accordingly. A new chat starts with no team and is asked first (with more than one team configured); chats from before keep following all. |
-| Browser push | Subscriptions per team, same events and texts as the bot, dead subscriptions removed on 404/410/403. |
+| Microsite | `/<team-id>/` — next match with opponent profile, last result, standings with trend arrows, schedule with match timelines, season chart, squad (names only with `SITE_PLAYERS`). Buttons at the top switch between all teams of the club. Live countdown, **live mode** (the page refreshes itself every 30 s while a match runs), schedule filter (home/away/upcoming/played) with a jump to the next match, collapsible "Nichts verpassen" tiles that remember their state (push bell, Telegram, `webcal://` subscription, RSS feed), goal-scorer progression chart (with `SITE_PLAYERS`), installable PWA (icons, shortcuts, offline fallback of the last loaded page). Style and script are separate routes with a content hash in the URL (cacheable for a year) and an ETag. No inline JavaScript (CSP). |
+| Telegram bot | Match-day morning greeting (from 08:00, at least 4 h before throw-off, for chats that want announcements), announcement (lead time per chat), lineup, half-time, final score as an animated card, match report, postponements, season card; commands `/spiele` `/ergebnisse` `/tabelle` `/kader` `/torjaeger` `/spieler` `/saison` `/rekorde` `/bericht` `/live` `/kalender` `/halle` `/erinnerung` `/modus` `/teams` `/feedback`; inline mode; groups; admin chats with `/status`, `/rundruf`, `/erledigt`. **`/teams`** lets every subscriber pick which teams of the club they follow — messages and commands are filtered accordingly. A new chat starts with no team and is asked first (with more than one team configured); chats from before keep following all. |
+| Browser push | Subscriptions per team (capped by `SITE_PUSH_MAX`), same events and texts as the bot, dead subscriptions removed on 404/410/403; a win vibrates like a goal celebration. |
 | Todoteck API | `/api/overview`, `/api/teams/:id/details`, `/api/teams/:id/bild/:art`, `/api/sync`, `/api/health` — Bearer `API_TOKEN`. |
+| Source checks | Concurrent requests for the same path are coalesced, a shared league table is fetched once per run, and the three core responses (season, matches, standings) are shape-checked with zod — a changed format fails loudly (`HandballEmptyError`) instead of producing wrong numbers. `/healthz` reports the state of the fetch (last success, failures, request counters) without error text. |
 | Operator alerts | Fetch failures (auth immediately, transient from the third run) and a suspected time-zone misreading go to the admin chats once per state. |
 
 ## Architecture
@@ -103,9 +104,11 @@ See `.env.example` for every variable with its default. The important ones:
 | Variable | Default | Meaning |
 |---|---|---|
 | `PUBLIC_URL` | `http://localhost:3000` | External address of this service (webhook, page links). |
-| `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the dropdown derives one from league and team name (`1. Herren`, `mB-Jugend`). |
+| `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
+| `SYNC_LIVE_INTERVAL_MS` | `0` (off) | Tick while a match is live (min 20 s); also polls from kick-off instead of kick-off + 45 min. Feeds the page's live mode. |
+| `SITE_PUSH_MAX` | `2000` | Maximum number of browser push subscriptions; the subscribe route answers 503 above it. |
 | `TELEGRAM_BOT_TOKEN` | – | Enables the bot. |
 | `TELEGRAM_INVITE_CODE` | – | Restricts `/start` to invitees. |
 | `TELEGRAM_ADMIN_CHAT_IDS` | – | Operator chats (status, broadcast, feedback, alerts). |
@@ -124,7 +127,7 @@ See `.env.example` for every variable with its default. The important ones:
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `GET /healthz` | none | Liveness, version. |
+| `GET /healthz` | none | Liveness, version, fetch state (`sync`: last success, failures, counters — no error text). |
 | `GET /`, `GET /:teamId/…` | none | Microsite (HTML, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |
 | `GET /inline/:art.jpg` | HMAC signature in URL | Images for the bot's inline mode. |
@@ -156,6 +159,8 @@ each and recorded in `migrations`.
 - CSP forbids inline scripts; the page's script is a separate route. Logos are fetched
   through `safeFetch` with a host allowlist and stored locally, never hot-linked.
 - Player names of youth teams are shown only with `SITE_PLAYERS=true`.
+- Security headers on every response: CSP (scripts only from `'self'`), `nosniff`, `Referrer-Policy: no-referrer`, HSTS, COOP, `Permissions-Policy`. `security.test.ts` pins them and fails for any route that has neither its own rate limit nor a listed reason.
+- The `quality` job runs `npm audit` (runtime, high+) and Trivy (lockfile vulnerabilities and committed secrets).
 - The page is `noindex` and `robots.txt` disallows everything: it is for sharing, not for finding.
 
 ## Technology stack
@@ -173,8 +178,11 @@ src/
   db/                 connection, drizzle schema, migration runner
   routes/             site.ts (microsite), telegram.ts (webhook, inline), api.ts (Todoteck)
   import/             todoteck.ts (one-time import at startup)
-  lib/                handballNetClient, handballTeam (fetch + DB), handballBot,
-                      handballTableImage (SVG), handballSite (HTML), handballSitePush,
+  lib/                handballNetClient, handballTeam (fetch + DB),
+                      handballBot (core: config, subscribers, handler, rounds),
+                      handballBotTexts (pure texts + keyboards), handballBotImages (SVG),
+                      handballTableImage (SVG renderer), handballSite (HTML),
+                      handballSiteAssets (CSS, service worker, page script), handballSitePush,
                       telegramClient, webPush, safeFetch, alerts, …
   __tests__/          vitest
 drizzle/              SQL migrations

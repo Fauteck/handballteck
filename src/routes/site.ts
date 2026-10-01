@@ -17,7 +17,7 @@
  *
  * Alle Verweise in der Seite sind relativ, deshalb liegt sie unter einer
  * Adresse mit Schrägstrich am Ende; die Route ohne leitet dorthin um. Die
- * Wurzel `/` führt zur ersten Mannschaft; das Dropdown im Kopf zu den
+ * Wurzel `/` führt zur ersten Mannschaft; die Schaltflächen im Kopf zu den
  * anderen (`../<Team-ID>/`).
  */
 
@@ -26,15 +26,19 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import {
   siteConfig, siteTeam, renderSiteHtml, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, siteLogoPng, siteFontPath, istBildArt, SITE_SW_JS, SITE_APP_JS,
+  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS,
 } from '../lib/handballSite';
+import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
-  sitePushConfig, saveSiteSubscription, deleteSiteSubscription, sendSiteWelcome, istLead, istMode,
+  sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode,
 } from '../lib/handballSitePush';
 import { readPalette, handballOverview } from '../lib/handballTeam';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
 import { isPushServiceUrl } from '../lib/ssrf';
+import { sitePushMax } from '../config';
+
+const APP_JS_HASH = inhaltsHash(SITE_APP_JS);
 
 const subscribeSchema = z.object({
   subscription: z.object({
@@ -65,8 +69,24 @@ export async function siteRoutes(fastify: FastifyInstance) {
 
   const limit = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 minute' } } });
 
-  /** Alle Mannschaften für das Dropdown — relative Ziele, damit die Seite unter jeder Wurzel läuft. */
-  function dropdown(): Array<{ id: string; label: string; url: string }> {
+  /**
+   * Stil und Skript: Der Hash im Namen (`?v=…`) macht sie ein Jahr lang
+   * zwischenspeicherbar; ohne oder mit altem Hash gilt eine kurze Frist, und
+   * ein ETag erspart die Übertragung, wenn sich nichts geändert hat.
+   */
+  function festeDatei(request: { query: unknown; headers: Record<string, unknown> }, reply: FastifyReply, text: string, hash: string, contentType: string) {
+    const etag = `"${hash}"`;
+    const fest = (request.query as { v?: string } | undefined)?.v === hash;
+    reply.header('Content-Type', contentType).header('ETag', etag)
+      .header('Cache-Control', fest ? 'public, max-age=31536000, immutable' : 'public, max-age=300, must-revalidate');
+    // Ein Proxy, der komprimiert, macht daraus ein schwaches `W/"…"`; mehrere Werte kommen durch Komma getrennt.
+    const angefragt = String(request.headers['if-none-match'] ?? '').split(',').map(t => t.trim().replace(/^W\//, ''));
+    if (angefragt.includes(etag)) return reply.code(304).send();
+    return reply.send(text);
+  }
+
+  /** Alle Mannschaften für die Mannschaftswahl im Kopf — relative Ziele, damit die Seite unter jeder Wurzel läuft. */
+  function mannschaftswahl(): Array<{ id: string; label: string; url: string }> {
     const sicht = handballOverview();
     return sicht.configured ? sicht.teams.map(t => ({ id: t.team_id, label: t.label, url: `../${encodeURIComponent(t.team_id)}/` })) : [];
   }
@@ -89,18 +109,26 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
     const html = renderSiteHtml(t.team, {
-      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: dropdown(),
+      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(),
     });
+    // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
+    const live = t.team.next_match?.status === 'live';
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
-      .header('Cache-Control', 'public, max-age=60')
+      .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
       .header('X-Robots-Tag', 'noindex, nofollow')
       .send(html);
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/app.js', limit(120), async (request, reply) => {
     if (!freigegeben(request.params.teamId)) return nichtDa(reply);
-    return reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(SITE_APP_JS);
+    return festeDatei(request, reply, SITE_APP_JS, APP_JS_HASH, 'application/javascript; charset=utf-8');
+  });
+
+  fastify.get<{ Params: { teamId: string } }>('/:teamId/site.css', limit(120), async (request, reply) => {
+    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    const css = siteCssText();
+    return festeDatei(request, reply, css.text, css.hash, 'text/css; charset=utf-8');
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/sw.js', limit(120), async (request, reply) => {
@@ -118,6 +146,13 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
     const png = await siteLogoPng(t.team, vervollstaendigePalette(readPalette()));
+    return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=86400').send(png);
+  });
+
+  fastify.get<{ Params: { teamId: string } }>('/:teamId/logo-192.png', limit(120), async (request, reply) => {
+    const t = freigegeben(request.params.teamId);
+    if (!t) return nichtDa(reply);
+    const png = await siteLogoPng(t.team, vervollstaendigePalette(readPalette()), 192);
     return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=86400').send(png);
   });
 
@@ -171,6 +206,10 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const parsed = subscribeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', message: 'Die Anmeldung ist unvollständig.' });
     const { subscription, lead, mode } = parsed.data;
+    // Eine neue Anmeldung nur, solange Platz ist; wer schon drin ist, darf seine Wahl ändern.
+    if (!siteSubscriptionExists(subscription.endpoint) && countSiteSubscribers() >= sitePushMax()) {
+      return reply.code(503).header('Retry-After', '3600').send({ error: 'push_full', message: 'Es sind gerade keine weiteren Benachrichtigungen möglich.' });
+    }
     const abo = saveSiteSubscription(t.team.team_id, {
       endpoint: subscription.endpoint, p256dh: subscription.keys.p256dh, auth: subscription.keys.auth,
       lead: istLead(lead) ? lead : '1h', mode: istMode(mode) ? mode : 'all',

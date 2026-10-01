@@ -30,6 +30,8 @@ export interface PushPayload {
   tag?: string;
   /** Großes Benachrichtigungsbild, sofern der Browser es zeigt. */
   image?: string;
+  /** Vibrationsmuster in Millisekunden (Ton, Pause, Ton …), sofern das Gerät es kann. */
+  vibrate?: number[];
 }
 
 export type PushResult =
