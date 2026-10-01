@@ -420,20 +420,21 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .status{margin:6px 0 10px;font-weight:500}
 .lead{margin:0 0 12px;color:rgba(255,255,255,.8)}
 .channels{display:grid;gap:10px}
-.channel{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;text-decoration:none;transition:background .15s,border-color .15s}
-a.channel:hover{background:rgba(255,255,255,.14);border-color:var(--a)}
+.channel{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff}
+.channel[open]{border-color:rgba(255,255,255,.24)}
+.channel summary{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
+.channel summary::-webkit-details-marker{display:none}
+.channel summary::after{content:"▾";font-size:1.1rem;color:var(--a);transition:transform .15s}
+.channel[open] summary::after{transform:rotate(180deg)}
 .channel .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--a);color:var(--g)}
 .channel .ico svg{width:22px;height:22px;fill:currentColor}
 .channel .ico.tg{background:#29a9eb;color:#fff}
 .channel .ico.rss{background:#f28a1a;color:#fff}
 .channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75);margin-top:2px}
-.channel .arrow{font-size:1.3rem;color:var(--a)}
-.channel.push{grid-template-columns:40px minmax(0,1fr);cursor:default}
-.channel.push .inner{grid-column:1/-1}
-.tools{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:.9rem;color:rgba(255,255,255,.75)}
-.tools a,.tools button{color:#fff;background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.4);text-underline-offset:3px}
-.tools svg{width:16px;height:16px;fill:currentColor;vertical-align:-3px;margin-right:4px}
+.channel .body{margin-top:10px}
+.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
+.channel a.open{display:inline-block;margin-top:8px;color:var(--a);font-weight:600;text-decoration:none}
+.channel a.open:hover{text-decoration:underline}
 .gegner{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:grid;gap:8px}
 .gegner .kopf{display:flex;gap:12px;align-items:center}
 .gegner .kopf img,.gegner .kopf .ini{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain;flex:none}
@@ -475,12 +476,11 @@ main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;p
 }
 
 /** Inline-Icons für die Kanäle — `currentColor`, damit sie die Farbe der Kachel nehmen. */
-const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share', string> = {
+const ICON: Record<'bell' | 'send' | 'calendar' | 'rss', string> = {
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v4.2L4 15v1h16v-1l-2-2.8V8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22z"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6z"/></svg>',
   rss: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4a16 16 0 0 1 16 16h-3A13 13 0 0 0 4 7zm0 6a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7zm2 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>',
-  share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-7-4.1a3 3 0 0 0 0-2.2l7-4.1A3 3 0 1 0 15 5c0 .2 0 .4.1.6l-7 4.1a3 3 0 1 0 0 4.6l7 4.1V19a3 3 0 1 0 3-3z"/></svg>',
 };
 
 /** Der Kalendertag in deutscher Ortszeit als Zahl — für „heute", „morgen", „in 6 Tagen". */
@@ -819,8 +819,8 @@ function spielerHtml(team: HandballTeamView): string {
 /**
  * „Nichts verpassen": vier Wege als Kacheln — Browser-Push mit dem Formular
  * darunter, der Telegram-Bot (wenn er registriert ist, mit Einladungscode
- * im Link), das Kalender-Abo und der Feed. Dazu ICS-Download und „Seite
- * teilen" als Kleingedrucktes.
+ * im Link), das Kalender-Abo und der Feed. Alle Kacheln sind
+ * eingeklappt (Icon und Überschrift).
  */
 function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null): string {
   const webcal = baseUrl.replace(/^https?:\/\//, 'webcal://') + 'kalender.ics';
@@ -828,55 +828,59 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
   <h2>Nichts verpassen</h2>
   <p class="lead">Ohne App, ohne Konto — such dir den Weg aus, der zu dir passt.</p>
   <div class="channels">
-    <div class="channel push">
-      <span class="ico">${ICON.bell}</span>
-      <div><b>Im Browser</b><span class="desc">Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.</span></div>
-      <div class="inner">
-        <p class="status" data-status>${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — die anderen Wege gehen trotzdem.'}</p>
-        <form data-form hidden>
-          <fieldset>
-            <legend>Ankündigung</legend>
-            <div class="opts">
-              <label><input type="radio" name="lead" value="1h" checked> 1 Stunde vorher</label>
-              <label><input type="radio" name="lead" value="3h"> 3 Stunden vorher</label>
-              <label><input type="radio" name="lead" value="abend"> Am Vorabend</label>
-              <label><input type="radio" name="lead" value="aus"> Keine</label>
+    <details class="channel push">
+      <summary><span class="ico">${ICON.bell}</span><b>Im Browser</b></summary>
+      <div class="body">
+        <span class="desc">Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.</span>
+        <div class="inner">
+          <p class="status" data-status>${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — die anderen Wege gehen trotzdem.'}</p>
+          <form data-form hidden>
+            <fieldset>
+              <legend>Ankündigung</legend>
+              <div class="opts">
+                <label><input type="radio" name="lead" value="1h" checked> 1 Stunde vorher</label>
+                <label><input type="radio" name="lead" value="3h"> 3 Stunden vorher</label>
+                <label><input type="radio" name="lead" value="abend"> Am Vorabend</label>
+                <label><input type="radio" name="lead" value="aus"> Keine</label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Was</legend>
+              <div class="opts">
+                <label><input type="radio" name="mode" value="all" checked> Alles: Ankündigung, Halbzeit, Endstand, Verlegungen</label>
+                <label><input type="radio" name="mode" value="results"> Nur Endstände und Verlegungen</label>
+              </div>
+            </fieldset>
+            <div class="row">
+              <button class="btn primary" type="submit" data-subscribe>Benachrichtigungen einschalten</button>
+              <button class="btn ghost" type="button" data-unsubscribe hidden>Ausschalten</button>
             </div>
-          </fieldset>
-          <fieldset>
-            <legend>Was</legend>
-            <div class="opts">
-              <label><input type="radio" name="mode" value="all" checked> Alles: Ankündigung, Halbzeit, Endstand, Verlegungen</label>
-              <label><input type="radio" name="mode" value="results"> Nur Endstände und Verlegungen</label>
-            </div>
-          </fieldset>
-          <div class="row">
-            <button class="btn primary" type="submit" data-subscribe>Benachrichtigungen einschalten</button>
-            <button class="btn ghost" type="button" data-unsubscribe hidden>Ausschalten</button>
-          </div>
-        </form>
-        <p class="muted small" data-ios hidden>iPhone und iPad: Safari erlaubt Benachrichtigungen nur für Seiten auf dem Home-Bildschirm. Erst „Teilen → Zum Home-Bildschirm", dann von dort öffnen und hier einschalten.</p>
+          </form>
+          <p class="muted small" data-ios hidden>iPhone und iPad: Safari erlaubt Benachrichtigungen nur für Seiten auf dem Home-Bildschirm. Erst „Teilen → Zum Home-Bildschirm", dann von dort öffnen und hier einschalten.</p>
+        </div>
       </div>
-    </div>
-    ${telegram ? `<a class="channel" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer">
-      <span class="ico tg">${ICON.send}</span>
-      <div><b>Telegram-Bot</b><span class="desc">${h(telegram.handle)} · Ankündigung, Halbzeit, Endstand mit Torschützen — und Tabelle, Kader, Spielplan auf Zuruf.</span></div>
-      <span class="arrow">→</span>
-    </a>` : ''}
-    <a class="channel" href="${h(webcal)}">
-      <span class="ico">${ICON.calendar}</span>
-      <div><b>Kalender-Abo</b><span class="desc">Alle Spiele im eigenen Kalender. Verlegungen wandern von selbst mit.</span></div>
-      <span class="arrow">→</span>
-    </a>
-    <a class="channel" href="./feed.xml">
-      <span class="ico rss">${ICON.rss}</span>
-      <div><b>RSS-Feed</b><span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader.</span></div>
-      <span class="arrow">→</span>
-    </a>
-  </div>
-  <div class="tools">
-    <a href="./kalender.ics" download>ICS-Datei herunterladen</a>
-    <button type="button" data-share hidden>${ICON.share} Seite teilen</button>
+    </details>
+    ${telegram ? `<details class="channel">
+      <summary><span class="ico tg">${ICON.send}</span><b>Telegram-Bot</b></summary>
+      <div class="body">
+        <span class="desc">${h(telegram.handle)} · Ankündigung, Halbzeit, Endstand mit Torschützen — und Tabelle, Kader, Spielplan auf Zuruf.</span>
+        <a class="open" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer">Bot öffnen →</a>
+      </div>
+    </details>` : ''}
+    <details class="channel">
+      <summary><span class="ico">${ICON.calendar}</span><b>Kalender-Abo</b></summary>
+      <div class="body">
+        <span class="desc">Alle Spiele im eigenen Kalender. Verlegungen wandern von selbst mit.</span>
+        <a class="open" href="${h(webcal)}">Kalender abonnieren →</a>
+      </div>
+    </details>
+    <details class="channel">
+      <summary><span class="ico rss">${ICON.rss}</span><b>RSS-Feed</b></summary>
+      <div class="body">
+        <span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader.</span>
+        <a class="open" href="./feed.xml">Feed öffnen →</a>
+      </div>
+    </details>
   </div>
 </section>`;
 }
@@ -1024,20 +1028,6 @@ export const SITE_APP_JS = `(function () {
   // Das Dropdown der Mannschaften: Auswahl wechselt zur Seite der Mannschaft.
   var teams = document.querySelector('select[data-teams]');
   if (teams) teams.addEventListener('change', function () { if (teams.value) location.href = teams.value; });
-
-  // „Seite teilen": das Teilen-Blatt des Geräts, sonst der Link in die Zwischenablage.
-  var share = document.querySelector('[data-share]');
-  if (share && (navigator.share || (navigator.clipboard && navigator.clipboard.writeText))) {
-    share.hidden = false;
-    share.addEventListener('click', function () {
-      var url = location.href.split('#')[0];
-      if (navigator.share) { navigator.share({ title: document.title, url: url }).catch(function () {}); return; }
-      navigator.clipboard.writeText(url).then(function () {
-        var alt = share.innerHTML; share.textContent = 'Link kopiert';
-        setTimeout(function () { share.innerHTML = alt; }, 2000);
-      }).catch(function () {});
-    });
-  }
 
   var root = document.getElementById('push');
   if (!root) return;

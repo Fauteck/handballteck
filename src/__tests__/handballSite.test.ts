@@ -136,8 +136,6 @@ describe('Handball-Microsite', () => {
     // Kein Inline-Skript (CSP), kein Todoteck.
     expect(html).not.toMatch(/<script>/);
     expect(html).not.toContain('Todoteck');
-    // Das Teilen-Symbol hat eine feste Größe — ein SVG ohne Maß füllt sonst die ganze Spalte.
-    expect(html).toContain('.tools svg{width:16px;height:16px');
     // Zwei Spalten ab 960 px: das Spiel links, die Wege und der Spielplan rechts; am Telefon eine Reihenfolge über `order`.
     expect(html).toContain('<div class="col main">');
     expect(html).toContain('<div class="col side">');
@@ -147,10 +145,10 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('<b class="a">1.<small>von 2</small></b><span>Platz</span>');
     expect(html).toContain('<b>1-0-1</b>');
     expect(html).toContain('In 7 Tagen');
-    // Die Wege: Kalender-Abo und Feed als Kacheln, ICS und Teilen als Kleingedrucktes — kein Telegram, solange kein Bot registriert ist.
+    // Die Wege: Kalender-Abo und Feed als Kacheln, kein Telegram, solange kein Bot registriert ist.
     expect(html).toContain('<b>Kalender-Abo</b>');
     expect(html).toContain('<b>RSS-Feed</b>');
-    expect(html).toContain('data-share hidden');
+    expect(html).not.toContain('data-share');
     expect(html).not.toContain('t.me/');
     // Footer: wer die Seite baut und wohin Rückmeldungen gehen.
     expect(html).toContain('nicht-kommerzielles Projekt von Niklas Fauteck');
@@ -268,7 +266,6 @@ describe('Handball-Microsite', () => {
     expect(app.statusCode).toBe(200);
     expect(app.headers['content-type']).toContain('javascript');
     expect(app.body).toContain("register('./sw.js', { scope: './' })");
-    expect(app.body).toContain('navigator.share');
     const sw = await get(`/${TEAM}/sw.js`);
     expect(sw.statusCode).toBe(200);
     expect(sw.body).toContain("addEventListener('push'");
