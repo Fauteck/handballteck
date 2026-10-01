@@ -387,7 +387,10 @@ export interface HandballSubscriber {
   name: string | null;
   lead: Lead;
   mode: Mode;
-  /** Die verfolgten Mannschaften (`/teams`); null heißt alle. */
+  /**
+   * Die verfolgten Mannschaften (`/teams`); null heißt alle, eine leere Liste
+   * noch keine — so steht ein neuer Chat da, bis er gewählt hat.
+   */
   teamIds: string[] | null;
 }
 
@@ -403,15 +406,17 @@ export function listSubscribers(): HandballSubscriber[] {
 }
 
 function alsTeamIds(roh: string | null): string[] | null {
+  // Leerer Text (nicht NULL) ist die bewusst leere Auswahl eines neuen Chats.
+  if (roh === '') return [];
   const ids = (roh ?? '').split(',').map(t => t.trim()).filter(t => /^\d{1,12}$/.test(t));
   return ids.length > 0 ? ids : null;
 }
 
 function setTeams(chatId: string, teamIds: string[] | null): void {
-  db.update(handball_bot_subscriber).set({ team_ids: teamIds && teamIds.length > 0 ? teamIds.join(',') : null }).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
+  db.update(handball_bot_subscriber).set({ team_ids: teamIds ? teamIds.join(',') : null }).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
 }
 
-/** Ob ein Abonnent diese Mannschaft verfolgt — ohne Auswahl alle. */
+/** Ob ein Abonnent diese Mannschaft verfolgt — ohne Auswahl (null) alle, mit leerer keine. */
 export function verfolgt(abo: Pick<HandballSubscriber, 'teamIds'>, teamId: string): boolean {
   return !abo.teamIds || abo.teamIds.includes(teamId);
 }
@@ -1472,6 +1477,9 @@ export function statusTastatur(offene: Array<{ id: number }>): InlineKeyboard | 
 export function textTeams(alle: HandballTeamView[], gewaehlt: string[] | null): string {
   const eigene = gewaehlt ? alle.filter(t => gewaehlt.includes(t.team_id)) : alle;
   const namen = eigene.map(t => t.label).join(', ');
+  if (alle.length > 1 && eigene.length === 0) {
+    return 'Welche Mannschaften willst du verfolgen? Tipp sie unten an — gern mehrere. Bis du eine gewählt hast, schicke ich dir nichts.';
+  }
   return alle.length > 1
     ? `Du verfolgst ${gewaehlt ? '' : '<b>alle</b> Mannschaften: '}<b>${escapeHtml(namen)}</b>.\nAntippen wählt eine Mannschaft an oder ab; Meldungen und Befehle gelten dann nur für die gewählten.`
     : `Es gibt nur eine Mannschaft: <b>${escapeHtml(namen)}</b>.`;
@@ -1737,7 +1745,7 @@ export function textStatus(sicht: ReturnType<typeof handballOverview>, now = new
   const namen = new Map(abos.map(a => [a.chatId, a.name]));
   const zeilen = [
     `🛠 <b>Betriebsstand</b>${botUsername ? ` @${escapeHtml(botUsername)}` : ''}`,
-    `Abonnenten: ${abos.length}${gruppen ? ` (davon ${gruppen} Gruppe${gruppen === 1 ? '' : 'n'})` : ''}${nurErgebnisse ? `, ${nurErgebnisse} nur Ergebnisse` : ''}${abos.some(a => a.teamIds) ? `, ${abos.filter(a => a.teamIds).length} mit Mannschaftsauswahl` : ''}`,
+    `Abonnenten: ${abos.length}${gruppen ? ` (davon ${gruppen} Gruppe${gruppen === 1 ? '' : 'n'})` : ''}${nurErgebnisse ? `, ${nurErgebnisse} nur Ergebnisse` : ''}${abos.some(a => a.teamIds?.length) ? `, ${abos.filter(a => a.teamIds?.length).length} mit Mannschaftsauswahl` : ''}${abos.some(a => a.teamIds?.length === 0) ? `, ${abos.filter(a => a.teamIds?.length === 0).length} noch ohne Auswahl` : ''}`,
     `Letzter Abruf: ${stand}`,
     `Letzter Fehler: ${fehler ? escapeHtml(fehler) : 'keiner'}`,
     `Zeitzone: ${tz.stand}${tz.detail ? ` (${escapeHtml(tz.detail)})` : ''}`,
@@ -2139,7 +2147,12 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     }
     const neu = subscribe(chatId, name);
     const sicht = handballOverview();
+    // Ein neuer Chat verfolgt erst einmal nichts und wählt selbst — bei
+    // mehreren Mannschaften wäre „alle" für fast jeden zu viel.
+    const waehlen = neu && sicht.teams.length > 1;
+    if (waehlen) setTeams(chatId, []);
     await deps.send(chatId, `${neu ? 'Willkommen! ' : 'Du bist schon dabei. '}${textHilfe(sicht.teams)}`, hilfeTastatur());
+    if (waehlen) await deps.send(chatId, textTeams(sicht.teams, []), teamsTastatur(sicht.teams, []));
     return;
   }
 
@@ -2249,6 +2262,11 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     return;
   }
   // Befehle antworten für die Mannschaften, die der Chat verfolgt (`/teams`).
+  // Hat er noch keine gewählt, kommt zuerst die Auswahl.
+  if (befehl !== '/hilfe' && befehl !== '/help' && abonnent(chatId)?.teamIds?.length === 0 && sicht.teams.length > 1) {
+    await deps.send(chatId, textTeams(sicht.teams, []), teamsTastatur(sicht.teams, []));
+    return;
+  }
   const teams = meineTeams(chatId, sicht.teams);
 
   switch (befehl) {

@@ -15,14 +15,14 @@ describe('TRUST_PROXY', () => {
   });
 
   it('nimmt Adressen und Bereiche, durch Komma oder Leerzeichen getrennt', () => {
-    process.env.TRUST_PROXY = '192.168.0.97, 172.16.0.0/12  ::1';
-    expect(trustProxy()).toEqual(['192.168.0.97', '172.16.0.0/12', '::1']);
+    process.env.TRUST_PROXY = '10.0.0.5, 172.16.0.0/12  ::1';
+    expect(trustProxy()).toEqual(['10.0.0.5', '172.16.0.0/12', '::1']);
   });
 
   it('wird durch „true" oder eine Zahl nicht zu „allen vertrauen"', () => {
     process.env.TRUST_PROXY = 'true';
     expect(trustProxy()).toBe(false);
-    process.env.TRUST_PROXY = 'loopback, 192.168.0.97';
-    expect(trustProxy()).toEqual(['192.168.0.97']);
+    process.env.TRUST_PROXY = 'loopback, 10.0.0.5';
+    expect(trustProxy()).toEqual(['10.0.0.5']);
   });
 });
