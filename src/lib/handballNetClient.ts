@@ -36,6 +36,8 @@
  * der Job meldet über `sync_error`, statt das Cockpit still altern zu lassen.
  */
 
+import { z, type ZodTypeAny } from 'zod';
+
 export const HANDBALL_KIND = 'handball';
 
 const BASE_URL = 'https://www.handball.net';
@@ -119,7 +121,41 @@ async function fetchClientToken(force = false): Promise<string> {
   return token;
 }
 
-async function hnFetch<T>(path: string, erneutBeiAbweisung = true): Promise<T> {
+/** Zähler seit dem Start — für `/healthz` und `/api/health`: Wie viele Abrufe, wie viele gescheitert, wann zuletzt einer gelang. */
+const zaehler = { requests: 0, failures: 0, lastOkAt: null as string | null };
+
+export function getHandballNetStats(): { requests: number; failures: number; last_ok_at: string | null } {
+  return { requests: zaehler.requests, failures: zaehler.failures, last_ok_at: zaehler.lastOkAt };
+}
+
+/** Nur für Tests. */
+export function __resetHandballNetStatsForTests(): void {
+  zaehler.requests = 0; zaehler.failures = 0; zaehler.lastOkAt = null;
+}
+
+/** Abrufe, die gerade unterwegs sind — ein zweiter nach demselben Pfad hängt sich an den ersten. */
+const unterwegs = new Map<string, Promise<unknown>>();
+
+/**
+ * Ein GET an die Quelle. Fragen zwei Aufrufer gleichzeitig denselben Pfad
+ * (zwei Mannschaften derselben Staffel, Bot und Seite im selben Takt), geht
+ * nur ein Abruf raus; beide bekommen dieselbe Antwort.
+ */
+function hnFetch<T>(path: string, schema?: ZodTypeAny, erneutBeiAbweisung = true): Promise<T> {
+  const laufend = unterwegs.get(path);
+  if (laufend) return laufend as Promise<T>;
+  zaehler.requests++;
+  const abruf = hnFetchEinzeln<T>(path, schema, erneutBeiAbweisung)
+    .then(
+      body => { zaehler.lastOkAt = new Date().toISOString(); return body; },
+      err => { zaehler.failures++; throw err; },
+    )
+    .finally(() => { unterwegs.delete(path); });
+  unterwegs.set(path, abruf);
+  return abruf;
+}
+
+async function hnFetchEinzeln<T>(path: string, schema?: ZodTypeAny, erneutBeiAbweisung = true): Promise<T> {
   const token = await fetchClientToken();
   const res = await mitTimeout(`${BASE_URL}${path}`, {
     headers: {
@@ -133,7 +169,7 @@ async function hnFetch<T>(path: string, erneutBeiAbweisung = true): Promise<T> {
   if (res.status === 401 || res.status === 403) {
     if (erneutBeiAbweisung) {
       await fetchClientToken(true);
-      return hnFetch<T>(path, false);
+      return hnFetchEinzeln<T>(path, schema, false);
     }
     throw new HandballBlockedError(`handball.net: Zugang verweigert (HTTP ${res.status})`);
   }
@@ -141,8 +177,29 @@ async function hnFetch<T>(path: string, erneutBeiAbweisung = true): Promise<T> {
     throw new HandballTransientError(`handball.net: HTTP ${res.status}`);
   }
   if (!res.ok) throw new Error(`handball.net: HTTP ${res.status} für ${path}`);
-  return (await res.json()) as T;
+  const body: unknown = await res.json();
+  if (schema) {
+    // Ändert die Quelle ihren Aufbau, soll das laut scheitern — mit dem Pfad
+    // und der ersten abweichenden Stelle —, nicht als leere oder falsche Zahl enden.
+    const geprueft = schema.safeParse(body);
+    if (!geprueft.success) {
+      const fund = geprueft.error.issues[0];
+      throw new HandballEmptyError(`handball.net: Antwort auf ${path.split('?')[0]} hat nicht den erwarteten Aufbau (${fund?.path.join('.') || 'Wurzel'}: ${fund?.message ?? 'unbekannt'}) — Schnittstelle geändert?`);
+    }
+  }
+  return body as T;
 }
+
+/**
+ * Das Mindeste, worauf die Auswertung baut — bewusst locker (`passthrough`,
+ * alles andere optional): geprüft wird, ob die Antwort noch die Gestalt hat,
+ * nicht jedes Feld. Neue Felder der Quelle stören nicht.
+ */
+const SeasonsAntwort = z.object({ data: z.array(z.object({ id: z.number() }).passthrough()).optional() }).passthrough();
+const MatchesAntwort = z.object({ data: z.array(z.object({ id: z.union([z.number(), z.string()]), date: z.string() }).passthrough()).optional() }).passthrough();
+const StandingsAntwort = z.object({
+  data: z.array(z.object({ position: z.number(), team: z.object({ id: z.union([z.number(), z.string()]) }).passthrough() }).passthrough()).optional(),
+}).passthrough();
 
 // ---------------------------------------------------------------------------
 // Zeit und Namen
@@ -369,7 +426,7 @@ function logoUrl(v: unknown): string | null {
 
 /** Die laufende Saison — die Quelle führt genau eine als aktiv. */
 export async function fetchActiveSeason(): Promise<HandballSeason> {
-  const body = await hnFetch<{ data?: RawSeason[] }>('/api/new/seasons');
+  const body = await hnFetch<{ data?: RawSeason[] }>('/api/new/seasons', SeasonsAntwort);
   const aktive = (body.data ?? []).find(s => s.is_active) ?? (body.data ?? [])[0];
   if (!aktive) throw new HandballEmptyError('handball.net: keine Saison in der Antwort');
   return { id: aktive.id, name: aktive.name, isActive: !!aktive.is_active };
@@ -381,7 +438,7 @@ export async function fetchActiveSeason(): Promise<HandballSeason> {
  */
 export async function fetchTeamMatches(teamId: string, seasonId: number): Promise<HandballMatch[]> {
   const path = `/api/new/matches?team_id=${encodeURIComponent(teamId)}&season_id=${seasonId}&per_page=${MATCHES_PER_PAGE}`;
-  const body = await hnFetch<{ data?: RawMatch[] }>(path);
+  const body = await hnFetch<{ data?: RawMatch[] }>(path, MatchesAntwort);
   const rows = body.data ?? [];
   if (rows.length === 0) {
     throw new HandballEmptyError(`handball.net: keine Spiele für Team ${teamId} in Saison ${seasonId} — Team-ID prüfen`);
@@ -443,7 +500,7 @@ function tabellenZeile(r: RawStanding, round: number): HandballStandingRow {
  * Quelle bei jedem Abruf vollständig nennt, muss niemand selbst mitschreiben.
  */
 export async function fetchStandingsWithHistory(phaseId: number, seasonId: number): Promise<HandballStandingsFetch> {
-  const body = await hnFetch<{ data?: RawStanding[] }>(`/api/new/standings?phase_id=${phaseId}&season_id=${seasonId}`);
+  const body = await hnFetch<{ data?: RawStanding[] }>(`/api/new/standings?phase_id=${phaseId}&season_id=${seasonId}`, StandingsAntwort);
   const alle = body.data ?? [];
   if (alle.length === 0) throw new HandballEmptyError(`handball.net: leere Tabelle für Staffel ${phaseId}`);
   const juengster = Math.max(...alle.map(r => r.round ?? 0));

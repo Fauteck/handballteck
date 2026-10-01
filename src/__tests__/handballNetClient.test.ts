@@ -21,7 +21,7 @@ import {
   fetchStandings,
   fetchStandingsWithHistory,
   klassifiziereHandballFehler,
-  __resetHandballTokenForTests,
+  __resetHandballTokenForTests, __resetHandballNetStatsForTests, getHandballNetStats,
   halbzeitAus, chronicleToText, fetchMatchReport, torfolgeAus,
 } from '../lib/handballNetClient';
 
@@ -187,6 +187,33 @@ describe('Token und Abruf', () => {
       .mockResolvedValueOnce(antwort(SEITE))
       .mockResolvedValueOnce(antwort({ data: [] })) as unknown as typeof fetch;
     await expect(fetchTeamMatches('123', 2627)).rejects.toMatchObject({ name: 'HandballEmptyError' });
+  });
+
+  it('scheitert laut, wenn die Antwort nicht mehr die erwartete Gestalt hat', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(
+      String(url).includes('/api/new/') ? antwort({ data: [{ id: 1, datum: '2026-09-26' }] }) : antwort(SEITE),
+    )) as unknown as typeof fetch;
+    const err = await fetchTeamMatches('96254', 2627).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).name).toBe('HandballEmptyError');
+    expect((err as Error).message).toContain('/api/new/matches');
+    expect((err as Error).message).toContain('data.0.date');
+    expect(klassifiziereHandballFehler(err)).toBe('auth_error');
+  });
+
+  it('zählt Abrufe, Fehlschläge und den letzten Erfolg', async () => {
+    __resetHandballNetStatsForTests();
+    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(
+      String(url).includes('/api/new/') ? antwort({ data: [{ id: 2627, name: 's', is_active: true }] }) : antwort(SEITE),
+    )) as unknown as typeof fetch;
+    await fetchActiveSeason();
+    expect(getHandballNetStats()).toMatchObject({ requests: 1, failures: 0 });
+    expect(getHandballNetStats().last_ok_at).not.toBeNull();
+    global.fetch = vi.fn().mockImplementation((url: string) => Promise.resolve(
+      String(url).includes('/api/new/') ? antwort({ error: 'x' }, 500) : antwort(SEITE),
+    )) as unknown as typeof fetch;
+    await fetchActiveSeason().catch(() => undefined);
+    expect(getHandballNetStats()).toMatchObject({ requests: 2, failures: 1 });
   });
 
   it('ordnet Leere und Sperre dem Zugang zu, alles andere dem Vorübergehenden', () => {

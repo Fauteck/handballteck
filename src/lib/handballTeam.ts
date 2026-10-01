@@ -640,7 +640,7 @@ async function berichteNachholen(teamId: string, now = Date.now()): Promise<numb
  * stehen, wenn der Abruf scheitert (nach bestem Bemühen, wie in der
  * Ankündigung des Bots).
  */
-async function gegnerSpielplanHolen(teamId: string, seasonId: number): Promise<number> {
+async function gegnerSpielplanHolen(teamId: string, seasonId: number, schon: Set<string> = new Set()): Promise<number> {
   const jetzt = Date.now();
   const naechstes = db.select().from(handball_team_match)
     .where(eq(handball_team_match.team_id, teamId)).all()
@@ -650,6 +650,9 @@ async function gegnerSpielplanHolen(teamId: string, seasonId: number): Promise<n
   const gegner = naechstes.home_id === teamId ? naechstes.away_id : naechstes.home_id;
   // Testspiele gegen Mannschaften außerhalb von handball.net tragen die ID 0 — die Quelle antwortet darauf mit 422.
   if (!gegner || gegner === '0') return 0;
+  // Derselbe Gegner zweier Mannschaften (oder zweimal im selben Lauf): einmal holen.
+  if (schon.has(gegner)) return 0;
+  schon.add(gegner);
   try {
     const spiele = await fetchTeamMatches(gegner, seasonId);
     const now = new Date().toISOString();
@@ -732,9 +735,16 @@ function phasenVon(teamId: string): Array<{ phaseId: number; seasonId: number; n
   return [...out.values()];
 }
 
-async function tabellenHolen(teamId: string): Promise<number> {
+/**
+ * `schon`: die Staffeln, die dieser Lauf bereits geholt hat. Spielen zwei
+ * Mannschaften des Vereins in derselben Staffel, ist die Tabelle dieselbe —
+ * ein Abruf genügt.
+ */
+async function tabellenHolen(teamId: string, schon: Set<number> = new Set()): Promise<number> {
   let fetched = 0;
   for (const phase of phasenVon(teamId)) {
+    if (schon.has(phase.phaseId)) continue;
+    schon.add(phase.phaseId);
     try {
       const { current, history } = await fetchStandingsWithHistory(phase.phaseId, phase.seasonId);
       fetched++;
@@ -1050,6 +1060,8 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
     if (faellig.length > 0) {
       const saison = await fetchActiveSeason();
       fetched++;
+      const tabellenSchon = new Set<number>();
+      const gegnerSchon = new Set<string>();
       for (const teamId of faellig) {
         let spiele: HandballMatch[];
         try {
@@ -1062,9 +1074,9 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
         }
         fetched++;
         for (const m of spiele) upsertMatch(teamId, m);
-        fetched += await tabellenHolen(teamId);
+        fetched += await tabellenHolen(teamId, tabellenSchon);
         fetched += await kaderHolen(teamId, saison.id);
-        fetched += await gegnerSpielplanHolen(teamId, saison.id);
+        fetched += await gegnerSpielplanHolen(teamId, saison.id, gegnerSchon);
         fetched += await berichteNachholen(teamId, jetzt);
       }
     }
@@ -1090,6 +1102,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
         .map(r => r.team_id),
     )].filter(teamId => teams.includes(teamId));
 
+    const nachSchon = new Set<number>();
     for (const teamId of nachzufassen) {
       const saisonId = db.select({ s: handball_team_match.season_id }).from(handball_team_match)
         .where(eq(handball_team_match.team_id, teamId)).get()?.s;
@@ -1102,7 +1115,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
       const nachher = db.select().from(handball_team_match)
         .where(and(eq(handball_team_match.team_id, teamId), eq(handball_team_match.status, 'finished'))).all().length;
       // Ein neu beendetes Spiel ändert die Tabelle — einmal nachholen, nicht je Tick.
-      if (nachher > vorher) fetched += await tabellenHolen(teamId);
+      if (nachher > vorher) fetched += await tabellenHolen(teamId, nachSchon);
     }
     if (teamFehler) throw teamFehler;
   } catch (err) {

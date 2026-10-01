@@ -283,6 +283,27 @@ describe('Tageslauf', () => {
     }
   });
 
+  it('holt die Tabelle einer gemeinsamen Staffel nur einmal', async () => {
+    trageTeamEin('96254,96300');
+    const f = quelle([spiel()]);
+    const r = await mod.syncHandballTeams();
+    expect(r.status).toBe('ok');
+    expect(f.mock.calls.filter(c => String(c[0]).includes('/standings?'))).toHaveLength(1);
+    // Beide Mannschaften haben ihre Spiele bekommen.
+    expect(new Set(dbRef.select().from(schemaRef.handball_team_match).all().map(z => z.team_id))).toEqual(new Set(['96254', '96300']));
+  });
+
+  it('fasst gleichzeitige Abrufe desselben Pfads zu einem zusammen', async () => {
+    const f = quelle();
+    const client = await import('../lib/handballNetClient');
+    const [a, b] = await Promise.all([client.fetchActiveSeason(), client.fetchActiveSeason()]);
+    expect(a).toEqual(b);
+    expect(f.mock.calls.filter(c => String(c[0]).includes('/seasons'))).toHaveLength(1);
+    // Danach ist der Pfad wieder frei: ein neuer Aufruf geht neu raus.
+    await client.fetchActiveSeason();
+    expect(f.mock.calls.filter(c => String(c[0]).includes('/seasons'))).toHaveLength(2);
+  });
+
   it('meldet null Spiele als Ausfall — nicht als spielfreie Saison', async () => {
     trageTeamEin();
     erlaube();

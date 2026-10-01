@@ -16,6 +16,8 @@ import { siteRoutes } from './routes/site';
 import { telegramRoutes } from './routes/telegram';
 import { apiRoutes } from './routes/api';
 import { setServiceLogger } from './lib/serviceLogger';
+import { getBackoffSnapshot } from './lib/pollerBackoff';
+import { getHandballNetStats } from './lib/handballNetClient';
 
 /**
  * Die URL, wie sie ins Log geht: ohne das Pfadgeheimnis des Webhooks und
@@ -94,7 +96,21 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   // Der Healthcheck kommt alle 30 Sekunden; mit `warn` schreibt er keine
   // Zeile pro Abruf, ein Fehler landet trotzdem im Log.
   fastify.get('/healthz', { logLevel: 'warn', config: { rateLimit: false } }, async (_request, reply) => {
-    return reply.header('Cache-Control', 'no-store').send({ ok: true, ...version() });
+    // `ok` bleibt wahr, solange der Prozess antwortet — ein Ausfall der Quelle ist
+    // kein Grund, den Container neu zu starten. Wer ihn überwachen will, liest
+    // `sync` (ohne Fehlertext; der steht nur hinter dem Token in /api/health).
+    const snapshot = getBackoffSnapshot('handball', 'team');
+    const letzter = snapshot?.lastSuccessAt ?? null;
+    return reply.header('Cache-Control', 'no-store').send({
+      ok: true,
+      ...version(),
+      sync: {
+        last_success_at: letzter ? new Date(letzter).toISOString() : null,
+        last_success_age_s: letzter ? Math.round((Date.now() - letzter) / 1000) : null,
+        consecutive_failures: snapshot?.consecutiveFailures ?? 0,
+        source: getHandballNetStats(),
+      },
+    });
   });
   fastify.get('/robots.txt', async (_request, reply) => {
     return reply.header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nDisallow: /\n');
