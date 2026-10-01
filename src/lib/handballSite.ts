@@ -420,17 +420,21 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .status{margin:6px 0 10px;font-weight:500}
 .lead{margin:0 0 12px;color:rgba(255,255,255,.8)}
 .channels{display:grid;gap:10px}
-.channel{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;text-decoration:none;transition:background .15s,border-color .15s}
-a.channel:hover{background:rgba(255,255,255,.14);border-color:var(--a)}
+.channel{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff}
+.channel[open]{border-color:rgba(255,255,255,.24)}
+.channel summary{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
+.channel summary::-webkit-details-marker{display:none}
+.channel summary::after{content:"▾";font-size:1.1rem;color:var(--a);transition:transform .15s}
+.channel[open] summary::after{transform:rotate(180deg)}
 .channel .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--a);color:var(--g)}
 .channel .ico svg{width:22px;height:22px;fill:currentColor}
 .channel .ico.tg{background:#29a9eb;color:#fff}
 .channel .ico.rss{background:#f28a1a;color:#fff}
 .channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75);margin-top:2px}
-.channel .arrow{font-size:1.3rem;color:var(--a)}
-.channel.push{grid-template-columns:40px minmax(0,1fr);cursor:default}
-.channel.push .inner{grid-column:1/-1}
+.channel .body{margin-top:10px}
+.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
+.channel a.open{display:inline-block;margin-top:8px;color:var(--a);font-weight:600;text-decoration:none}
+.channel a.open:hover{text-decoration:underline}
 .tools{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:.9rem;color:rgba(255,255,255,.75)}
 .tools a,.tools button{color:#fff;background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.4);text-underline-offset:3px}
 .tools svg{width:16px;height:16px;fill:currentColor;vertical-align:-3px;margin-right:4px}
@@ -819,8 +823,8 @@ function spielerHtml(team: HandballTeamView): string {
 /**
  * „Nichts verpassen": vier Wege als Kacheln — Browser-Push mit dem Formular
  * darunter, der Telegram-Bot (wenn er registriert ist, mit Einladungscode
- * im Link), das Kalender-Abo und der Feed. Dazu ICS-Download und „Seite
- * teilen" als Kleingedrucktes.
+ * im Link), das Kalender-Abo und der Feed. Alle Kacheln sind
+ * eingeklappt (Icon und Überschrift); dazu „Seite teilen" als Kleingedrucktes.
  */
 function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null): string {
   const webcal = baseUrl.replace(/^https?:\/\//, 'webcal://') + 'kalender.ics';
@@ -828,54 +832,61 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
   <h2>Nichts verpassen</h2>
   <p class="lead">Ohne App, ohne Konto — such dir den Weg aus, der zu dir passt.</p>
   <div class="channels">
-    <div class="channel push">
-      <span class="ico">${ICON.bell}</span>
-      <div><b>Im Browser</b><span class="desc">Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.</span></div>
-      <div class="inner">
-        <p class="status" data-status>${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — die anderen Wege gehen trotzdem.'}</p>
-        <form data-form hidden>
-          <fieldset>
-            <legend>Ankündigung</legend>
-            <div class="opts">
-              <label><input type="radio" name="lead" value="1h" checked> 1 Stunde vorher</label>
-              <label><input type="radio" name="lead" value="3h"> 3 Stunden vorher</label>
-              <label><input type="radio" name="lead" value="abend"> Am Vorabend</label>
-              <label><input type="radio" name="lead" value="aus"> Keine</label>
+    <details class="channel push">
+      <summary><span class="ico">${ICON.bell}</span><b>Im Browser</b></summary>
+      <div class="body">
+        <span class="desc">Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.</span>
+        <div class="inner">
+          <p class="status" data-status>${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — die anderen Wege gehen trotzdem.'}</p>
+          <form data-form hidden>
+            <fieldset>
+              <legend>Ankündigung</legend>
+              <div class="opts">
+                <label><input type="radio" name="lead" value="1h" checked> 1 Stunde vorher</label>
+                <label><input type="radio" name="lead" value="3h"> 3 Stunden vorher</label>
+                <label><input type="radio" name="lead" value="abend"> Am Vorabend</label>
+                <label><input type="radio" name="lead" value="aus"> Keine</label>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Was</legend>
+              <div class="opts">
+                <label><input type="radio" name="mode" value="all" checked> Alles: Ankündigung, Halbzeit, Endstand, Verlegungen</label>
+                <label><input type="radio" name="mode" value="results"> Nur Endstände und Verlegungen</label>
+              </div>
+            </fieldset>
+            <div class="row">
+              <button class="btn primary" type="submit" data-subscribe>Benachrichtigungen einschalten</button>
+              <button class="btn ghost" type="button" data-unsubscribe hidden>Ausschalten</button>
             </div>
-          </fieldset>
-          <fieldset>
-            <legend>Was</legend>
-            <div class="opts">
-              <label><input type="radio" name="mode" value="all" checked> Alles: Ankündigung, Halbzeit, Endstand, Verlegungen</label>
-              <label><input type="radio" name="mode" value="results"> Nur Endstände und Verlegungen</label>
-            </div>
-          </fieldset>
-          <div class="row">
-            <button class="btn primary" type="submit" data-subscribe>Benachrichtigungen einschalten</button>
-            <button class="btn ghost" type="button" data-unsubscribe hidden>Ausschalten</button>
-          </div>
-        </form>
-        <p class="muted small" data-ios hidden>iPhone und iPad: Safari erlaubt Benachrichtigungen nur für Seiten auf dem Home-Bildschirm. Erst „Teilen → Zum Home-Bildschirm", dann von dort öffnen und hier einschalten.</p>
+          </form>
+          <p class="muted small" data-ios hidden>iPhone und iPad: Safari erlaubt Benachrichtigungen nur für Seiten auf dem Home-Bildschirm. Erst „Teilen → Zum Home-Bildschirm", dann von dort öffnen und hier einschalten.</p>
+        </div>
       </div>
-    </div>
-    ${telegram ? `<a class="channel" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer">
-      <span class="ico tg">${ICON.send}</span>
-      <div><b>Telegram-Bot</b><span class="desc">${h(telegram.handle)} · Ankündigung, Halbzeit, Endstand mit Torschützen — und Tabelle, Kader, Spielplan auf Zuruf.</span></div>
-      <span class="arrow">→</span>
-    </a>` : ''}
-    <a class="channel" href="${h(webcal)}">
-      <span class="ico">${ICON.calendar}</span>
-      <div><b>Kalender-Abo</b><span class="desc">Alle Spiele im eigenen Kalender. Verlegungen wandern von selbst mit.</span></div>
-      <span class="arrow">→</span>
-    </a>
-    <a class="channel" href="./feed.xml">
-      <span class="ico rss">${ICON.rss}</span>
-      <div><b>RSS-Feed</b><span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader.</span></div>
-      <span class="arrow">→</span>
-    </a>
+    </details>
+    ${telegram ? `<details class="channel">
+      <summary><span class="ico tg">${ICON.send}</span><b>Telegram-Bot</b></summary>
+      <div class="body">
+        <span class="desc">${h(telegram.handle)} · Ankündigung, Halbzeit, Endstand mit Torschützen — und Tabelle, Kader, Spielplan auf Zuruf.</span>
+        <a class="open" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer">Bot öffnen →</a>
+      </div>
+    </details>` : ''}
+    <details class="channel">
+      <summary><span class="ico">${ICON.calendar}</span><b>Kalender-Abo</b></summary>
+      <div class="body">
+        <span class="desc">Alle Spiele im eigenen Kalender. Verlegungen wandern von selbst mit.</span>
+        <a class="open" href="${h(webcal)}">Kalender abonnieren →</a>
+      </div>
+    </details>
+    <details class="channel">
+      <summary><span class="ico rss">${ICON.rss}</span><b>RSS-Feed</b></summary>
+      <div class="body">
+        <span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader.</span>
+        <a class="open" href="./feed.xml">Feed öffnen →</a>
+      </div>
+    </details>
   </div>
   <div class="tools">
-    <a href="./kalender.ics" download>ICS-Datei herunterladen</a>
     <button type="button" data-share hidden>${ICON.share} Seite teilen</button>
   </div>
 </section>`;
