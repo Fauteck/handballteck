@@ -162,3 +162,17 @@ describe('Log ohne Geheimnisse', () => {
     expect(logUrl('/75796/bild/endstand.png?match=379369')).toBe('/75796/bild/endstand.png?match=379369');
   });
 });
+
+describe('Reverse Proxy ohne TRUST_PROXY', () => {
+  it('warnt einmal, wenn X-Forwarded-For ankommt', async () => {
+    delete process.env.TRUST_PROXY;
+    const zeilen: string[] = [];
+    const { buildServer } = await import('../server');
+    const f = await buildServer({ logger: { level: 'warn', stream: { write: (z: string) => { zeilen.push(z); } } } });
+    await f.inject({ method: 'GET', url: '/robots.txt', headers: { 'x-forwarded-for': '203.0.113.7' } });
+    await f.inject({ method: 'GET', url: '/robots.txt', headers: { 'x-forwarded-for': '203.0.113.8' } });
+    await f.inject({ method: 'GET', url: '/robots.txt' });
+    await f.close();
+    expect(zeilen.filter(z => z.includes('ohne TRUST_PROXY'))).toHaveLength(1);
+  });
+});

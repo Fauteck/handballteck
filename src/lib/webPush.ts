@@ -13,6 +13,7 @@ import webpush from 'web-push';
 import { getSetting, setSetting } from './settings';
 import { serviceLog } from './serviceLogger';
 import { publicUrl } from '../config';
+import { isPushServiceUrl } from './ssrf';
 
 export interface PushTarget {
   endpoint: string;
@@ -107,6 +108,10 @@ export function resetPushConfigCache(): void {
 /** Wirft nicht — der Aufrufer arbeitet eine Liste ab und darf nicht am ersten toten Gerät hängenbleiben. */
 export async function sendPush(target: PushTarget, payload: PushPayload): Promise<PushResult> {
   if (!isPushConfigured()) return { status: 'retry', reason: 'VAPID nicht konfiguriert' };
+  // SEC-1-001: Auch Zeilen, die vor der Prüfung in der Anmeldung (oder per
+  // Import aus Todoteck) hereinkamen, gehen nur an einen Push-Dienst; alle
+  // anderen gelten als tot und werden vom Aufrufer gelöscht.
+  if (!isPushServiceUrl(target.endpoint)) return { status: 'gone', reason: 'kein bekannter Push-Dienst' };
   try {
     await webpush.sendNotification(
       { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },

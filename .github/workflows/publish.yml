@@ -23,6 +23,10 @@ concurrency:
   group: publish-image
   cancel-in-progress: false
 
+# CIO-3-001: Standard nur Lesen; `build-and-push` hebt für sich `packages: write` an.
+permissions:
+  contents: read
+
 jobs:
   quality:
     name: Typecheck, Test, Audit

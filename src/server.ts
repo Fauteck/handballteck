@@ -67,6 +67,19 @@ export async function buildServer(opts: { logger?: boolean | object } = {}): Pro
   });
   await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
 
+  // SEC-1-002: Ohne TRUST_PROXY sieht der Dienst hinter einem Reverse Proxy
+  // nur dessen Adresse — dann teilen sich alle Besucher jedes Rate-Limit,
+  // und ein einzelner Aufrufer sperrt die Seite für alle. Kommt ein
+  // X-Forwarded-For an, obwohl kein Proxy eingetragen ist, einmal warnen.
+  if (!trustProxy()) {
+    let gewarnt = false;
+    fastify.addHook('onRequest', async (request) => {
+      if (gewarnt || request.headers['x-forwarded-for'] === undefined) return;
+      gewarnt = true;
+      request.log.warn({ proxy: request.ip }, 'X-Forwarded-For ohne TRUST_PROXY — alle Besucher teilen sich ein Rate-Limit. TRUST_PROXY auf die Adresse des Reverse Proxys setzen.');
+    });
+  }
+
   // Der Healthcheck kommt alle 30 Sekunden; mit `warn` schreibt er keine
   // Zeile pro Abruf, ein Fehler landet trotzdem im Log.
   fastify.get('/healthz', { logLevel: 'warn', config: { rateLimit: false } }, async (_request, reply) => {

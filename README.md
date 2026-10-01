@@ -94,7 +94,7 @@ The microsite uses relative links only. To serve it under its own domain, proxy 
 domain root to this container and set `SITE_URL=https://woelfe.example.de` so that
 `webcal://`, the feed and the Open Graph preview point there. Team pages are then
 `https://woelfe.example.de/<team-id>/`; the domain root redirects to the first team.
-Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies in front of the service. Empty trusts none: all clients then share one rate-limit bucket — annoying, not a hole. Never trust all: a client could forge its address with `X-Forwarded-For` and bypass every limit. A hop count is not an option — Fastify ≥ 5.12 ignores it and trusts no proxy.
+Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies in front of the service. Empty trusts none: behind a proxy all clients then share one rate-limit bucket, so a single client can lock everyone out of the page; the service logs a warning once when it sees `X-Forwarded-For` without `TRUST_PROXY`. Never trust all: a client could forge its address with `X-Forwarded-For` and bypass every limit. A hop count is not an option — Fastify ≥ 5.12 ignores it and trusts no proxy.
 
 ## Configuration
 
@@ -149,6 +149,10 @@ each and recorded in `migrations`.
   constant-time compare) — and it is closed entirely without `API_TOKEN`.
 - The webhook checks a random path and Telegram's secret header; inline images carry a
   signed, expiring URL. Rate limits on every public route.
+- Web Push only goes to the browsers' push services (FCM, Mozilla, WNS, Apple); any
+  other endpoint is refused at subscription and dropped at delivery — the server never
+  sends to an address a visitor chose.
+- Request logs show `/telegram/webhook/***` and `t=***` instead of the secrets.
 - CSP forbids inline scripts; the page's script is a separate route. Logos are fetched
   through `safeFetch` with a host allowlist and stored locally, never hot-linked.
 - Player names of youth teams are shown only with `SITE_PLAYERS=true`.

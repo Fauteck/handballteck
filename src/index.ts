@@ -7,7 +7,7 @@
  */
 import { runMigrations } from './db/migrate';
 import { buildServer } from './server';
-import { port, syncIntervalMs, teamIds, publicUrl, importTodoteckDb } from './config';
+import { port, syncIntervalMs, teamIds, publicUrl, importTodoteckDb, apiToken } from './config';
 import { importTodoteck } from './import/todoteck';
 import { syncHandballTeams } from './lib/handballTeam';
 import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
@@ -62,6 +62,9 @@ async function main(): Promise<void> {
       fastify.log.error({ err: err instanceof Error ? err.message : String(err) }, 'Übernahme aus Todoteck gescheitert');
     }
   }
+  // SEC-3-003: Der Token ist das einzige Schloss vor /api/* — ein kurzer lässt sich durchprobieren.
+  const token = apiToken();
+  if (token && token.length < 32) fastify.log.warn(`API_TOKEN hat nur ${token.length} Zeichen — mindestens 32 nehmen (openssl rand -hex 32).`);
   await fastify.listen({ port: port(), host: '0.0.0.0' });
   fastify.log.info(`Handballteck läuft — ${teamIds().length} Mannschaft(en), erreichbar unter ${publicUrl()}`);
 
