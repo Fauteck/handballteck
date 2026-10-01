@@ -435,9 +435,6 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
 .channel a.open{display:inline-block;margin-top:8px;color:var(--a);font-weight:600;text-decoration:none}
 .channel a.open:hover{text-decoration:underline}
-.tools{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:.9rem;color:rgba(255,255,255,.75)}
-.tools a,.tools button{color:#fff;background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.4);text-underline-offset:3px}
-.tools svg{width:16px;height:16px;fill:currentColor;vertical-align:-3px;margin-right:4px}
 .gegner{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:grid;gap:8px}
 .gegner .kopf{display:flex;gap:12px;align-items:center}
 .gegner .kopf img,.gegner .kopf .ini{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain;flex:none}
@@ -479,12 +476,11 @@ main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;p
 }
 
 /** Inline-Icons für die Kanäle — `currentColor`, damit sie die Farbe der Kachel nehmen. */
-const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share', string> = {
+const ICON: Record<'bell' | 'send' | 'calendar' | 'rss', string> = {
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v4.2L4 15v1h16v-1l-2-2.8V8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22z"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6z"/></svg>',
   rss: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4a16 16 0 0 1 16 16h-3A13 13 0 0 0 4 7zm0 6a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7zm2 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>',
-  share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-7-4.1a3 3 0 0 0 0-2.2l7-4.1A3 3 0 1 0 15 5c0 .2 0 .4.1.6l-7 4.1a3 3 0 1 0 0 4.6l7 4.1V19a3 3 0 1 0 3-3z"/></svg>',
 };
 
 /** Der Kalendertag in deutscher Ortszeit als Zahl — für „heute", „morgen", „in 6 Tagen". */
@@ -824,7 +820,7 @@ function spielerHtml(team: HandballTeamView): string {
  * „Nichts verpassen": vier Wege als Kacheln — Browser-Push mit dem Formular
  * darunter, der Telegram-Bot (wenn er registriert ist, mit Einladungscode
  * im Link), das Kalender-Abo und der Feed. Alle Kacheln sind
- * eingeklappt (Icon und Überschrift); dazu „Seite teilen" als Kleingedrucktes.
+ * eingeklappt (Icon und Überschrift).
  */
 function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null): string {
   const webcal = baseUrl.replace(/^https?:\/\//, 'webcal://') + 'kalender.ics';
@@ -885,9 +881,6 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
         <a class="open" href="./feed.xml">Feed öffnen →</a>
       </div>
     </details>
-  </div>
-  <div class="tools">
-    <button type="button" data-share hidden>${ICON.share} Seite teilen</button>
   </div>
 </section>`;
 }
@@ -1035,20 +1028,6 @@ export const SITE_APP_JS = `(function () {
   // Das Dropdown der Mannschaften: Auswahl wechselt zur Seite der Mannschaft.
   var teams = document.querySelector('select[data-teams]');
   if (teams) teams.addEventListener('change', function () { if (teams.value) location.href = teams.value; });
-
-  // „Seite teilen": das Teilen-Blatt des Geräts, sonst der Link in die Zwischenablage.
-  var share = document.querySelector('[data-share]');
-  if (share && (navigator.share || (navigator.clipboard && navigator.clipboard.writeText))) {
-    share.hidden = false;
-    share.addEventListener('click', function () {
-      var url = location.href.split('#')[0];
-      if (navigator.share) { navigator.share({ title: document.title, url: url }).catch(function () {}); return; }
-      navigator.clipboard.writeText(url).then(function () {
-        var alt = share.innerHTML; share.textContent = 'Link kopiert';
-        setTimeout(function () { share.innerHTML = alt; }, 2000);
-      }).catch(function () {});
-    });
-  }
 
   var root = document.getElementById('push');
   if (!root) return;
