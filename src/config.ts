@@ -195,6 +195,43 @@ export function sitePushMax(): number {
   return Number.isFinite(n) && n > 0 ? n : 2000;
 }
 
+/**
+ * Schlüssel der Vorschau: Mit `?vorab=<Schlüssel>` zeigt die Seite, was
+ * noch nicht öffentlich ist (die Fotos der Vereinsseite). Leer: keine
+ * Vorschau. Unter 32 Zeichen wird er nicht angenommen — er ist das einzige
+ * Schloss davor.
+ */
+export function sitePreviewToken(): string | null {
+  const v = env('SITE_PREVIEW_TOKEN');
+  return v && v.length >= 32 ? v : null;
+}
+
+/** Die Vereinsseite bei ClubDesk, ohne Pfad (`https://woelfevoreifel.clubdesk.com`); null ohne oder bei Unbrauchbarem. */
+export function clubdeskUrl(): string | null {
+  const v = env('CLUBDESK_URL');
+  if (!v) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' && (u.pathname === '/' || u.pathname === '') && !u.search ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Welche Teamseite der Vereinsseite zu welcher Mannschaft gehört:
+ * `96254=woelfe_b,75796=woelfe_2`. Der Teil nach dem Gleichheitszeichen ist
+ * der letzte Pfadteil unter `/spielbetrieb/teams-und-tabellen/`.
+ */
+export function clubdeskTeams(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const teil of (env('CLUBDESK_TEAMS') ?? '').split(',')) {
+    const [id, slug] = teil.split('=').map(x => x?.trim() ?? '');
+    if (/^\d{1,12}$/.test(id) && /^[a-z0-9_-]{1,40}$/i.test(slug ?? '')) out.set(id, slug);
+  }
+  return out;
+}
+
 export function siteOperator(): string | null {
   return env('SITE_OPERATOR') ?? null;
 }

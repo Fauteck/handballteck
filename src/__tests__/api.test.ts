@@ -168,6 +168,8 @@ describe('Log ohne Geheimnisse', () => {
     expect(logUrl('/inline/tabelle.jpg?team=96254&exp=123&t=abcdef&vorschau=1'))
       .toBe('/inline/tabelle.jpg?team=96254&exp=123&t=***&vorschau=1');
     expect(logUrl('/75796/bild/endstand.png?match=379369')).toBe('/75796/bild/endstand.png?match=379369');
+    // Der Schlüssel der Vorschau geht nicht ins Log.
+    expect(logUrl('/75796/?vorab=geheim123&x=1')).toBe('/75796/?vorab=***&x=1');
   });
 });
 
