@@ -207,7 +207,11 @@ self.addEventListener('fetch', function (event) {
   event.respondWith(fetch(req).then(function (res) {
     if (res && res.ok) {
       var kopie = res.clone();
-      caches.open(CACHE).then(function (c) { return c.put(seite ? scope : req, kopie); }).catch(function () {});
+      // Ältere Fassungen (anderer ?v=) vorher entfernen, sonst wächst der Speicher mit jedem Update.
+      caches.open(CACHE).then(function (c) {
+        var schluessel = seite ? scope : req;
+        return c.delete(schluessel, { ignoreSearch: true }).then(function () { return c.put(schluessel, kopie); });
+      }).catch(function () {});
     }
     return res;
   }).catch(function () {
@@ -224,10 +228,10 @@ self.addEventListener('push', function (event) {
     badge: new URL('logo.png', scope).href,
     tag: payload.tag || 'handball',
     renotify: !!payload.renotify,
-    vibrate: payload.vibrate || [120, 60, 120],
     data: { url: payload.url ? new URL(payload.url, scope).href : scope }
   };
   if (payload.image) options.image = new URL(payload.image, scope).href;
+  if (payload.vibrate) options.vibrate = payload.vibrate;
   event.waitUntil(self.registration.showNotification(payload.title || 'Handball', options));
 });
 self.addEventListener('notificationclick', function (event) {
@@ -269,13 +273,13 @@ export const SITE_APP_JS = `(function () {
     });
   });
 
-  // Countdown: „in 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind.
+  // Countdown: „In 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind.
   function countdown() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-countdown]'), function (el) {
       var ms = Date.parse(el.getAttribute('data-countdown')) - Date.now();
       if (!(ms > 0) || ms > 36 * 3600000) return;
       var min = Math.ceil(ms / 60000);
-      el.textContent = min < 60 ? 'in ' + min + ' Min.' : 'in ' + Math.floor(min / 60) + ' Std. ' + (min % 60) + ' Min.';
+      el.textContent = min < 60 ? 'In ' + min + ' Min.' : 'In ' + Math.floor(min / 60) + ' Std. ' + (min % 60) + ' Min.';
     });
   }
   countdown();

@@ -309,8 +309,8 @@ export interface SiteRenderOptions {
   players: boolean;
   baseUrl: string;
   /**
-   * Alle Mannschaften des Vereins für das Dropdown im Kopf — leer oder eine,
-   * und es gibt kein Dropdown. `url` ist relativ (`../96300/`), damit die Seite
+   * Alle Mannschaften des Vereins für die Schaltflächen im Kopf — leer oder
+   * eine, und es gibt keine. `url` ist relativ (`../96300/`), damit die Seite
    * unter jeder Wurzel funktioniert.
    */
   teams?: Array<{ id: string; label: string; url: string }>;
@@ -684,7 +684,8 @@ function saisonHtml(team: HandballTeamView, players: boolean): string {
 </section>`;
 }
 
-const TOR_FARBEN = ['var(--p)', 'var(--ad)', '#e0891a', '#8a63d2', '#c9403a'];
+// Nicht `--p`: die Vereinsfarbe ist dunkel und verschwindet auf der dunklen Karte.
+const TOR_FARBEN = ['var(--ad)', '#e0891a', '#8a63d2', '#c9403a', '#1f9d55'];
 
 /**
  * Die Tore der besten Torschützen über die Saison — je Spieler eine

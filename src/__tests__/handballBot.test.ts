@@ -417,6 +417,16 @@ describe('Meldungen', () => {
     expect(gesendet.filter(g => g.text.includes('Spieltag!'))).toHaveLength(1);
   });
 
+  it('lässt den Gruß aus, wenn die Ankündigung ohnehin binnen zwei Stunden kommt', async () => {
+    abonniere('drei');
+    dbRef.update(schemaRef.handball_bot_subscriber).set({ lead: '3h' }).where(eq(schemaRef.handball_bot_subscriber.chat_id, 'drei')).run();
+    // Anwurf 13:00 Uhr Ortszeit, Ankündigung „3h" um 10:00 — um 9:00 Uhr kein Gruß mehr.
+    legeSpiel({ starts_at: '2026-10-10T11:00:00.000Z' });
+    const { deps, gesendet } = sammler();
+    await bot.pushHandballBot(new Date('2026-10-10T07:00:00.000Z'), deps);
+    expect(gesendet.filter(g => g.text.includes('Spieltag!'))).toHaveLength(0);
+  });
+
   it('grüßt nicht, wenn die Ankündigung des Spiels schon raus ist oder der Anwurf zu nah liegt', () => {
     const spiel = (startsAt: string) => ({ starts_at: startsAt, is_home: true, away_name: 'Gegner', home_name: 'HSG', venue_name: null, venue_address: null, away_id: '1', home_id: '2' }) as never;
     // Anwurf 12:00 Uhr, jetzt 9:00 Uhr: nur drei Stunden — zu knapp für einen Gruß.

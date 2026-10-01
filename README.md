@@ -104,7 +104,7 @@ See `.env.example` for every variable with its default. The important ones:
 | Variable | Default | Meaning |
 |---|---|---|
 | `PUBLIC_URL` | `http://localhost:3000` | External address of this service (webhook, page links). |
-| `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the dropdown derives one from league and team name (`1. Herren`, `mB-Jugend`). |
+| `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
 | `SYNC_LIVE_INTERVAL_MS` | `0` (off) | Tick while a match is live (min 20 s); also polls from kick-off instead of kick-off + 45 min. Feeds the page's live mode. |

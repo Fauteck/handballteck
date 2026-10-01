@@ -198,7 +198,8 @@ async function hnFetchEinzeln<T>(path: string, schema?: ZodTypeAny, erneutBeiAbw
 const SeasonsAntwort = z.object({ data: z.array(z.object({ id: z.number() }).passthrough()).optional() }).passthrough();
 const MatchesAntwort = z.object({ data: z.array(z.object({ id: z.union([z.number(), z.string()]), date: z.string() }).passthrough()).optional() }).passthrough();
 const StandingsAntwort = z.object({
-  data: z.array(z.object({ position: z.number(), team: z.object({ id: z.union([z.number(), z.string()]) }).passthrough() }).passthrough()).optional(),
+  // `team` darf fehlen — `tabellenZeile` kommt ohne aus; `position` nicht.
+  data: z.array(z.object({ position: z.number() }).passthrough()).optional(),
 }).passthrough();
 
 // ---------------------------------------------------------------------------

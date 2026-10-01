@@ -62,6 +62,12 @@ export const HANDBALL_LABEL = 'Handball (handball.net)';
 const NACHFASSEN_AB_MS = 45 * 60 * 1000;
 /** Im Live-Takt (`SYNC_LIVE_INTERVAL_MS`) schon fünf Minuten vor dem Anwurf. */
 const LIVE_VORLAUF_MS = 5 * 60 * 1000;
+/**
+ * Und nur so lange, wie ein Spiel samt Verzug dauert: zweieinhalb Stunden nach
+ * Anwurf. Danach gilt wieder der normale Takt — sonst hinge ein Spiel, das die
+ * Quelle nie auf „beendet" setzt, sechs Stunden lang im Minutentakt an ihr.
+ */
+const LIVE_BIS_MS = 150 * 60 * 1000;
 
 function nachfassenAb(): number {
   return syncLiveIntervalMs() > 0 ? -LIVE_VORLAUF_MS : NACHFASSEN_AB_MS;
@@ -77,7 +83,7 @@ export function liveFensterOffen(now = Date.now()): boolean {
     teams.includes(r.team_id)
     && (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
     && now - Date.parse(r.starts_at) >= -LIVE_VORLAUF_MS
-    && now - Date.parse(r.starts_at) < NACHFASSEN_BIS_MS);
+    && now - Date.parse(r.starts_at) < LIVE_BIS_MS);
 }
 
 /**
@@ -87,7 +93,15 @@ export function liveFensterOffen(now = Date.now()): boolean {
  */
 export function naechsterAbstandMs(now = Date.now()): number {
   const live = syncLiveIntervalMs();
-  return live > 0 && liveFensterOffen(now) ? Math.min(live, syncIntervalMs()) : syncIntervalMs();
+  if (live <= 0) return syncIntervalMs();
+  // Der Takt plant sich nach jedem Lauf selbst neu — scheitert der Blick in die
+  // Datenbank, darf die Kette nicht abreißen: dann eben der normale Takt.
+  try {
+    return liveFensterOffen(now) ? Math.min(live, syncIntervalMs()) : syncIntervalMs();
+  } catch (err) {
+    serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[sync] Live-Fenster nicht lesbar — normaler Takt');
+    return syncIntervalMs();
+  }
 }
 
 /** Bis wann: Ein Spiel, das sechs Stunden nach Anwurf nicht beendet ist, holt der nächste Tageslauf. */
@@ -1211,7 +1225,7 @@ export interface HandballTeamView {
   team_id: string;
   name: string;
   /**
-   * Wie die Mannschaft neben den anderen des Vereins heißt — im Dropdown der
+   * Wie die Mannschaft neben den anderen des Vereins heißt — in der Mannschaftswahl der
    * Microsite und in der Auswahl des Bots: der Name aus `TEAM_IDS`, sonst
    * `automatischesLabel` („2. Herren", „mB-Jugend"), sonst die Altersklasse
    * der Quelle („B-Jugend"), sonst der Mannschaftsname.
@@ -1301,7 +1315,7 @@ function sicht(r: typeof handball_team_match.$inferSelect, rated = false): Handb
 const ROEMISCH: Record<string, number> = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
 
 /**
- * Der Name im Dropdown, aus den Daten der Quelle gelesen — so, wie der Verein
+ * Der Name in der Mannschaftswahl, aus den Daten der Quelle gelesen — so, wie der Verein
  * seine Mannschaften nennt: „1. Herren", „3. Damen", „mB-Jugend", „wC-Jugend".
  *
  * Maßgeblich ist der Wettbewerb mit den meisten Spielen, nicht das erste

@@ -264,6 +264,9 @@ describe('Handball-Microsite', () => {
     const etag = String(css.headers.etag);
     const nochmal = await fastify.inject({ method: 'GET', url: `/${TEAM}/${cssUrl}`, headers: { 'if-none-match': etag } });
     expect(nochmal.statusCode).toBe(304);
+    // Ein komprimierender Proxy schickt das ETag schwach zurück, auch in einer Liste.
+    const schwach = await fastify.inject({ method: 'GET', url: `/${TEAM}/${cssUrl}`, headers: { 'if-none-match': `"alt", W/${etag}` } });
+    expect(schwach.statusCode).toBe(304);
     // Ohne oder mit falschem Hash: kurze Frist, kein immutable.
     expect((await get(`/${TEAM}/site.css`)).headers['cache-control']).not.toContain('immutable');
     const js = await get(`/${TEAM}/app.js?v=falsch`);
@@ -290,7 +293,8 @@ describe('Handball-Microsite', () => {
   it('hält die Seite offline vor und liefert ein installierbares Manifest', async () => {
     const sw = await get(`/${TEAM}/sw.js`);
     expect(sw.body).toContain("addEventListener('fetch'");
-    expect(sw.body).toContain('vibrate');
+    expect(sw.body).toContain('if (payload.vibrate) options.vibrate');
+    expect(sw.body).toContain('ignoreSearch: true');
     const manifest = (await get(`/${TEAM}/manifest.webmanifest`)).json();
     expect(manifest.id).toBe('./');
     expect(manifest.icons.map((i: { sizes: string }) => i.sizes)).toEqual(['192x192', '512x512']);
@@ -332,7 +336,7 @@ describe('Handball-Microsite', () => {
       const html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('Tore im Saisonverlauf');
       expect(html).toContain('aria-label="Tore der besten Torschützen je Spiel, aufsummiert"');
-      expect(html).toContain('<li><i style="background:var(--p)"></i>Nr. 7 <b>13</b></li>');
+      expect(html).toContain('<li><i style="background:var(--ad)"></i>Nr. 7 <b>13</b></li>');
       expect(html).toContain('Nr. 11 <b>9</b>');
     } finally {
       db.delete(schema.handball_match_player).run();
@@ -441,7 +445,10 @@ describe('Handball-Microsite', () => {
     });
 
     it('nimmt über der Obergrenze keine neue Anmeldung mehr an — wer drin ist, darf ändern', async () => {
-      process.env.SITE_PUSH_MAX = '1';
+      // Unabhängig von der Reihenfolge der Tests und ohne den Bestand anzufassen:
+      // `sub` steht drin, und die Grenze liegt genau beim jetzigen Stand.
+      sitePush.saveSiteSubscription(TEAM, { endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, lead: '1h', mode: 'all' });
+      process.env.SITE_PUSH_MAX = String(sitePush.countSiteSubscribers());
       try {
         const neu = await post({ subscription: { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/voll' }, lead: '1h', mode: 'all' });
         expect(neu.statusCode).toBe(503);
@@ -469,11 +476,13 @@ describe('Handball-Microsite', () => {
       // Ein Endstand (m2, 90 Minuten alt) an beide; m1 ist eine Woche alt und wird nur gemerkt.
       expect(r.messages).toBe(1);
       expect(r.recipients).toBe(1);
-      const payloads = sendPush.mock.calls.map(c => c[1] as { title: string; image?: string; tag?: string });
+      const payloads = sendPush.mock.calls.map(c => c[1] as { title: string; image?: string; tag?: string; vibrate?: number[] });
       expect(payloads).toHaveLength(2);
       expect(payloads[0].title).toContain('HSG Wölfe Voreifel verliert 20:25');
       expect(payloads[0].image).toBe('bild/endstand.png?match=m2');
       expect(payloads[0].tag).toBe('handball-m2');
+      // Eine Niederlage vibriert einmal lang, nicht wie ein Torjubel.
+      expect(payloads[0].vibrate).toEqual([400]);
       expect(sitePush.listSiteSubscribers(TEAM).map(s => s.endpoint)).toEqual([sub.endpoint]);
 
       sendPush.mockClear();

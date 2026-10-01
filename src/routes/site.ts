@@ -17,7 +17,7 @@
  *
  * Alle Verweise in der Seite sind relativ, deshalb liegt sie unter einer
  * Adresse mit Schrägstrich am Ende; die Route ohne leitet dorthin um. Die
- * Wurzel `/` führt zur ersten Mannschaft; das Dropdown im Kopf zu den
+ * Wurzel `/` führt zur ersten Mannschaft; die Schaltflächen im Kopf zu den
  * anderen (`../<Team-ID>/`).
  */
 
@@ -79,12 +79,14 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const fest = (request.query as { v?: string } | undefined)?.v === hash;
     reply.header('Content-Type', contentType).header('ETag', etag)
       .header('Cache-Control', fest ? 'public, max-age=31536000, immutable' : 'public, max-age=300, must-revalidate');
-    if (request.headers['if-none-match'] === etag) return reply.code(304).send();
+    // Ein Proxy, der komprimiert, macht daraus ein schwaches `W/"…"`; mehrere Werte kommen durch Komma getrennt.
+    const angefragt = String(request.headers['if-none-match'] ?? '').split(',').map(t => t.trim().replace(/^W\//, ''));
+    if (angefragt.includes(etag)) return reply.code(304).send();
     return reply.send(text);
   }
 
-  /** Alle Mannschaften für das Dropdown — relative Ziele, damit die Seite unter jeder Wurzel läuft. */
-  function dropdown(): Array<{ id: string; label: string; url: string }> {
+  /** Alle Mannschaften für die Mannschaftswahl im Kopf — relative Ziele, damit die Seite unter jeder Wurzel läuft. */
+  function mannschaftswahl(): Array<{ id: string; label: string; url: string }> {
     const sicht = handballOverview();
     return sicht.configured ? sicht.teams.map(t => ({ id: t.team_id, label: t.label, url: `../${encodeURIComponent(t.team_id)}/` })) : [];
   }
@@ -107,7 +109,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
     const html = renderSiteHtml(t.team, {
-      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: dropdown(),
+      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(),
     });
     // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
     const live = t.team.next_match?.status === 'live';

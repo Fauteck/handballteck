@@ -278,6 +278,10 @@ describe('Tageslauf', () => {
       expect(mod.naechsterAbstandMs()).toBe(60 * 1000);
       process.env.SYNC_LIVE_INTERVAL_MS = '10000';
       expect(mod.naechsterAbstandMs()).toBe(20 * 1000);
+      // Drei Stunden nach Anwurf und noch nicht beendet: zurück zum normalen Takt.
+      dbRef.delete(schemaRef.handball_team_match).run();
+      legeSpiel({ starts_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() });
+      expect(mod.naechsterAbstandMs()).toBe(15 * 60 * 1000);
     } finally {
       delete process.env.SYNC_LIVE_INTERVAL_MS;
     }

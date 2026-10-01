@@ -60,8 +60,10 @@ jobs:
       # eigene Schwachstellen-Datenbank (nicht nur die von npm) und sucht
       # nebenbei nach versehentlich eingecheckten Geheimnissen. Nur behebbare
       # Funde ab „high" brechen den Lauf ab.
+      # Auf den Commit gepinnt, nicht auf den Tag: Tags einer Fremd-Action lassen
+      # sich umhängen, und dieser Job teilt den GHA-Cache mit dem Image-Bau.
       - name: Trivy (Abhängigkeiten und Geheimnisse)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret

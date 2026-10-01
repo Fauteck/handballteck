@@ -136,6 +136,8 @@ const REPORT_FROM_MS = 75 * 60 * 1000;
 const REPORT_UNTIL_MS = 8 * 60 * 60 * 1000;
 /** Eine Verlegung, die der Abruf vor mehr als einem Tag gesehen hat, wird nur gemerkt (erster Lauf mit Abonnenten). */
 const CHANGE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+/** So viel Abstand muss zwischen Spieltagsgruß und Ankündigung liegen, sonst entfällt der Gruß. */
+const GRUSS_ABSTAND_ZUR_ANKUENDIGUNG_MS = 2 * 60 * 60 * 1000;
 
 const BOT_COMMANDS: BotCommand[] = [
   { command: 'spiele', description: 'Die nächsten Spiele' },
@@ -2073,6 +2075,9 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
           if (abo.mode !== 'all' || abo.lead === 'aus' || !verfolgt(abo, team.team_id)) continue;
           const key = schluessel(`morning:${abo.chatId}`);
           if (schonGeschickt(key) || schonGeschickt(schluessel(`upcoming:${abo.chatId}`))) continue;
+          // Kommt die Ankündigung ohnehin in den nächsten zwei Stunden, wäre der Gruß ein Doppel.
+          const ankuendigungAb = ankuendigungFaelligAb(m.starts_at, abo.lead);
+          if (ankuendigungAb !== null && ankuendigungAb - jetzt < GRUSS_ABSTAND_ZUR_ANKUENDIGUNG_MS) continue;
           merke(key);
           try {
             await deps.send(abo.chatId, text, routenTastatur(m));

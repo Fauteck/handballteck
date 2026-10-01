@@ -40,7 +40,7 @@ export function wo(m: HandballMatchView): string {
   return m.round ? `${m.competition_name}, ${m.round}. Spieltag` : m.competition_name;
 }
 
-export function heuteOderDatum(start: Date, now: Date): string {
+function heuteOderDatum(start: Date, now: Date): string {
   const tag = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
   return tag(start) === tag(now) ? 'heute' : `am ${DATUM_LANG.format(start)}`;
 }
@@ -107,9 +107,9 @@ export function textAnkuendigung(team: HandballTeamView, m: HandballMatchView, n
 const BERLIN_TAG = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Berlin' });
 const BERLIN_STUNDE = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Berlin' });
 /** Ab dieser Berliner Stunde kommt der Spieltagsgruß — nicht vor dem Frühstück. */
-export const SPIELTAGSGRUSS_AB_STUNDE = 8;
+const SPIELTAGSGRUSS_AB_STUNDE = 8;
 /** Bis zum Anwurf muss mindestens so viel Zeit sein, sonst übernimmt die Ankündigung. */
-export const SPIELTAGSGRUSS_MIN_VORLAUF_MS = 4 * 60 * 60 * 1000;
+const SPIELTAGSGRUSS_MIN_VORLAUF_MS = 4 * 60 * 60 * 1000;
 
 /** Ob jetzt der Gruß am Spieltagsmorgen fällig ist: Anwurf heute, es ist nach acht Uhr, und bis dahin ist noch Zeit. */
 export function spieltagsGrussFaellig(m: HandballMatchView, now: Date): boolean {
@@ -166,7 +166,7 @@ export function halleAlsOrt(m: HandballMatchView): HandballVenue | null {
  * Karten-App öffnet. Mit der Spiel-ID, solange sie in Telegrams 64 Byte
  * passt, sonst ohne (dann gilt das nächste Spiel).
  */
-export function halleKnopf(m: HandballMatchView): { text: string; callback_data: string } {
+function halleKnopf(m: HandballMatchView): { text: string; callback_data: string } {
   const mitId = knopf('📍 Halle', 'halle', m.match_id);
   return Buffer.byteLength(mitId.callback_data, 'utf8') <= 64 && /^[\w.:-]+$/.test(m.match_id) ? mitId : knopf('📍 Halle', 'halle');
 }
@@ -256,7 +256,7 @@ export function berichtTastatur(m: HandballMatchView, gekuerzt: boolean): Inline
   return { inline_keyboard: gekuerzt ? [[knopf('📄 Ganzer Bericht', 'bericht', 'voll')], ...rest] : rest };
 }
 
-export function bilanzZeile(p: HandballPlayerStats): string {
+function bilanzZeile(p: HandballPlayerStats): string {
   const teile = [`${p.goals} Tore in ${p.games} Spiel${p.games === 1 ? '' : 'en'}`];
   if (p.sevenMeterAttempts > 0) teile.push(`${p.sevenMeterGoals}/${p.sevenMeterAttempts} Siebenmeter`);
   if (p.twoMinutes > 0) teile.push(`${p.twoMinutes}× 2 min`);
@@ -638,7 +638,7 @@ export function textKader(team: HandballTeamView): string {
   return teile.join('\n');
 }
 
-export function kaderFussnote(spieler: HandballRosterName[]): string {
+function kaderFussnote(spieler: HandballRosterName[]): string {
   const ausAufstellung = spieler.filter(r => r.numberSource === 'lineup').length;
   return ausAufstellung > 0
     ? `Nummern laut Kader — am Spieltag werden sie manchmal getauscht. ${ausAufstellung === 1 ? 'Eine Nummer (*)' : `${ausAufstellung} Nummern (*)`} fehlen im Kader und stammen aus der letzten Aufstellung.`

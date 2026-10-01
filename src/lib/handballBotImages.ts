@@ -16,7 +16,7 @@ import {
 import { botIdentity, DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballBotTexts';
 
 /** Fußzeile aller Bilder: Stand und der Bot, der sie schickt. */
-export function bildMarke(now = new Date()): ImageBrand {
+function bildMarke(now = new Date()): ImageBrand {
   return { botHandle: botIdentity.username ? `@${botIdentity.username}` : null, stand: `${DATUM.format(now)} ${ZEIT.format(now)}` };
 }
 
@@ -192,7 +192,7 @@ export interface EndstandKarteExtras {
 }
 
 /** Wie viele Siege in Folge, das genannte Spiel eingeschlossen — null unter zwei. */
-export function siegesserie(team: HandballTeamView, m: HandballMatchView): string | null {
+function siegesserie(team: HandballTeamView, m: HandballMatchView): string | null {
   const gespielt = team.matches.filter(x => x.status === 'finished' && x.score_home !== null && x.score_away !== null);
   const bis = gespielt.findIndex(x => x.match_id === m.match_id);
   if (bis < 0 || gespielt[bis].won !== true) return null;
@@ -202,12 +202,12 @@ export function siegesserie(team: HandballTeamView, m: HandballMatchView): strin
 }
 
 /** „Platz 1 · 6:0 Punkte" aus der gespeicherten Tabelle. */
-export function tabellenStand(team: HandballTeamView): string | null {
+function tabellenStand(team: HandballTeamView): string | null {
   const zeile = team.standings.flatMap(s => s.rows).find(r => r.teamId === team.team_id);
   return zeile ? `Platz ${zeile.position} · ${zeile.points}:${zeile.played * 2 - zeile.points} Punkte` : null;
 }
 
-export function endstandEingabe(team: HandballTeamView, m: HandballMatchView, extras: EndstandKarteExtras, opponentColor: string | null) {
+function endstandEingabe(team: HandballTeamView, m: HandballMatchView, extras: EndstandKarteExtras, opponentColor: string | null) {
   const start = new Date(m.starts_at);
   return {
     competitionName: m.competition_name,
@@ -238,9 +238,9 @@ export async function endstandBild(team: HandballTeamView, m: HandballMatchView,
 }
 
 /** Bilder je Animationsschritt der Endstand-Karte; das GIF baut `renderGif` daraus. */
-export const ENDSTAND_FRAMES = 12;
-export const ENDSTAND_FRAME_MS = 90;
-export const ENDSTAND_HOLD_MS = 3500;
+const ENDSTAND_FRAMES = 12;
+const ENDSTAND_FRAME_MS = 90;
+const ENDSTAND_HOLD_MS = 3500;
 
 /**
  * Die Endstand-Karte als Animation: die Zahlen zählen hoch (schnell am
