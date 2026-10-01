@@ -9,7 +9,8 @@ import { runMigrations } from './db/migrate';
 import { buildServer } from './server';
 import { port, teamIds, publicUrl, importTodoteckDb, apiToken } from './config';
 import { importTodoteck } from './import/todoteck';
-import { syncHandballTeams, naechsterAbstandMs } from './lib/handballTeam';
+import { syncHandballTeams, naechsterAbstandMs, handballOverview } from './lib/handballTeam';
+import { clubdeskHolen } from './lib/clubdesk';
 import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
 import { pushHandballSite } from './lib/handballSitePush';
 import { serviceLog } from './lib/serviceLogger';
@@ -32,6 +33,14 @@ export async function einTakt(): Promise<void> {
       serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[bot] Beschreibung nicht gesetzt');
     }
     await refreshHandballWebhookInfo();
+    // Fotos der Vereinsseite — einmal am Tag, nach bestem Bemühen; ohne CLUBDESK_URL nichts.
+    try {
+      const sicht = handballOverview();
+      const fotos = await clubdeskHolen(new Map(sicht.teams.map(t => [t.team_id, t.label])));
+      if (fotos.status === 'ok') serviceLog.info({ geladen: fotos.geladen }, '[clubdesk] Fotos abgeglichen');
+    } catch (err) {
+      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[clubdesk] Abruf gescheitert');
+    }
     serviceLog.info({ teams: result.teams, fetched: result.fetched + bot.fetches, bot: bot.recipients, site: site.recipients }, '[sync] Lauf beendet');
   } catch (err) {
     serviceLog.error({ err: err instanceof Error ? err.message : String(err) }, '[sync] Lauf gescheitert');

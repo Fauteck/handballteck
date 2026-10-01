@@ -26,8 +26,10 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import {
   siteConfig, siteTeam, renderSiteHtml, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS,
+  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS,
 } from '../lib/handballSite';
+import { fotoJpeg, portraits, istJugend } from '../lib/clubdesk';
+import { timingSafeEqual } from 'node:crypto';
 import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
   sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode,
@@ -36,9 +38,22 @@ import { readPalette, handballOverview } from '../lib/handballTeam';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
 import { isPushServiceUrl } from '../lib/ssrf';
-import { sitePushMax } from '../config';
+import { sitePushMax, sitePreviewToken, sitePlayers } from '../config';
 
 const APP_JS_HASH = inhaltsHash(SITE_APP_JS);
+const THEME_JS_HASH = inhaltsHash(SITE_THEME_JS);
+
+/**
+ * Der Vorschau-Schlüssel aus `?vorab=` — zurückgegeben nur, wenn er zu
+ * `SITE_PREVIEW_TOKEN` passt (Vergleich in konstanter Zeit). Sonst null, und
+ * die Seite ist die öffentliche.
+ */
+function vorschauAus(query: unknown): string | null {
+  const soll = sitePreviewToken();
+  const ist = (query as { vorab?: unknown } | undefined)?.vorab;
+  if (!soll || typeof ist !== 'string' || ist.length !== soll.length) return null;
+  return timingSafeEqual(Buffer.from(ist), Buffer.from(soll)) ? ist : null;
+}
 
 const subscribeSchema = z.object({
   subscription: z.object({
@@ -108,14 +123,16 @@ export async function siteRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { teamId: string } }>('/:teamId/', limit(60), async (request, reply) => {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
+    const vorschau = vorschauAus(request.query);
     const html = renderSiteHtml(t.team, {
-      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(),
+      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
     });
     // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
     const live = t.team.next_match?.status === 'live';
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
-      .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
+      // Die Vorschau darf in keinem Zwischenspeicher landen, auch nicht in dem eines Proxys.
+      .header('Cache-Control', vorschau ? 'private, no-store' : live ? 'public, max-age=15' : 'public, max-age=60')
       .header('X-Robots-Tag', 'noindex, nofollow')
       .send(html);
   });
@@ -123,6 +140,29 @@ export async function siteRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { teamId: string } }>('/:teamId/app.js', limit(120), async (request, reply) => {
     if (!freigegeben(request.params.teamId)) return nichtDa(reply);
     return festeDatei(request, reply, SITE_APP_JS, APP_JS_HASH, 'application/javascript; charset=utf-8');
+  });
+
+  fastify.get<{ Params: { teamId: string } }>('/:teamId/theme.js', limit(120), async (request, reply) => {
+    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    return festeDatei(request, reply, SITE_THEME_JS, THEME_JS_HASH, 'application/javascript; charset=utf-8');
+  });
+
+  /**
+   * Fotos der Vereinsseite — nur mit gültigem Vorschau-Schlüssel, und nur, was
+   * die Seite in der Vorschau auch zeigen würde: Jugend nur mit Spielernamen,
+   * Porträts nur bei Senioren mit Spielernamen. Sonst 404 wie für Unbekanntes.
+   */
+  fastify.get<{ Params: { teamId: string; wer: string } }>('/:teamId/foto/:wer', limit(120), async (request, reply) => {
+    const t = freigegeben(request.params.teamId);
+    if (!t || !vorschauAus(request.query)) return nichtDa(reply);
+    const wer = /^(gruppe|\d{1,12})\.jpg$/.exec(request.params.wer)?.[1];
+    if (!wer) return nichtDa(reply);
+    const jugend = istJugend(t.team.label, t.team.championship_name);
+    const players = sitePlayers();
+    if (wer === 'gruppe' ? jugend && !players : jugend || !players || !portraits(t.team.team_id).some(p => p.contactId === wer)) return nichtDa(reply);
+    const jpeg = fotoJpeg(t.team.team_id, wer);
+    if (!jpeg) return nichtDa(reply);
+    return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', 'private, max-age=3600').header('X-Robots-Tag', 'noindex').send(jpeg);
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/site.css', limit(120), async (request, reply) => {

@@ -51,9 +51,10 @@ import {
   textSaison, alsKlartext, icsKalender, handballBotLink, getHandballBotUsername,
 } from './handballBot';
 import type { HandballStandingRow } from './handballNetClient';
-import { siteCss, inhaltsHash, SITE_SW_JS, SITE_APP_JS } from './handballSiteAssets';
+import { siteCss, inhaltsHash, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS } from './handballSiteAssets';
+import { hatGruppenbild, portraits, istJugend } from './clubdesk';
 
-export { SITE_SW_JS, SITE_APP_JS };
+export { SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS };
 
 // ---------------------------------------------------------------------------
 // Konfiguration
@@ -318,6 +319,12 @@ export interface SiteRenderOptions {
   pushEnabled: boolean;
   stand: string | null;
   now?: Date;
+  /**
+   * Der Vorschau-Schlüssel, wenn die Seite als Vorschau angefragt wurde
+   * (`?vorab=…`): Dann zeigt sie zusätzlich die Fotos der Vereinsseite,
+   * und alle Verweise innerhalb der Seite tragen den Schlüssel weiter.
+   */
+  vorschau?: string | null;
 }
 
 /**
@@ -382,7 +389,7 @@ function formStrip(team: HandballTeamView): string {
  * Punkte, Bilanz, Tore, Form, nächstes Spiel), damit die Frage „wie
  * stehen wir?" beantwortet ist, bevor jemand scrollt.
  */
-function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: Array<{ id: string; label: string; url: string }>): string {
+function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: Array<{ id: string; label: string; url: string }>, anhang = ''): string {
   const zeile = eigeneZeile(team);
   const saison = saisonLabel(team.matches[0]?.season_id);
   const wettbewerb = [team.championship_name, team.standings[0]?.competition_name ?? team.matches[0]?.competition_name].filter(Boolean).join(' · ');
@@ -407,10 +414,11 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   // der gewählten Mannschaft ist markiert.
   const wahl = mannschaften.length > 1
     ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${mannschaften.map(t => t.id === team.team_id
-      ? `<a href="${h(t.url)}" aria-current="page">${h(t.label)}</a>`
-      : `<a href="${h(t.url)}">${h(t.label)}</a>`).join('')}</nav>`
+      ? `<a href="${h(t.url + anhang)}" aria-current="page">${h(t.label)}</a>`
+      : `<a href="${h(t.url + anhang)}">${h(t.label)}</a>`).join('')}</nav>`
     : '';
   return `<header class="hero"><div class="wrap">
+  <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}
   <div>
     ${wahl}
@@ -522,9 +530,10 @@ function torfolgeText(m: HandballMatchView): string {
  * Spielbericht und Spielverlauf zu einem beendeten Spiel, aufklappbar. Der
  * Verlauf kommt ohne Namen aus und steht immer da; der Bericht ist der Text
  * der Quelle und nennt Spieler — er erscheint nur mit dem zweiten Schalter,
- * wie Torjäger und Kader. Leer, wenn es beides nicht gibt.
+ * wie Torjäger und Kader. Leer, wenn es beides nicht gibt. Immer zugeklappt,
+ * auch unter dem letzten Spiel — sonst schiebt der Bericht die Seite lang.
  */
-function spielDetailsHtml(m: HandballMatchView, players: boolean, offen = false): string {
+function spielDetailsHtml(m: HandballMatchView, players: boolean): string {
   const verlauf = spielverlaufSvg(m);
   const bericht = players && m.report_text ? m.report_text : null;
   if (!verlauf && !bericht) return '';
@@ -532,7 +541,7 @@ function spielDetailsHtml(m: HandballMatchView, players: boolean, offen = false)
     ? bericht.split(/\n{2,}/).map(a => a.trim()).filter(Boolean).map(a => a.startsWith('## ') ? `<h4>${h(a.slice(3))}</h4>` : `<p>${h(a)}</p>`).join('')
     : '';
   const titel = [verlauf ? 'Spielverlauf' : null, bericht ? 'Spielbericht' : null].filter(Boolean).join(' & ');
-  return `<details class="more"${offen ? ' open' : ''}><summary>${titel}</summary>
+  return `<details class="more"><summary>${titel}</summary>
     ${verlauf ? `<div class="verlauf">${verlauf}</div>${torfolgeText(m)}` : ''}
     ${bericht ? `<div class="bericht">${absaetze}<p class="quelle">Spielbericht von handball.net${m.report_url ? ` · <a href="${h(m.report_url)}" target="_blank" rel="noopener noreferrer">Spielberichtsbogen (PDF)</a>` : ''}</p></div>` : ''}
   </details>`;
@@ -586,7 +595,7 @@ function letztesSpielHtml(team: HandballTeamView, players: boolean): string {
       <a class="btn" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">handball.net</a>
     </div>
   </div>
-  ${spielDetailsHtml(m, players, true)}
+  ${spielDetailsHtml(m, players)}
 </section>`;
 }
 
@@ -715,6 +724,27 @@ export function torverlaufHtml(team: HandballTeamView): string | null {
   <p class="muted small" style="margin:4px 0 0">Summe der Tore nach dem n-ten Spiel</p>`;
 }
 
+/**
+ * Die Fotos der Vereinsseite — bisher nur in der Vorschau. Das Gruppenbild bei
+ * Senioren immer, bei der Jugend nur mit Spielernamen; die Porträts nur bei
+ * Senioren und nur mit Spielernamen (sie tragen Namen). Leer ohne Fotos.
+ */
+function teamFotosHtml(team: HandballTeamView, players: boolean, anhang: string): string {
+  const jugend = istJugend(team.label, team.championship_name);
+  const gruppe = hatGruppenbild(team.team_id) && (!jugend || players);
+  const personen = players && !jugend ? portraits(team.team_id) : [];
+  if (!gruppe && personen.length === 0) return '';
+  const abschnitte = new Map<string, typeof personen>();
+  for (const p of personen) abschnitte.set(p.section, [...(abschnitte.get(p.section) ?? []), p]);
+  return `<section class="card s-fotos" id="team">
+  <h2>Das Team <span class="badge">Vorschau</span></h2>
+  ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${team.name}`)}" loading="lazy" width="1600">` : ''}
+  ${[...abschnitte].map(([titel, leute]) => `<h3 class="unter">${h(titel)}</h3>
+  <ul class="portraets">${leute.map(p => `<li><img src="./foto/${h(p.contactId)}.jpg${h(anhang)}" alt="" loading="lazy" width="400" height="500"><b>${h(p.name)}</b>${p.position ? `<span>${h(p.position)}</span>` : ''}</li>`).join('')}</ul>`).join('')}
+  <p class="muted small" style="margin:10px 0 0">Fotos: Vereinsseite der Wölfe Voreifel (ClubDesk).</p>
+</section>`;
+}
+
 function spielerHtml(team: HandballTeamView): string {
   const stats = playerStats(team.team_id);
   const torjaeger = stats.some(p => p.goals > 0);
@@ -807,6 +837,8 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
  */
 export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions): string {
   const now = opts.now ?? new Date();
+  // In der Vorschau trägt jeder Verweis innerhalb der Seite den Schlüssel weiter.
+  const anhang = opts.vorschau ? `?vorab=${encodeURIComponent(opts.vorschau)}` : '';
   const palette = vervollstaendigePalette(readPalette());
   const logo = logoDataUri(team.team_id);
   const naechstes = team.next_match;
@@ -846,18 +878,21 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <link rel="icon" href="./logo.png" type="image/png">
 <link rel="apple-touch-icon" href="./logo.png">
 <link rel="alternate" type="application/rss+xml" title="${h(team.name)} — Ergebnisse" href="./feed.xml">
+<script src="./theme.js?v=${inhaltsHash(SITE_THEME_JS)}"></script>
 <link rel="stylesheet" href="./site.css?v=${siteCssText().hash}">
 </head>
 <body${naechstes?.status === 'live' ? ' data-live="1"' : ''}>
 <a class="skip" href="#inhalt">Zum Inhalt</a>
+${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über deinen Vorschau-Link erreichbar. Fotos von der Vereinsseite, Rechte noch nicht geklärt.</div>' : ''}
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
-${heroHtml(team, logo, now, opts.teams ?? [])}
+${heroHtml(team, logo, now, opts.teams ?? [], anhang)}
 <main class="wrap" id="inhalt">
 <div class="col main">
 ${naechstesSpielHtml(team, now)}
 ${letztesSpielHtml(team, opts.players)}
 ${tabelleHtml(team)}
 ${saisonHtml(team, opts.players)}
+${opts.vorschau ? teamFotosHtml(team, opts.players, anhang) : ''}
 ${opts.players ? spielerHtml(team) : ''}
 </div>
 <div class="col side">

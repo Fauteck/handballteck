@@ -293,3 +293,22 @@ export const handball_site_subscription = sqliteTable('handball_site_subscriptio
   last_seen_at: text('last_seen_at').notNull(),
   last_sent_at: text('last_sent_at'),
 });
+
+/**
+ * Fotos von der Vereinsseite (Migration 0002): `gruppe` je Mannschaft, `person`
+ * je Kachel des Kaders (nur Senioren). Verkleinert als JPEG abgelegt.
+ */
+export const clubdesk_photo = sqliteTable('clubdesk_photo', {
+  /** `${team_id}:gruppe` oder `${team_id}:person:${contact_id}` */
+  id: text('id').primaryKey(),
+  team_id: text('team_id').notNull(),
+  kind: text('kind').notNull(),
+  contact_id: text('contact_id'),
+  name: text('name'),
+  section: text('section'),
+  position: text('position'),
+  sort: integer('sort').notNull().default(0),
+  source_key: text('source_key').notNull(),
+  image: blob('image', { mode: 'buffer' }).notNull(),
+  fetched_at: text('fetched_at').notNull(),
+});

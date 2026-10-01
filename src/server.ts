@@ -23,11 +23,13 @@ import { getHandballNetStats } from './lib/handballNetClient';
  * Die URL, wie sie ins Log geht: ohne das Pfadgeheimnis des Webhooks und
  * ohne die Signatur der Inline-Bilder. Beides wäre sonst im Klartext in jedem
  * Container-Log — und wer das Log liest, könnte den Webhook ansprechen.
+ * Ebenso der Schlüssel der Vorschau der Seite (`vorab=`).
  */
 export function logUrl(url: string): string {
   return url
     .replace(/^\/telegram\/webhook\/[^/?#]+/, '/telegram/webhook/***')
-    .replace(/([?&]t=)[^&#]*/g, '$1***');
+    .replace(/([?&]t=)[^&#]*/g, '$1***')
+    .replace(/([?&]vorab=)[^&#]*/g, '$1***');
 }
 
 /**

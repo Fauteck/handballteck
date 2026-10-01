@@ -12,6 +12,28 @@ export function inhaltsHash(text: string): string {
   return createHash('sha1').update(text).digest('hex').slice(0, 10);
 }
 
+/**
+ * Das dunkle Schema — zweimal ausgegeben: einmal für „automatisch" (folgt dem
+ * Gerät, außer der Schalter steht auf hell), einmal für „dunkel" von Hand.
+ * Eine Quelle, damit beide nie auseinanderlaufen.
+ */
+const DUNKEL: Array<[string, string]> = [
+  ['', '--bg:#0c1a1f;--card:#12262c;--text:#e6f0f2;--muted:#9bb0b6;--line:#1f3840;color-scheme:dark'],
+  ['.btn', 'background:#12262c;color:#e6f0f2'],
+  ['.plan .e', 'background:#0c1a1f;color:#e6f0f2'],
+  ['tr.own td', 'background:color-mix(in srgb,var(--a) 22%,#12262c)'],
+  ['.plan li.next', 'background:color-mix(in srgb,var(--a) 14%,#12262c)'],
+  ['.plan .e.w', 'background:color-mix(in srgb,var(--win) 24%,#12262c)'],
+  ['.plan .e.l', 'background:color-mix(in srgb,var(--loss) 22%,#12262c)'],
+];
+
+function dunkel(): string {
+  const regeln = (wurzel: string) => DUNKEL.map(([sel, body]) => `${wurzel}${sel ? ` ${sel}` : ''}{${body}}`).join('');
+  return `:root{color-scheme:light dark}:root[data-theme=light]{color-scheme:light}
+@media (prefers-color-scheme:dark){${regeln(':root:not([data-theme=light])')}}
+${regeln(':root[data-theme=dark]')}`;
+}
+
 export function siteCss(p: FullPalette): string {
   const grund = p.primary.toLowerCase() === '#003e51' ? '#001f2b' : p.primary;
   return `
@@ -52,7 +74,7 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--p);disp
 .form i.w{background:var(--win)}.form i.l{background:var(--loss)}
 main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,1fr)}
 .col{display:contents}
-.s-next{order:1}.s-push{order:2}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-team{order:7}
+.s-next{order:1}.s-push{order:2}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-fotos{order:7}.s-team{order:8}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,38,44,.04);min-width:0}
 .card.dark{background:linear-gradient(135deg,var(--g),var(--p) 60%,var(--s));color:#fff;border-color:transparent}
 .card.dark h2{color:var(--a)}
@@ -137,6 +159,14 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;color:var(--p);margin:12px 0 4px}
 .legende{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.9rem}
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.hero .theme{position:absolute;top:12px;right:16px;z-index:2;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-size:1.2rem;line-height:1;cursor:pointer}
+.hero .theme:hover{background:rgba(255,255,255,.22)}
+.vorschau-band{padding:8px 16px;text-align:center;background:#7a2a8a;color:#fff;font-size:.9rem;font-weight:600}
+.portraets{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
+.portraets li{display:grid;gap:2px;font-size:.9rem;line-height:1.25}
+.portraets img{width:100%;height:auto;aspect-ratio:4/5;object-fit:cover;border-radius:10px;background:var(--line)}
+.portraets b{margin-top:4px}
+.portraets span{color:var(--muted);font-size:.8rem}
 .gegner{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:grid;gap:8px}
 .gegner .kopf{display:flex;gap:12px;align-items:center}
 .gegner .kopf img,.gegner .kopf .ini{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain;flex:none}
@@ -174,9 +204,17 @@ main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;p
 .season .body .lines{margin-top:0}
 .card{padding:22px}
 }
-@media (prefers-color-scheme:dark){:root{--bg:#0c1a1f;--card:#12262c;--text:#e6f0f2;--muted:#9bb0b6;--line:#1f3840}.btn{background:#12262c;color:#e6f0f2}.plan .e{background:#0c1a1f;color:#e6f0f2}tr.own td{background:color-mix(in srgb,var(--a) 22%,#12262c)}.plan li.next{background:color-mix(in srgb,var(--a) 14%,#12262c)}.plan .e.w{background:color-mix(in srgb,var(--win) 24%,#12262c)}.plan .e.l{background:color-mix(in srgb,var(--loss) 22%,#12262c)}}
+${dunkel()}
 `;
 }
+
+/**
+ * Setzt das gewählte Farbschema, bevor die Seite gezeichnet wird — als eigene,
+ * blockierende Datei im Kopf (kein Inline-Skript, CSP), damit die Seite nicht
+ * erst hell aufblitzt und dann dunkel wird.
+ */
+export const SITE_THEME_JS = `try { var t = localStorage.getItem('handball-site-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+`;
 
 /**
  * Der Service Worker der Microsite: zeigt den Push, öffnet beim Antippen die
@@ -188,7 +226,7 @@ main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;p
  */
 export const SITE_SW_JS = `/* Handball-Microsite: Push-Empfang, Offline-Rückfall für die Seite. */
 var CACHE = 'handball-site-v1';
-var CACHEBAR = ['site.css', 'app.js', 'logo.png', 'logo-192.png', 'fonts/'];
+var CACHEBAR = ['site.css', 'app.js', 'theme.js', 'logo.png', 'logo-192.png', 'fonts/'];
 self.addEventListener('install', function () { self.skipWaiting(); });
 self.addEventListener('activate', function (event) {
   event.waitUntil(caches.keys().then(function (namen) {
@@ -200,6 +238,8 @@ self.addEventListener('fetch', function (event) {
   if (req.method !== 'GET') return;
   var scope = self.registration.scope;
   if (req.url.indexOf(scope) !== 0) return;
+  // Die Vorschau geht nie in den Speicher — sonst stünde sie offline in der normalen Seite.
+  if (req.url.indexOf('vorab=') >= 0) return;
   var rel = req.url.slice(scope.length).split('?')[0].split('#')[0];
   var seite = req.mode === 'navigate' && rel === '';
   var statisch = CACHEBAR.some(function (p) { return rel.indexOf(p) === 0; });
@@ -256,6 +296,31 @@ export const SITE_APP_JS = `(function () {
   // Der Service Worker gehört zur Seite, nicht nur zum Push: Er hält die
   // zuletzt geladene Fassung für den Fall ohne Netz vor.
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
+
+  // Farbschema: automatisch (Gerät) → hell → dunkel → automatisch.
+  var THEME_KEY = 'handball-site-theme';
+  var themeKnopf = document.querySelector('[data-theme-toggle]');
+  var THEMES = { auto: ['◐', 'automatisch'], light: ['☀', 'hell'], dark: ['☾', 'dunkel'] };
+  function themeZeigen(wahl) {
+    if (wahl === 'light' || wahl === 'dark') document.documentElement.setAttribute('data-theme', wahl);
+    else document.documentElement.removeAttribute('data-theme');
+    if (!themeKnopf) return;
+    var t = THEMES[wahl] || THEMES.auto;
+    themeKnopf.textContent = t[0];
+    themeKnopf.setAttribute('aria-label', 'Farbschema: ' + t[1]);
+    themeKnopf.title = 'Farbschema: ' + t[1] + ' (antippen zum Wechseln)';
+  }
+  var themeWahl = 'auto';
+  try { var gespeichert = localStorage.getItem(THEME_KEY); if (gespeichert === 'light' || gespeichert === 'dark') themeWahl = gespeichert; } catch (e) {}
+  themeZeigen(themeWahl);
+  if (themeKnopf) {
+    themeKnopf.hidden = false;
+    themeKnopf.addEventListener('click', function () {
+      themeWahl = themeWahl === 'auto' ? 'light' : themeWahl === 'light' ? 'dark' : 'auto';
+      try { if (themeWahl === 'auto') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, themeWahl); } catch (e) {}
+      themeZeigen(themeWahl);
+    });
+  }
 
   // Kanäle: welche Kachel offen war, merkt sich der Browser.
   var OPEN_KEY = 'handball-site-open';
@@ -320,7 +385,7 @@ export const SITE_APP_JS = `(function () {
   if (document.body.hasAttribute('data-live')) {
     var liveTakt = setInterval(function () {
       if (document.hidden) return;
-      fetch('./', { cache: 'no-store', credentials: 'omit' })
+      fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'omit' })
         .then(function (res) { return res.ok ? res.text() : null; })
         .then(function (html) {
           if (!html) return;

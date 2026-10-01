@@ -216,7 +216,9 @@ describe('Handball-Microsite', () => {
       html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('<summary>Spielverlauf & Spielbericht</summary>');
       expect(html).toContain('<h4>Erste Halbzeit</h4><p>Eskil Lieck traf siebenmal.</p>');
-      expect(html).toContain('<details class="more" open>');
+      // Überall zugeklappt, auch unter dem letzten Spiel.
+      expect(html).toContain('<details class="more"><summary>Spielverlauf & Spielbericht</summary>');
+      expect(html).not.toContain('<details class="more" open>');
     } finally {
       db.delete(schema.handball_opponent_form).run();
       db.update(schema.handball_team_match).set({ events_payload: null, report_text: null, halftime_home: null, halftime_away: null }).where(eq(schema.handball_team_match.id, `${TEAM}:m2`)).run();
@@ -341,6 +343,111 @@ describe('Handball-Microsite', () => {
     } finally {
       db.delete(schema.handball_match_player).run();
     }
+  });
+
+  describe('Vorschau mit Fotos der Vereinsseite', () => {
+    const TOKEN = 'v'.repeat(40);
+    const SENIOR = '96301';
+    let jpeg: Buffer;
+
+    beforeAll(async () => {
+      const sharp = (await import('sharp')).default;
+      jpeg = await sharp({ create: { width: 8, height: 10, channels: 3, background: '#336699' } }).jpeg().toBuffer();
+      const jetzt = new Date().toISOString();
+      const foto = (team: string, kind: string, contact: string | null, name: string, section: string | null, sort: number) => ({
+        id: kind === 'gruppe' ? `${team}:gruppe` : `${team}:person:${contact}`, team_id: team, kind, contact_id: contact, name, section, position: kind === 'person' ? 'Rückraum' : null,
+        sort, source_key: 'x', image: jpeg, fetched_at: jetzt,
+      });
+      db.insert(schema.clubdesk_photo).values([
+        foto(TEAM, 'gruppe', null, 'B-Jugend', null, 0),
+        foto(TEAM, 'person', '7001', 'Jugendlicher', 'Spieler(in)', 1),
+        foto(SENIOR, 'gruppe', null, 'Wölfe I', null, 0),
+        foto(SENIOR, 'person', '8001', 'Senior Eins', 'Spieler(in)', 1),
+      ] as never).run();
+      db.insert(schema.handball_team_match).values({
+        id: `${SENIOR}:s1`, team_id: SENIOR, match_id: 's1', season_id: 2627, starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
+        status: 'scheduled', status_name: 'scheduled', round: 1, phase_id: 13000, competition_name: 'Oberliga Männer', championship_name: 'Männer',
+        home_id: SENIOR, home_name: 'HSG Wölfe Voreifel', away_id: '96400', away_name: 'TV Palmersheim',
+        score_home: null, score_away: null, venue_name: null, venue_address: null, notified_upcoming: false, notified_result: false, updated_at: jetzt,
+      } as never).run();
+    });
+
+    afterAll(() => {
+      db.delete(schema.clubdesk_photo).run();
+      db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, SENIOR)).run();
+      delete process.env.SITE_PREVIEW_TOKEN;
+    });
+
+    beforeEach(() => {
+      process.env.SITE_PREVIEW_TOKEN = TOKEN;
+      setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}` });
+    });
+
+    it('zeigt ohne oder mit falschem Schlüssel nichts davon — und die Fotos antworten 404', async () => {
+      for (const url of [`/${SENIOR}/`, `/${SENIOR}/?vorab=falsch`, `/${SENIOR}/?vorab=${'x'.repeat(40)}`]) {
+        const res = await get(url);
+        expect(res.body, url).not.toContain('Das Team');
+        expect(res.body, url).not.toContain('vorschau-band');
+        expect(res.headers['cache-control'], url).toBe('public, max-age=60');
+      }
+      expect((await get(`/${SENIOR}/foto/gruppe.jpg`)).statusCode).toBe(404);
+      expect((await get(`/${SENIOR}/foto/gruppe.jpg?vorab=falsch`)).statusCode).toBe(404);
+      // Ein zu kurzer Schlüssel in der Umgebung schaltet die Vorschau gar nicht erst ein.
+      process.env.SITE_PREVIEW_TOKEN = 'kurz';
+      expect((await get(`/${SENIOR}/?vorab=kurz`)).body).not.toContain('Das Team');
+    });
+
+    it('zeigt mit Schlüssel Gruppenbild und Porträts der Senioren — privat, nicht zwischenspeicherbar', async () => {
+      setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_players: 'true' });
+      const res = await get(`/${SENIOR}/?vorab=${TOKEN}`);
+      expect(res.headers['cache-control']).toBe('private, no-store');
+      expect(res.body).toContain('class="vorschau-band"');
+      expect(res.body).toContain(`<img class="bild" src="./foto/gruppe.jpg?vorab=${TOKEN}"`);
+      expect(res.body).toContain(`<img src="./foto/8001.jpg?vorab=${TOKEN}"`);
+      expect(res.body).toContain('<b>Senior Eins</b><span>Rückraum</span>');
+      // Die Mannschaftswahl trägt den Schlüssel weiter.
+      expect(res.body).toContain(`href="../96254/?vorab=${TOKEN}"`);
+      const bild = await get(`/${SENIOR}/foto/gruppe.jpg?vorab=${TOKEN}`);
+      expect(bild.statusCode).toBe(200);
+      expect(bild.headers['content-type']).toBe('image/jpeg');
+      expect(bild.headers['cache-control']).toBe('private, max-age=3600');
+      expect((await get(`/${SENIOR}/foto/8001.jpg?vorab=${TOKEN}`)).statusCode).toBe(200);
+      // Eine Kontakt-ID einer anderen Mannschaft gibt es hier nicht.
+      expect((await get(`/${SENIOR}/foto/7001.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+      expect((await get(`/${SENIOR}/foto/..%2Fgruppe.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+    });
+
+    it('zeigt Porträts der Senioren nur mit Spielernamen, das Gruppenbild auch ohne', async () => {
+      const html = (await get(`/${SENIOR}/?vorab=${TOKEN}`)).body;
+      expect(html).toContain('./foto/gruppe.jpg');
+      expect(html).not.toContain('./foto/8001.jpg');
+      expect((await get(`/${SENIOR}/foto/8001.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+    });
+
+    it('zeigt bei der Jugend das Gruppenbild nur mit Spielernamen und nie Porträts', async () => {
+      let html = (await get(`/${TEAM}/?vorab=${TOKEN}`)).body;
+      expect(html).not.toContain('Das Team');
+      expect((await get(`/${TEAM}/foto/gruppe.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+      setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_players: 'true' });
+      html = (await get(`/${TEAM}/?vorab=${TOKEN}`)).body;
+      expect(html).toContain('./foto/gruppe.jpg');
+      expect(html).not.toContain('./foto/7001.jpg');
+      expect((await get(`/${TEAM}/foto/7001.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+    });
+  });
+
+  it('bietet einen Schalter für hell und dunkel — gesetzt vor dem Zeichnen, ohne Inline-Skript', async () => {
+    const html = (await get(`/${TEAM}/`)).body;
+    expect(html).toContain('data-theme-toggle hidden');
+    expect(html).toMatch(/<script src="\.\/theme\.js\?v=[0-9a-f]{10}"><\/script>\n<link rel="stylesheet"/);
+    const theme = await get(`/${TEAM}/theme.js`);
+    expect(theme.statusCode).toBe(200);
+    expect(theme.body).toContain("localStorage.getItem('handball-site-theme')");
+    const css = (await get(`/${TEAM}/site.css`)).body;
+    expect(css).toContain(':root[data-theme=dark]{--bg:#0c1a1f');
+    expect(css).toContain('@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0c1a1f');
+    expect(css).toContain(':root[data-theme=dark] .btn{background:#12262c');
+    expect((await get(`/${TEAM}/app.js`)).body).toContain("themeWahl === 'auto' ? 'light'");
   });
 
   it('zeigt Spielernamen nur mit dem zweiten Schalter — auch bei den Bildern', async () => {
