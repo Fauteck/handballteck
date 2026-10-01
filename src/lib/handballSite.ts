@@ -522,9 +522,10 @@ function torfolgeText(m: HandballMatchView): string {
  * Spielbericht und Spielverlauf zu einem beendeten Spiel, aufklappbar. Der
  * Verlauf kommt ohne Namen aus und steht immer da; der Bericht ist der Text
  * der Quelle und nennt Spieler — er erscheint nur mit dem zweiten Schalter,
- * wie Torjäger und Kader. Leer, wenn es beides nicht gibt.
+ * wie Torjäger und Kader. Leer, wenn es beides nicht gibt. Immer zugeklappt,
+ * auch unter dem letzten Spiel — sonst schiebt der Bericht die Seite lang.
  */
-function spielDetailsHtml(m: HandballMatchView, players: boolean, offen = false): string {
+function spielDetailsHtml(m: HandballMatchView, players: boolean): string {
   const verlauf = spielverlaufSvg(m);
   const bericht = players && m.report_text ? m.report_text : null;
   if (!verlauf && !bericht) return '';
@@ -532,7 +533,7 @@ function spielDetailsHtml(m: HandballMatchView, players: boolean, offen = false)
     ? bericht.split(/\n{2,}/).map(a => a.trim()).filter(Boolean).map(a => a.startsWith('## ') ? `<h4>${h(a.slice(3))}</h4>` : `<p>${h(a)}</p>`).join('')
     : '';
   const titel = [verlauf ? 'Spielverlauf' : null, bericht ? 'Spielbericht' : null].filter(Boolean).join(' & ');
-  return `<details class="more"${offen ? ' open' : ''}><summary>${titel}</summary>
+  return `<details class="more"><summary>${titel}</summary>
     ${verlauf ? `<div class="verlauf">${verlauf}</div>${torfolgeText(m)}` : ''}
     ${bericht ? `<div class="bericht">${absaetze}<p class="quelle">Spielbericht von handball.net${m.report_url ? ` · <a href="${h(m.report_url)}" target="_blank" rel="noopener noreferrer">Spielberichtsbogen (PDF)</a>` : ''}</p></div>` : ''}
   </details>`;
@@ -586,7 +587,7 @@ function letztesSpielHtml(team: HandballTeamView, players: boolean): string {
       <a class="btn" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">handball.net</a>
     </div>
   </div>
-  ${spielDetailsHtml(m, players, true)}
+  ${spielDetailsHtml(m, players)}
 </section>`;
 }
 

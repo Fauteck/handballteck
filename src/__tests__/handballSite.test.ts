@@ -216,7 +216,9 @@ describe('Handball-Microsite', () => {
       html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('<summary>Spielverlauf & Spielbericht</summary>');
       expect(html).toContain('<h4>Erste Halbzeit</h4><p>Eskil Lieck traf siebenmal.</p>');
-      expect(html).toContain('<details class="more" open>');
+      // Überall zugeklappt, auch unter dem letzten Spiel.
+      expect(html).toContain('<details class="more"><summary>Spielverlauf & Spielbericht</summary>');
+      expect(html).not.toContain('<details class="more" open>');
     } finally {
       db.delete(schema.handball_opponent_form).run();
       db.update(schema.handball_team_match).set({ events_payload: null, report_text: null, halftime_home: null, halftime_away: null }).where(eq(schema.handball_team_match.id, `${TEAM}:m2`)).run();
