@@ -430,6 +430,7 @@ a.channel:hover{background:rgba(255,255,255,.14);border-color:var(--a)}
 .channel.push .inner{grid-column:1/-1}
 .tools{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:.9rem;color:rgba(255,255,255,.75)}
 .tools a,.tools button{color:#fff;background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline;text-decoration-color:rgba(255,255,255,.4);text-underline-offset:3px}
+.tools svg{width:16px;height:16px;fill:currentColor;vertical-align:-3px;margin-right:4px}
 .gegner{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);display:grid;gap:8px}
 .gegner .kopf{display:flex;gap:12px;align-items:center}
 .gegner .kopf img,.gegner .kopf .ini{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain;flex:none}

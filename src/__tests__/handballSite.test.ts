@@ -136,6 +136,8 @@ describe('Handball-Microsite', () => {
     // Kein Inline-Skript (CSP), kein Todoteck.
     expect(html).not.toMatch(/<script>/);
     expect(html).not.toContain('Todoteck');
+    // Das Teilen-Symbol hat eine feste Größe — ein SVG ohne Maß füllt sonst die ganze Spalte.
+    expect(html).toContain('.tools svg{width:16px;height:16px');
     // Zwei Spalten ab 960 px: das Spiel links, die Wege und der Spielplan rechts; am Telefon eine Reihenfolge über `order`.
     expect(html).toContain('<div class="col main">');
     expect(html).toContain('<div class="col side">');
