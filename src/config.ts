@@ -220,7 +220,7 @@ export function clubdeskUrl(): string | null {
 
 /**
  * Welche Teamseite der Vereinsseite zu welcher Mannschaft gehört:
- * `96254=woelfe_b,75796=woelfe_2`. Der Teil nach dem Gleichheitszeichen ist
+ * `96254=woelfe_b,75796=woelfe_1`. Der Teil nach dem Gleichheitszeichen ist
  * der letzte Pfadteil unter `/spielbetrieb/teams-und-tabellen/`.
  */
 export function clubdeskTeams(): Map<string, string> {

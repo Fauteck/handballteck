@@ -118,7 +118,7 @@ See `.env.example` for every variable with its default. The important ones:
 | `SITE_URL` | – | Root under which a proxy serves the pages. |
 | `SITE_OPERATOR` / `SITE_FEEDBACK_MAIL` | – | Footer of the microsite. |
 | `SITE_PREVIEW_TOKEN` | – (off) | Secret (≥ 32 chars) for `/<team>/?vorab=<token>`: the page then also shows what is not public yet (ClubDesk photos). Responses are `private, no-store`; the token is masked in logs. |
-| `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_2`). Daily fetch of the group photo (youth only with `SITE_PLAYERS`) and, for senior teams, the squad portraits; stored downscaled as JPEG. Shown only in the preview. |
+| `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_1`). Daily fetch of the group photo (youth only with `SITE_PLAYERS`) and, for senior teams, the squad portraits; stored downscaled as JPEG. Shown only in the preview. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | generated | Web push keys; generated and stored on first use. |
 | `API_TOKEN` | – | Bearer token for `/api/*`; unset means 401 for all of it. |
 | `DATA_DIR` / `DATABASE_PATH` | `./data` | Where the SQLite file lives. |
