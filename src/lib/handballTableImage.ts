@@ -157,8 +157,8 @@ const TEXT_COLOR = '#1f2937';
 
 /** Kleingedrucktes am Fuß jedes Bildes — Stand und der Bot, der es geschickt hat. */
 export interface ImageBrand {
-  /** „@WoelfeBot" — fehlt er, bleibt die rechte Ecke der Fußzeile leer. */
-  botHandle?: string | null;
+  /** Wo es die Seite gibt — „handball.fauteck.eu"; fehlt es, bleibt die rechte Ecke der Fußzeile leer. */
+  adresse?: string | null;
   /** „Sa, 26.09.2026 18:32" — fehlt er, entfällt die linke Angabe. */
   stand?: string | null;
 }
@@ -296,7 +296,7 @@ function fuss(th: Theme, parts: string[], height: number, brand: ImageBrand | nu
   if (teile.length > 0) parts.push(text(PAD, height - 14, 12, teile.join(' · '), { fill, ls: 0.3 }));
   // Ohne Bot-Handle bleibt die rechte Ecke leer: Die Bilder gehen seit der
   // Microsite (docs/handball-verfolgung.md §7) auch an Leute ohne Bot.
-  if (brand?.botHandle) parts.push(text(WIDTH - PAD, height - 14, 12, `${brand.botHandle} · Telegram-Bot`, { fill, anchor: 'end', ls: 0.3 }));
+  if (brand?.adresse) parts.push(text(WIDTH - PAD, height - 14, 12, brand.adresse, { fill, anchor: 'end', ls: 0.3 }));
 }
 const FUSS_H = 26;
 

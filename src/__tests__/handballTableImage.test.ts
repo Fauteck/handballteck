@@ -30,10 +30,11 @@ describe('Tabelle als Bild', () => {
     expect(svg).toContain('HSG Wölfe Voreifel');
     // Ohne Logo die Initialen im Kreis, mit Logo das Bild.
     expect(svg).toContain('>HS</text>');
-    const mitLogo = renderStandingsSvg({ competitionName: 'K', ownTeamId: '96254', rows: [zeile(1, '96254', 'HSG Wölfe Voreifel', 6)], logos: { '96254': 'data:image/png;base64,L' }, brand: { botHandle: '@Bot', stand: 'jetzt' } });
+    const mitLogo = renderStandingsSvg({ competitionName: 'K', ownTeamId: '96254', rows: [zeile(1, '96254', 'HSG Wölfe Voreifel', 6)], logos: { '96254': 'data:image/png;base64,L' }, brand: { adresse: 'handball.fauteck.eu', stand: 'jetzt' } });
     expect(mitLogo).toContain('<image href="data:image/png;base64,L"');
     expect(mitLogo).toContain('Stand: jetzt');
-    expect(mitLogo).toContain('@Bot · Telegram-Bot');
+    expect(mitLogo).toContain('handball.fauteck.eu');
+    expect(mitLogo).not.toContain('Telegram-Bot');
     // Sortiert nach Platz: die Wölfe stehen vor Siebengebirge.
     expect(svg.indexOf('Wölfe')).toBeLessThan(svg.indexOf('Siebengebirge'));
     // Eigene Zeile: Türkis-Balken im Vereins-CD.
@@ -133,7 +134,7 @@ describe('Endstand als Karte', () => {
       halftime: { home: 13, away: 12 }, ownIsHome: false, outcome: 'win', venue: 'Peter-Weber-Halle Kuchenheim',
       homeLogo: 'data:image/png;base64,HEIM', awayLogo: 'data:image/png;base64,GAST', opponentColor: '#e82838',
       playerOfMatch: 'Eskil Lieck · 12 Tore', streak: '3. Sieg in Folge', standing: 'Platz 1 · 6:0 Punkte',
-      brand: { botHandle: '@WoelfeBot', stand: 'Sa., 26.09. 18:32' },
+      brand: { adresse: 'handball.fauteck.eu', stand: 'Sa., 26.09. 18:32' },
     });
     // Stand als zwei Zahlen um den türkisen Doppelpunkt, Kopfzeile, Halbzeit, Ausgang.
     expect(svg).toMatch(/text-anchor="end">22<\/text>/);
@@ -161,7 +162,7 @@ describe('Endstand als Karte', () => {
     expect(svg).toContain('Spieler des Spiels: Eskil Lieck · 12 Tore');
     expect(svg).toContain('3. SIEG IN FOLGE');
     expect(svg).toContain('Stand: Sa., 26.09. 18:32 · Platz 1 · 6:0 Punkte');
-    expect(svg).toContain('@WoelfeBot · Telegram-Bot');
+    expect(svg).toContain('handball.fauteck.eu');
     // Hallenmotiv und Glanz (nur bei Sieg).
     expect(svg).toContain('stroke-dasharray="14 10"');
     expect(svg).toContain('fill="url(#glow)"');
@@ -365,7 +366,7 @@ describe('Saisonabschluss als Karte', () => {
       position: 1, teams: 10, won: 15, drawn: 1, lost: 2, goalsFor: 540, goalsAgainst: 410, points: 31,
       topScorer: 'Eskil Lieck · 87 Tore', biggestWin: '38:19 gegen HV Erftstadt',
       positions: [{ round: 1, position: 3 }, { round: 2, position: 2 }, { round: 3, position: 1 }],
-      brand: { botHandle: '@WoelfeBot', stand: 'So., 26.04. 09:00' },
+      brand: { adresse: 'handball.fauteck.eu', stand: 'So., 26.04. 09:00' },
     });
     expect(svg).toContain('width="800" height="450"');
     expect(svg).toContain('KREISOBERLIGA MB · SAISONBILANZ');
@@ -378,7 +379,7 @@ describe('Saisonabschluss als Karte', () => {
     expect(svg).toContain('Torschützenkönig: Eskil Lieck · 87 Tore');
     expect(svg).toContain('Höchster Sieg: 38:19 gegen HV Erftstadt');
     expect(svg).toContain('TABELLENPLATZ JE SPIELTAG');
-    expect(svg).toContain('@WoelfeBot · Telegram-Bot');
+    expect(svg).toContain('handball.fauteck.eu');
     const png = await renderPng(svg);
     expect((await sharp(png).metadata()).width).toBe(1600);
   });

@@ -9,15 +9,29 @@ import {
   renderStandingsSvg, renderRosterSvg, renderResultSvg, renderFixtureSvg, renderPositionChartSvg, renderScorersSvg, renderPlayerChartSvg,
   renderSeasonSummarySvg, renderGif, logoAccentColor, type ImageBrand,
 } from './handballTableImage';
+import { siteUrl, publicUrl } from '../config';
 import {
   rosterFor, playerStats, logoDataUri, playerMatchLog, playerGames, positionHistory, tendenzReferenz, readPalette, saisonVorbei,
   type HandballMatchView, type HandballTeamView, type HandballStandingsView, type HandballPlayerStats,
 } from './handballTeam';
-import { botIdentity, DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballBotTexts';
+import { DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballBotTexts';
 
-/** Fußzeile aller Bilder: Stand und der Bot, der sie schickt. */
+/**
+ * Fußzeile aller Bilder: Stand und die Adresse der Seite (ohne https://) —
+ * die eigene Domain aus SITE_URL, sonst PUBLIC_URL. Bis Oktober 2026 stand
+ * hier der Bot; die Bilder gehen aber auch über Seite, Push und Weiterleiten.
+ */
 function bildMarke(now = new Date()): ImageBrand {
-  return { botHandle: botIdentity.username ? `@${botIdentity.username}` : null, stand: `${DATUM.format(now)} ${ZEIT.format(now)}` };
+  return { adresse: seitenAdresse(), stand: `${DATUM.format(now)} ${ZEIT.format(now)}` };
+}
+
+function seitenAdresse(): string | null {
+  try {
+    const host = new URL(siteUrl() ?? publicUrl()).hostname;
+    return host && host !== 'localhost' ? host : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Der Wettbewerb einer Mannschaft — aus der Tabelle, sonst aus dem ersten Spiel. */
