@@ -19,7 +19,7 @@ export const settings = sqliteTable('settings', {
 
 /**
  * Spiele der verfolgten Handball-Mannschaften (Migration 0092,
- * docs/handball-verfolgung.md). Eine Zeile je Mannschaft und Spiel, geschrieben
+ * Wiki „Handball-Verfolgung (handball.net)“). Eine Zeile je Mannschaft und Spiel, geschrieben
  * vom Tageslauf, nachgefasst am Spieltag; die Merker gehören den Meldungen.
  */
 export const handball_team_match = sqliteTable('handball_team_match', {
@@ -61,7 +61,7 @@ export const handball_team_match = sqliteTable('handball_team_match', {
   /** Wann die Aufstellung dieses Spiels nach `handball_match_player` geschrieben wurde. */
   lineup_stored_at: text('lineup_stored_at'),
   /**
-   * Zeitzonen-Selbsttest (Migration 0099, docs/handball-verfolgung.md §6):
+   * Zeitzonen-Selbsttest (Migration 0099, Wiki „Handball-Verfolgung (handball.net)“ §6):
    * wann der Abruf das Spiel zuletzt **nicht** beendet und wann er es zuerst
    * beendet gesehen hat — beides echte UTC-Zeit dieser Instanz. Aus dem
    * Fenster dazwischen und `starts_at` folgt `tz_check`:
@@ -78,7 +78,7 @@ export const handball_team_match = sqliteTable('handball_team_match', {
   kickoff_estimated_at: text('kickoff_estimated_at'),
   tz_check: text('tz_check'),
   /**
-   * Die Torfolge des beendeten Spiels (Migration 0104, docs/handball-verfolgung.md §7.5):
+   * Die Torfolge des beendeten Spiels (Migration 0104, Wiki „Handball-Verfolgung (handball.net)“ §7.5):
    * JSON-Array von HandballMatchEventItem — Spielminute, Stand danach, Tor
    * ja/nein. `[]` heißt „geholt, die Quelle hat keine"; null heißt „noch nie
    * geholt". Für den Spielverlauf auf der Microsite.
@@ -90,7 +90,7 @@ export const handball_team_match = sqliteTable('handball_team_match', {
 });
 
 /**
- * Aufstellung je Spiel und Spieler (Migration 0095, docs/handball-verfolgung.md §5):
+ * Aufstellung je Spiel und Spieler (Migration 0095, Wiki „Handball-Verfolgung (handball.net)“ §5):
  * die Zahlen, die die Quelle je Spiel liefert und die bis dahin nur für die
  * eine Endstand-Nachricht gelesen und dann weggeworfen wurden. Grundlage der
  * Spielerbilanz (`/spieler`). Nur die eigene Mannschaft.
@@ -164,7 +164,7 @@ export const handball_standings = sqliteTable('handball_standings', {
 });
 
 /**
- * Handball-Telegram-Bot (Migration 0093, docs/handball-verfolgung.md §5):
+ * Handball-Telegram-Bot (Migration 0093, Wiki „Handball-Verfolgung (handball.net)“ §5):
  * Webhook-Geheimnisse wie beim Todoteck-Bot (`telegram_instance`), aber
  * eigene Zeile, weil es ein eigener Bot mit eigenem Webhook ist.
  */
@@ -256,7 +256,7 @@ export const handball_bot_sent = sqliteTable('handball_bot_sent', {
 
 /**
  * Web-Push-Abonnenten der Handball-Microsite (Migration 0103,
- * docs/handball-verfolgung.md §7): Browser ohne Todoteck-Konto und ohne
+ * Wiki „Handball-Verfolgung (handball.net)“ §7): Browser ohne Todoteck-Konto und ohne
  * Telegram, die auf der Seite die Glocke gedrückt haben. Eine Zeile je
  * Browser-Subscription (der Endpoint ist der Schlüssel des Push-Dienstes),
  * mit Vorlauf und Modus wie beim Bot-Abonnenten. Kein Nutzerbezug — wer
@@ -264,7 +264,7 @@ export const handball_bot_sent = sqliteTable('handball_bot_sent', {
  * Fehlschläge in Folge; eine tote Subscription (404/410/403) fliegt sofort.
  */
 /**
- * Der Spielplan des nächsten Gegners (Migration 0104, docs/handball-verfolgung.md §7.5):
+ * Der Spielplan des nächsten Gegners (Migration 0104, Wiki „Handball-Verfolgung (handball.net)“ §7.5):
  * einmal je Tageslauf geholt, damit Microsite und Ankündigung seine letzten
  * Ergebnisse zeigen können, ohne dass eine öffentliche Seite einen Abruf
  * nach draußen auslöst. `payload` ist ein JSON-Array von HandballMatch.

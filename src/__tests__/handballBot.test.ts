@@ -1,5 +1,5 @@
 /**
- * Handball-Telegram-Bot (docs/handball-verfolgung.md §5).
+ * Handball-Telegram-Bot (Wiki „Handball-Verfolgung (handball.net)“ §5).
  *
  * Geprüft wird, was in Betrieb peinlich würde: dass ein Fremder ohne
  * Einladungscode nichts abonniert, dass Befehle nur Abonnenten antworten,

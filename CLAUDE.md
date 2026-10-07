@@ -9,10 +9,18 @@ API for the Todoteck cockpit. It was carved out of
 
 - **This repo:** code, `README.md` (setup, configuration, API), `.env.example`
   (the complete list of variables — every variable the code reads is in it).
-- **Todoteck, `docs/handball-verfolgung.md`:** the history and reasoning behind every
+- **Wiki „Handball-Verfolgung (handball.net)“ (llm-wiki):** the history and reasoning behind every
   feature — source checks, the time-zone reading, the bot's rounds, the microsite, the
   split (§8). Link to it; do not copy it here.
 - **llm-wiki (Todoteck project):** cross-project knowledge, as for every Fauteck repo.
+  Overview note: `handballteck`.
+
+<!-- heimat-regel v1 -->
+**Heimat-Regel (gilt für jedes Fauteck-Repo, entschieden 2026-10-07).** Wissen lebt im Todoteck-Wiki `llm-wiki`. Im Repo liegt **nur**, was im selben PR wie der Code geändert oder von einem Guard oder Test geprüft wird: README, `CLAUDE.md`, Architektur-, Muster- und Konventions-Doku, API-Vertrag, Schema, Setup, Checklisten, Mechanik der Guards und Jobs. **Konzepte, Entscheidungen, Phasenverläufe, Befund-Berichte und Wissen über fremde Dienste gehören ins Wiki** — nicht in `docs/`, nicht als Notiz ins Projekt Home Lab. **Todoteck-Inhalte außerhalb von `llm-wiki` sind keine Wissensquelle** — Aufgaben, Unteraufgaben und Notizen in anderen Projekten (auch wenn dort Vibecoding-Projekte geplant werden) sind Momentaufnahmen für Menschen. Weder Claude Code noch ein Repo noch das Wiki stützt sich auf sie oder verweist auf sie als Beleg; was dort an Wissen entsteht, wird ins Wiki übernommen. Jede Datei in `docs/` trägt in ihrer ersten Zeile `<!-- heimat: repo — ändert sich mit: <Code-Pfad oder Guard> -->`; ein Konzept, das gerade gebaut wird, trägt stattdessen `<!-- heimat: repo — in Arbeit bis: JJJJ-MM-TT -->` und zieht bis dahin ins Wiki um. Aus Code und Doku wird auf Wiki-Seiten mit `Wiki „Seitentitel“ §n` verwiesen. Prüffrage vor jeder neuen Datei in `docs/`: *Muss sie sich ändern, wenn sich der Code ändert, oder prüft sie ein Guard?* Wenn nein, ist sie eine Wiki-Seite. Der Guard dieses Repos und der Todoteck-Job `wiki_repo_check` prüfen das.
+<!-- /heimat-regel -->
+
+In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; there is no
+`docs/` folder, and concepts and decisions go to the wiki.
 
 ## Binding rules
 

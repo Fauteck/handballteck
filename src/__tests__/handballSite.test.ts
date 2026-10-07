@@ -4,7 +4,7 @@ import { unlinkSync } from 'fs';
 import type { PushPayload, PushResult, PushTarget } from '../lib/webPush';
 
 /**
- * Die Handball-Microsite (docs/handball-verfolgung.md §7): die öffentliche
+ * Die Handball-Microsite (Wiki „Handball-Verfolgung (handball.net)“ §7): die öffentliche
  * Mannschaftsseite und ihre Web-Push-Anmeldung ohne Konto.
  *
  * Geprüft wird, was den offenen Zugang vertretbar macht — 404 ohne Freigabe,

@@ -1,5 +1,5 @@
 /**
- * Client für handball.net (docs/handball-verfolgung.md).
+ * Client für handball.net (Wiki „Handball-Verfolgung (handball.net)“).
  *
  * Geprüft wird, was beim Bauen nicht selbstverständlich war: dass die
  * Ortszeit der Quelle richtig nach UTC kommt (Sommer- wie Winterzeit), dass

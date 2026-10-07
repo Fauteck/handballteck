@@ -1,5 +1,5 @@
 /**
- * Handball-Verfolgung (docs/handball-verfolgung.md): der Job und seine
+ * Handball-Verfolgung (Wiki „Handball-Verfolgung (handball.net)“): der Job und seine
  * zwei Meldungen.
  *
  * Geprüft wird, was in Betrieb peinlich würde: dass ohne Team-ID nichts

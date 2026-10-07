@@ -1,5 +1,5 @@
 /**
- * Client für die interne Schnittstelle von handball.net (docs/handball-verfolgung.md).
+ * Client für die interne Schnittstelle von handball.net (Wiki „Handball-Verfolgung (handball.net)“).
  *
  * handball.net ist die Plattform des Deutschen Handballbundes und führt jede
  * Kreisliga bis hinunter zur Jugend — das, was keine der geprüften Sport-APIs

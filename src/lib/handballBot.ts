@@ -1,5 +1,5 @@
 /**
- * Handball-Telegram-Bot (docs/handball-verfolgung.md §5).
+ * Handball-Telegram-Bot (Wiki „Handball-Verfolgung (handball.net)“ §5).
  *
  * Ein eigener Bot neben dem Todoteck-Bot, und zwar aus einem Grund, der
  * im Konzept des ersten steht (docs/telegram-bot-strategy.md §3.1): Der
@@ -390,7 +390,7 @@ export function getHandballBotUsername(): string | null {
  *
  * Der Code steht damit auf einer Seite, die jeder öffnen kann, dem man den
  * Link gab — das ist gewollt: Die Microsite ist selbst die Einladung
- * (docs/handball-verfolgung.md §7.2), und wer sie hat, darf auch den Bot.
+ * (Wiki „Handball-Verfolgung (handball.net)“ §7.2), und wer sie hat, darf auch den Bot.
  */
 export function handballBotLink(): string | null {
   if (!botIdentity.username) return null;
