@@ -1,5 +1,5 @@
 /**
- * Die Handball-Tabelle und der Kader als Bild (docs/handball-verfolgung.md §5).
+ * Die Handball-Tabelle und der Kader als Bild (Wiki „Handball-Verfolgung (handball.net)“ §5).
  */
 
 import { describe, it, expect } from 'vitest';

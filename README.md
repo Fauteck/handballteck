@@ -8,7 +8,7 @@ and an RSS feed — in one container, without an account for anyone who just wan
 know when the next match is. A small token-protected API feeds the Todoteck cockpit.
 
 This service was carved out of [Todoteck](https://github.com/Fauteck/todo) on
-2026-09-28; `docs/handball-verfolgung.md` there tells the story and the reasoning
+2026-09-28; Wiki „Handball-Verfolgung (handball.net)“ in the llm-wiki tells the story and the reasoning
 behind every feature (§8 covers the split). Todoteck keeps a cockpit that reads this
 service's `/api/*`.
 

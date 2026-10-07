@@ -1,5 +1,5 @@
 /**
- * Die Handball-Bilder des Telegram-Bots (docs/handball-verfolgung.md §5):
+ * Die Handball-Bilder des Telegram-Bots (Wiki „Handball-Verfolgung (handball.net)“ §5):
  * Tabelle, Kader, Endstand, nächstes Spiel, Tabellenplatz-Verlauf, Torjäger,
  * Tore je Spiel. Gebaut wie die E-Ink-Anzeige (lib/displayRender.ts): ein SVG,
  * mit `sharp` gerastert. Textbreiten werden geschätzt (`estimateTextWidth`),
@@ -49,7 +49,7 @@ const BODY_FACTOR = 0.92;
 
 /**
  * Die Vereinsfarben — seit 27.09.2026 aus der Dienste-Zeile statt aus dem
- * Code (docs/handball-verfolgung.md §4): Petrol dunkel/hell und der Türkis-
+ * Code (Wiki „Handball-Verfolgung (handball.net)“ §4): Petrol dunkel/hell und der Türkis-
  * Akzent. `accentDark` ist der Akzent für Text auf Weiß; bei der Wölfe-
  * Palette der von Hand gewählte `#0e9a94`, sonst der Akzent um ein Drittel
  * abgedunkelt — ein helles Türkis ist auf Weiß nicht lesbar.
@@ -295,7 +295,7 @@ function fuss(th: Theme, parts: string[], height: number, brand: ImageBrand | nu
   const teile = [brand?.stand ? `Stand: ${brand.stand}` : null, links].filter(Boolean) as string[];
   if (teile.length > 0) parts.push(text(PAD, height - 14, 12, teile.join(' · '), { fill, ls: 0.3 }));
   // Ohne Bot-Handle bleibt die rechte Ecke leer: Die Bilder gehen seit der
-  // Microsite (docs/handball-verfolgung.md §7) auch an Leute ohne Bot.
+  // Microsite (Wiki „Handball-Verfolgung (handball.net)“ §7) auch an Leute ohne Bot.
   if (brand?.adresse) parts.push(text(WIDTH - PAD, height - 14, 12, brand.adresse, { fill, anchor: 'end', ls: 0.3 }));
 }
 const FUSS_H = 26;

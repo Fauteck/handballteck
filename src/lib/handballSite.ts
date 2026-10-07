@@ -1,5 +1,5 @@
 /**
- * Die Handball-Microsite (docs/handball-verfolgung.md §7): eine öffentliche
+ * Die Handball-Microsite (Wiki „Handball-Verfolgung (handball.net)“ §7): eine öffentliche
  * Mannschaftsseite im CD des Vereins, ohne Anmeldung, ohne Todoteck-Gewand
  * — zum Weitergeben an Eltern, Spieler und Freunde, die weder ein
  * Todoteck-Konto noch Telegram haben.

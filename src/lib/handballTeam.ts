@@ -352,7 +352,7 @@ export function playerStats(teamId: string, opts: { excludeMatchId?: string } = 
 }
 
 // ---------------------------------------------------------------------------
-// Zeitzonen-Selbsttest (docs/handball-verfolgung.md §6, Grenze 2)
+// Zeitzonen-Selbsttest (Wiki „Handball-Verfolgung (handball.net)“ §6, Grenze 2)
 // ---------------------------------------------------------------------------
 
 /**
@@ -431,7 +431,7 @@ export function zeitzonenMeldung(p: ZeitzonenPruefung): string {
   const min = Math.abs(p.abweichungMin ?? 0);
   const richtung = (p.abweichungMin ?? 0) > 0 ? 'hinter' : 'vor';
   const woher = p.grundlage === 'torfolge' ? 'Die Torfolge' : 'Der Statuswechsel auf beendet';
-  return `Zeitzonen-Lesart vermutlich falsch: ${woher} liegt ${min} min ${richtung} dem gespeicherten Anwurf — handball.net meint die Uhrzeit womöglich doch als UTC (docs/handball-verfolgung.md §3, Punkt 2).`;
+  return `Zeitzonen-Lesart vermutlich falsch: ${woher} liegt ${min} min ${richtung} dem gespeicherten Anwurf — handball.net meint die Uhrzeit womöglich doch als UTC (Wiki „Handball-Verfolgung (handball.net)“ §3, Punkt 2).`;
 }
 
 /**
@@ -592,7 +592,7 @@ function torfolgeAusZeile(payload: string | null): HandballMatchEventItem[] | nu
 
 /**
  * Torfolgen beendeter Spiele nachholen, in jedem Takt, höchstens drei: Der
- * Spielverlauf auf der Microsite (docs/handball-verfolgung.md §7.5) liest
+ * Spielverlauf auf der Microsite (Wiki „Handball-Verfolgung (handball.net)“ §7.5) liest
  * sie aus der Datenbank — eine öffentliche Seite darf keinen Abruf nach
  * draußen auslösen. Eine leere Antwort und ein 404 werden als `[]`
  * gespeichert, damit ein Spiel ohne Torfolge (gewertet, abgebrochen) nicht

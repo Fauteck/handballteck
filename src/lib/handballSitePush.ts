@@ -1,5 +1,5 @@
 /**
- * Web-Push von der Handball-Microsite (docs/handball-verfolgung.md §7): der
+ * Web-Push von der Handball-Microsite (Wiki „Handball-Verfolgung (handball.net)“ §7): der
  * zweite Weg ohne Todoteck-Konto und ohne Telegram. Wer auf der Seite die
  * Glocke drückt, hinterlässt eine Browser-Subscription — keinen Namen, kein
  * Konto, nur einen Endpoint beim Push-Dienst seines Browsers. Der Versand
