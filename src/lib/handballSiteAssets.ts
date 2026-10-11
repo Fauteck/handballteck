@@ -152,8 +152,8 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
 .channel .body{margin-top:10px}
 .channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
-.channel a.open{display:inline-block;margin-top:8px;color:var(--a);font-weight:600;text-decoration:none}
-.channel a.open:hover{text-decoration:underline}
+.channel a.open,.channel button.open{display:inline-block;margin:8px 14px 0 0;padding:0;border:0;background:none;font:inherit;cursor:pointer;color:var(--a);font-weight:600;text-decoration:none}
+.channel a.open:hover,.channel button.open:hover{text-decoration:underline}
 .chip{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--a);color:var(--g);font-size:.7rem;letter-spacing:.06em;vertical-align:2px}
 .skip{position:absolute;left:-999px;top:8px;z-index:10;padding:8px 14px;border-radius:8px;background:#fff;color:#10262c}
 .skip:focus{left:8px}
@@ -329,19 +329,18 @@ export const SITE_APP_JS = `(function () {
     });
   }
 
-  // Kanäle: welche Kachel offen war, merkt sich der Browser.
-  var OPEN_KEY = 'handball-site-open';
-  function offeneLesen() {
-    try { var l = JSON.parse(localStorage.getItem(OPEN_KEY) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; }
-  }
-  var gemerkteOffene = offeneLesen();
-  Array.prototype.forEach.call(document.querySelectorAll('details.channel[data-key]'), function (d) {
-    var key = d.getAttribute('data-key');
-    if (gemerkteOffene.indexOf(key) >= 0) d.open = true;
-    d.addEventListener('toggle', function () {
-      var liste = offeneLesen().filter(function (k) { return k !== key; });
-      if (d.open) liste.push(key);
-      try { localStorage.setItem(OPEN_KEY, JSON.stringify(liste)); } catch (e) {}
+  // Kanäle: die Kacheln starten immer eingeklappt, nichts wird gemerkt.
+  // Feed-Adresse kopieren (ein Feed lässt sich im Browser nur als rohes XML öffnen).
+  Array.prototype.forEach.call(document.querySelectorAll('button[data-copy]'), function (knopf) {
+    var text = knopf.textContent;
+    knopf.addEventListener('click', function () {
+      var adresse = knopf.getAttribute('data-copy') || '';
+      var fertig = function (ok) {
+        knopf.textContent = ok ? 'Kopiert ✓' : 'Adresse: ' + adresse;
+        setTimeout(function () { knopf.textContent = text; }, 2500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(adresse).then(function () { fertig(true); }, function () { fertig(false); });
+      else fertig(false);
     });
   });
 

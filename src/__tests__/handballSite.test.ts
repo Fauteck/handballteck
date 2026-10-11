@@ -357,7 +357,8 @@ describe('Handball-Microsite', () => {
     expect(klein.headers['content-type']).toBe('image/png');
     const app = await get(`/${TEAM}/app.js`);
     expect(app.body).toContain('data-live');
-    expect(app.body).toContain('handball-site-open');
+    expect(app.body).not.toContain('handball-site-open');
+    expect(app.body).toContain('button[data-copy]');
   });
 
   it('zeigt den Live-Modus nur bei laufendem Spiel — und lässt die Seite dann nur kurz liegen', async () => {
