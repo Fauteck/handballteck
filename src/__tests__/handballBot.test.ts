@@ -330,9 +330,9 @@ describe('Befehle', () => {
   });
 
   it('sagt ohne Aufstellungsnamen, dass der Kader fehlt', () => {
-    const team = { team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'HSG Wölfe Voreifel', championship_name: null, next_match: null, last_match: null, matches: [], standings: [] };
+    const team = { team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'HSG Wölfe Voreifel', championship_name: null, group: null, next_match: null, last_match: null, matches: [], standings: [] };
     const m = {
-      match_id: 'm1', season_id: 2627, starts_at: new Date().toISOString(), status: 'scheduled', status_name: '', round: 1, competition_name: 'Kreisoberliga mB',
+      match_id: 'm1', season_id: 2627, starts_at: new Date().toISOString(), status: 'scheduled', status_name: '', is_live: false, live: null, round: 1, competition_name: 'Kreisoberliga mB',
       home_id: TEAM, home_name: 'HSG Wölfe Voreifel', away_id: '96300', away_name: 'HV Erftstadt', is_home: true, score_home: null, score_away: null, won: null, rated: false,
       halftime_home: null, halftime_away: null, venue_name: null, venue_address: null, venue_lat: null, venue_lon: null, report_url: null, report_text: null, events: null, url: 'u',
     };
@@ -604,9 +604,9 @@ describe('Zweite Runde: Halbzeit, Bericht, Verlegung, Route, Steckbrief', () => 
   });
 
   it('glättet im Bericht die Titelschreibung der Quelle mit den Namen aus der Datenbank', () => {
-    const team = { team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'B-Jugend', championship_name: 'B-Jugend', next_match: null, last_match: null, matches: [], standings: [] };
+    const team = { team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'B-Jugend', championship_name: 'B-Jugend', group: null, next_match: null, last_match: null, matches: [], standings: [] };
     const m = {
-      match_id: 'm1', season_id: 2627, starts_at: new Date().toISOString(), status: 'finished', status_name: '', round: 3, competition_name: 'Kreisoberliga mB',
+      match_id: 'm1', season_id: 2627, starts_at: new Date().toISOString(), status: 'finished', status_name: '', is_live: false, live: null, round: 3, competition_name: 'Kreisoberliga mB',
       home_id: '96301', home_name: 'TV Palmersheim II', away_id: TEAM, away_name: 'HSG Wölfe Voreifel', is_home: false, score_home: 22, score_away: 30, won: true, rated: false,
       halftime_home: null, halftime_away: null, venue_name: 'Peter-Weber-Halle Kuchenheim', venue_address: null, venue_lat: null, venue_lon: null, report_url: null,
       report_text: 'Am 26. September trafen sich in der Peter-weber-halle Kuchenheim die Mannschaften von Tv Palmersheim Ii und Hsg Wölfe Voreifel im Rahmen der B-jugend - Kreisoberliga Mb.', events: null, url: 'u',
@@ -1133,7 +1133,7 @@ describe('Befunde vom ersten Abend', () => {
   });
 
   it('graut in der Tabelle Mannschaften mit weniger Spielen aus', () => {
-    const team = { team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'HSG Wölfe Voreifel', championship_name: null, next_match: null, last_match: null, matches: [], standings: [] };
+    const team = { team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'HSG Wölfe Voreifel', championship_name: null, group: null, next_match: null, last_match: null, matches: [], standings: [] };
     const rows = [
       { round: 3, position: 1, teamId: TEAM, teamName: 'HSG Wölfe Voreifel', played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 106, goalsAgainst: 87, goalsDiff: 19, points: 6 },
       { round: 3, position: 2, teamId: '96300', teamName: 'HV Erftstadt', played: 2, won: 2, drawn: 0, lost: 0, goalsFor: 80, goalsAgainst: 70, goalsDiff: 10, points: 4 },

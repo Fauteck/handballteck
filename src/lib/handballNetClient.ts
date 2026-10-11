@@ -721,6 +721,42 @@ export async function fetchMatchEventList(matchId: string): Promise<HandballMatc
   return torfolgeAus(body.data ?? []);
 }
 
+/** Wie viele Tore die Live-Ansicht zeigt. */
+const LIVE_TORE_MAX = 6;
+
+/**
+ * Der Zwischenstand eines laufenden Spiels für die Live-Ansicht der Seite:
+ * Stand, Spieluhr („27:14"), Block („2. Halbzeit"), Halbzeitstand und die
+ * letzten Tore (neueste zuletzt). Alles aus derselben Torfolge; vor dem
+ * Anwurf ist sie leer und `home`/`away` sind null.
+ */
+export interface HandballLiveState {
+  home: number | null;
+  away: number | null;
+  minute: string | null;
+  block: string | null;
+  halftime: { home: number; away: number } | null;
+  items: HandballMatchEventItem[];
+}
+
+export function liveStandAus(events: RawEvent[]): HandballLiveState {
+  const k = halbzeitAus(events);
+  return {
+    home: k.latest?.home ?? null,
+    away: k.latest?.away ?? null,
+    minute: k.latestMinute,
+    block: k.latestBlock,
+    halftime: k.halftime,
+    items: torfolgeAus(events).filter(e => e.goal).slice(-LIVE_TORE_MAX),
+  };
+}
+
+/** Der Zwischenstand eines Spiels — ein Aufruf, den nur der Live-Takt macht. */
+export async function fetchMatchLive(matchId: string): Promise<HandballLiveState> {
+  const body = await hnFetch<{ data?: RawEvent[] }>(`/api/new/matches/${encodeURIComponent(matchId)}/events`);
+  return liveStandAus(body.data ?? []);
+}
+
 /**
  * Den Spielbericht der Quelle (`chronicle`, HTML mit h1/h2/p) in Telegram-
  * taugliche Absätze bringen: Zwischenüberschriften als „## …", Absätze durch

@@ -43,7 +43,7 @@ import sharp from 'sharp';
 import { siteEnabled, sitePlayers, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail } from '../config';
 import {
   handballOverview, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
-  type HandballTeamView, type HandballMatchView,
+  HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, type FullPalette } from './handballTableImage';
 import {
@@ -131,6 +131,7 @@ function gegnerTore(m: HandballMatchView): number | null {
 function statusWort(m: HandballMatchView): string | null {
   switch (m.status) {
     case 'live': return 'Live';
+    case 'scheduled': if (m.is_live) return 'Live'; return m.rated ? 'Gewertet' : null;
     case 'postponed': return 'Verlegt';
     case 'cancelled': return 'Abgesetzt';
     case 'other': return m.rated ? 'Gewertet' : (m.status_name || 'Sonderfall');
@@ -190,7 +191,7 @@ async function bildSvg(team: HandballTeamView, art: SiteImageArt, matchId: strin
       return s && s.rows.length > 0 ? bildTabelle(team, s) : null;
     }
     case 'kader': return bildKader(team);
-    case 'spiel': return team.next_match && team.next_match.status !== 'live' ? bildSpiel(team.next_match) : null;
+    case 'spiel': return team.next_match && !team.next_match.is_live ? bildSpiel(team.next_match) : null;
     case 'endstand': {
       const m = matchId
         ? team.matches.find(x => x.match_id === matchId && (x.status === 'finished' || x.rated)) ?? null
@@ -306,6 +307,14 @@ export function siteFontPath(datei: string): string | null {
 // Die Seite
 // ---------------------------------------------------------------------------
 
+/** Eine Mannschaft in der Mannschaftswahl: `group` ist die obere Ebene, `url` relativ (`../96300/`). */
+export interface SiteTeamLink {
+  id: string;
+  label: string;
+  group: HandballGroup | null;
+  url: string;
+}
+
 export interface SiteRenderOptions {
   players: boolean;
   baseUrl: string;
@@ -314,7 +323,7 @@ export interface SiteRenderOptions {
    * eine, und es gibt keine. `url` ist relativ (`../96300/`), damit die Seite
    * unter jeder Wurzel funktioniert.
    */
-  teams?: Array<{ id: string; label: string; url: string }>;
+  teams?: SiteTeamLink[];
   /** Ob Web-Push überhaupt möglich ist (VAPID vorhanden) — sonst zeigt die Seite nur Kalender und Feed. */
   pushEnabled: boolean;
   stand: string | null;
@@ -385,11 +394,37 @@ function formStrip(team: HandballTeamView): string {
 }
 
 /**
+ * Die Mannschaftswahl in zwei Ebenen: oben Herren · Frauen · Jungen · Mädchen
+ * (nur, was es gibt), darunter die Mannschaften der gewählten Gruppe.
+ * Mannschaften, deren Gruppe die Quelle nicht verrät, sammeln sich unter
+ * „Weitere". Gibt es nur eine Gruppe, entfällt die obere Ebene; hat die Gruppe
+ * nur eine Mannschaft, die untere. Reine Verweise (`../<Team-ID>/`), kein
+ * Skript nötig; die gewählte Gruppe und Mannschaft sind markiert.
+ */
+function teamWahlHtml(team: HandballTeamView, mannschaften: SiteTeamLink[], anhang: string): string {
+  if (mannschaften.length < 2) return '';
+  const gruppen: Array<{ id: HandballGroup | 'weitere'; label: string; teams: SiteTeamLink[] }> = [
+    ...HANDBALL_GROUPS.map(g => ({ id: g.id as HandballGroup | 'weitere', label: g.label, teams: mannschaften.filter(t => t.group === g.id) })),
+    { id: 'weitere' as HandballGroup | 'weitere', label: 'Weitere', teams: mannschaften.filter(t => t.group === null) },
+  ].filter(g => g.teams.length > 0);
+  const aktuell = gruppen.find(g => g.teams.some(t => t.id === team.team_id)) ?? gruppen[0];
+  const link = (t: SiteTeamLink, text: string, aktiv: boolean, art: 'page' | 'true') =>
+    `<a href="${h(t.url + anhang)}"${aktiv ? ` aria-current="${art}"` : ''}>${h(text)}</a>`;
+  const oben = gruppen.length > 1
+    ? `<nav class="teamwahl gruppen" aria-label="Bereich wählen">${gruppen.map(g => link(g.teams[0], g.label, g === aktuell, 'true')).join('')}</nav>`
+    : '';
+  const unten = aktuell.teams.length > 1
+    ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${aktuell.teams.map(t => link(t, t.label, t.id === team.team_id, 'page')).join('')}</nav>`
+    : '';
+  return oben + unten;
+}
+
+/**
  * Der Kopf: Logo, Name, Wettbewerb — und die Saison in Kacheln (Platz,
  * Punkte, Bilanz, Tore, Form, nächstes Spiel), damit die Frage „wie
  * stehen wir?" beantwortet ist, bevor jemand scrollt.
  */
-function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: Array<{ id: string; label: string; url: string }>, anhang = ''): string {
+function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: SiteTeamLink[], anhang = ''): string {
   const zeile = eigeneZeile(team);
   const saison = saisonLabel(team.matches[0]?.season_id);
   const wettbewerb = [team.championship_name, team.standings[0]?.competition_name ?? team.matches[0]?.competition_name].filter(Boolean).join(' · ');
@@ -407,16 +442,9 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   if (form) kacheln.push(`<div class="stat"><b>${form}</b><span>Form</span></div>`);
   if (naechstes) {
     const start = new Date(naechstes.starts_at);
-    kacheln.push(`<div class="stat"><b class="a"${naechstes.status === 'live' ? '' : ` data-countdown="${h(naechstes.starts_at)}"`}>${naechstes.status === 'live' ? 'Jetzt' : h(inTagen(start, now))}</b><span>${naechstes.status === 'live' ? 'Spiel läuft' : `Nächstes Spiel · ${h(DATUM_KURZ.format(start))}`}</span></div>`);
+    kacheln.push(`<div class="stat"><b class="a"${naechstes.is_live ? '' : ` data-countdown="${h(naechstes.starts_at)}"`}>${naechstes.is_live ? 'Jetzt' : h(inTagen(start, now))}</b><span>${naechstes.is_live ? 'Spiel läuft' : `Nächstes Spiel · ${h(DATUM_KURZ.format(start))}`}</span></div>`);
   }
-  // Die Mannschaften des Vereins als Schaltflächen — nur, wenn es mehr als eine
-  // gibt. Reine Verweise (`../<Team-ID>/`), kein Skript nötig; die Seite
-  // der gewählten Mannschaft ist markiert.
-  const wahl = mannschaften.length > 1
-    ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${mannschaften.map(t => t.id === team.team_id
-      ? `<a href="${h(t.url + anhang)}" aria-current="page">${h(t.label)}</a>`
-      : `<a href="${h(t.url + anhang)}">${h(t.label)}</a>`).join('')}</nav>`
-    : '';
+  const wahl = teamWahlHtml(team, mannschaften, anhang);
   return `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}
@@ -547,21 +575,63 @@ function spielDetailsHtml(m: HandballMatchView, players: boolean): string {
   </details>`;
 }
 
+/**
+ * Die Live-Ansicht anstelle von „Nächstes Spiel": Spielstand aus Sicht der
+ * Mannschaft, Spieluhr und Halbzeit, die letzten Tore und der Stand der
+ * Quelle. Liest nur, was der Live-Takt gespeichert hat; fehlt es (der Takt
+ * ist aus oder die Quelle meldet noch nichts), bleibt es beim Spielstand der
+ * Spielliste und einem Hinweis.
+ */
+function liveSpielHtml(m: HandballMatchView, now: Date): string {
+  const live = m.live;
+  const start = new Date(m.starts_at);
+  const eigen = live && live.home !== null && live.away !== null ? (m.is_home ? live.home : live.away) : eigeneTore(m);
+  const gegner = live && live.home !== null && live.away !== null ? (m.is_home ? live.away : live.home) : gegnerTore(m);
+  const stand = eigen !== null && gegner !== null ? `${eigen}:${gegner}` : '–:–';
+  const uhr = [live?.minute ? `${live.minute} Min.` : null, live?.block ?? null].filter(Boolean).join(' · ');
+  const hz = live?.halftime ? `Halbzeit ${m.is_home ? live.halftime.home : live.halftime.away}:${m.is_home ? live.halftime.away : live.halftime.home}` : '';
+  const halle = [m.venue_name, m.venue_address].filter(Boolean).join(', ');
+  const tore = live ? [...live.items].reverse().map(e => {
+    const e1 = m.is_home ? e.home : e.away;
+    const e2 = m.is_home ? e.away : e.home;
+    return `<li><span class="min">${e.minute !== null ? `${Math.max(1, Math.ceil(e.minute))}.` : '–'}</span> Tor · <b>${e1}:${e2}</b></li>`;
+  }).join('') : '';
+  const vorMin = live ? Math.max(0, Math.round((now.getTime() - Date.parse(live.fetched_at)) / 60000)) : null;
+  return `<section class="card dark next live s-next" id="naechstes">
+  <h2>Läuft gerade <span class="badge live">Live</span></h2>
+  <div class="livestand" aria-label="Spielstand">
+    <span class="seite">${h(m.is_home ? m.home_name : m.away_name)}</span>
+    <b class="tore-gross">${stand}</b>
+    <span class="seite">${h(gegnerVon(m))}</span>
+  </div>
+  <div class="info">
+    <span>${uhr ? h(uhr) : 'Anwurf war um ' + h(ZEIT.format(start)) + ' Uhr'}${hz ? ` · ${h(hz)}` : ''}</span>
+    <span>${m.is_home ? 'Heimspiel' : 'Auswärts'}${halle ? ` · 📍 ${h(halle)}` : ''}</span>
+    <span class="muted small">${h(m.competition_name)}${m.round ? `, ${m.round}. Spieltag` : ''}</span>
+  </div>
+  ${tore ? `<ol class="livetore" aria-label="Letzte Tore">${tore}</ol>` : ''}
+  <p class="muted small" style="margin:10px 0 0">${vorMin !== null ? (vorMin < 1 ? 'Stand gerade eben' : `Stand vor ${vorMin} Min.`) : 'Der Zwischenstand kommt, sobald handball.net ihn liefert'} · die Seite aktualisiert sich selbst.</p>
+  <div class="row" style="margin-top:14px">
+    <a class="btn ghost" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">Live auf handball.net</a>
+  </div>
+</section>`;
+}
+
 function naechstesSpielHtml(team: HandballTeamView, now: Date): string {
   const m = team.next_match;
   if (!m) {
     return `<section class="card dark next s-next" id="naechstes"><h2>Nächstes Spiel</h2><p class="muted">Kein weiteres Spiel angesetzt.</p></section>`;
   }
+  if (m.is_live) return liveSpielHtml(m, now);
   const start = new Date(m.starts_at);
-  const live = m.status === 'live';
   const halle = [m.venue_name, m.venue_address].filter(Boolean).join(', ');
   const routen = routenLinks(m);
   const heute = tageBis(start, now) <= 0;
   return `<section class="card dark next s-next" id="naechstes">
-  <h2>${live ? 'Läuft gerade <span class="badge live">Live</span>' : `Nächstes Spiel <span class="badge" data-countdown="${h(m.starts_at)}">${h(inTagen(start, now))}</span>`}</h2>
-  ${!live ? `<img class="bild" src="./bild/spiel.png" width="800" height="450" alt="${h(`${m.home_name} gegen ${m.away_name}`)}" loading="eager">` : ''}
+  <h2>Nächstes Spiel <span class="badge" data-countdown="${h(m.starts_at)}">${h(inTagen(start, now))}</span></h2>
+  <img class="bild" src="./bild/spiel.png" width="800" height="450" alt="${h(`${m.home_name} gegen ${m.away_name}`)}" loading="eager">
   <div class="info">
-    <b>${m.is_home ? `gegen ${h(gegnerVon(m))}` : `bei ${h(gegnerVon(m))}`}${live && m.score_home !== null ? ` · ${m.score_home}:${m.score_away}` : ''}</b>
+    <b>${m.is_home ? `gegen ${h(gegnerVon(m))}` : `bei ${h(gegnerVon(m))}`}</b>
     <span>${heute ? 'Heute' : h(DATUM_LANG.format(start))}, ${h(ZEIT.format(start))} Uhr · ${m.is_home ? 'Heimspiel' : 'Auswärts'}</span>
     ${halle ? `<span>📍 ${h(halle)}</span>` : ''}
     <span class="muted small">${h(m.competition_name)}${m.round ? `, ${m.round}. Spieltag` : ''}</span>
@@ -652,22 +722,22 @@ function spielplanHtml(team: HandballTeamView, now: Date, players: boolean): str
   const items = team.matches.map(m => {
     const start = new Date(m.starts_at);
     const status = statusWort(m);
-    const mitStand = m.score_home !== null && m.score_away !== null && (m.status === 'finished' || m.rated || m.status === 'live');
+    const mitStand = m.score_home !== null && m.score_away !== null && (m.status === 'finished' || m.rated || m.is_live);
     let ergebnis: string;
     if (mitStand) {
-      const klasse = m.status === 'live' ? '' : m.won === true ? 'w' : m.won === false ? 'l' : '';
-      ergebnis = `<span class="e ${klasse}" title="${h(m.status === 'live' ? 'Zwischenstand' : m.won === true ? 'gewonnen' : m.won === false ? 'verloren' : 'unentschieden')}">${eigeneTore(m)}:${gegnerTore(m)}</span>`;
+      const klasse = m.is_live ? '' : m.won === true ? 'w' : m.won === false ? 'l' : '';
+      ergebnis = `<span class="e ${klasse}" title="${h(m.is_live ? 'Zwischenstand' : m.won === true ? 'gewonnen' : m.won === false ? 'verloren' : 'unentschieden')}">${eigeneTore(m)}:${gegnerTore(m)}</span>`;
     } else if (status) {
       ergebnis = `<span class="e o">${h(status)}</span>`;
     } else {
       ergebnis = `<span class="e o">${h(ZEIT.format(start))} Uhr</span>`;
     }
-    const gespieltEintrag = mitStand && m.status !== 'live';
+    const gespieltEintrag = mitStand && !m.is_live;
     return `<li${m.match_id === naechstesId ? ' class="next"' : ''} data-ha="${m.is_home ? 'heim' : 'aus'}" data-st="${gespieltEintrag ? 'gespielt' : 'kommend'}">
       <span class="d">${h(datumKurz(start, now))}<small>${m.round ? `${m.round}. Spieltag` : h(ZEIT.format(start))}</small></span>
       <span class="g"><a href="${h(m.url)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none">${h(gegnerVon(m))}</a><div class="ha">${m.is_home ? 'Heim' : 'Auswärts'}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}${status && mitStand ? ` · ${h(status)}` : ''}</div></span>
       ${ergebnis}
-      ${mitStand && m.status !== 'live' ? spielDetailsHtml(m, players) : ''}
+      ${mitStand && !m.is_live ? spielDetailsHtml(m, players) : ''}
     </li>`;
   }).join('');
   const bilanz = gespielt(team);
@@ -848,7 +918,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
     : letztes && letztes.score_home !== null
       ? `Zuletzt: ${eigeneTore(letztes)}:${gegnerTore(letztes)} ${letztes.is_home ? 'gegen' : 'bei'} ${gegnerVon(letztes)}`
       : 'Spielplan, Ergebnisse und Tabelle';
-  const ogBild = naechstes && naechstes.status !== 'live'
+  const ogBild = naechstes && !naechstes.is_live
     ? `${opts.baseUrl}bild/spiel.png`
     : letztes && letztes.score_home !== null ? `${opts.baseUrl}bild/endstand.png?match=${encodeURIComponent(letztes.match_id)}` : null;
   const wettbewerb = team.standings[0]?.competition_name ?? team.matches[0]?.competition_name ?? '';
@@ -881,7 +951,7 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <script src="./theme.js?v=${inhaltsHash(SITE_THEME_JS)}"></script>
 <link rel="stylesheet" href="./site.css?v=${siteCssText().hash}">
 </head>
-<body${naechstes?.status === 'live' ? ' data-live="1"' : ''}>
+<body${naechstes?.is_live ? ' data-live="1"' : ''}>
 <a class="skip" href="#inhalt">Zum Inhalt</a>
 ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über deinen Vorschau-Link erreichbar. Fotos von der Vereinsseite, Rechte noch nicht geklärt.</div>' : ''}
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>

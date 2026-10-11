@@ -55,7 +55,7 @@ export function bildTabelle(team: HandballTeamView, s: HandballStandingsView): s
     subtitle: [team.championship_name, spieltag ? `nach dem ${spieltag}. Spieltag` : null].filter(Boolean).join(' · ') || null,
     logo: logoDataUri(team.team_id),
     previousRows: tendenzReferenz(s),
-    nextOpponentId: team.next_match && team.next_match.status !== 'live' ? gegnerId(team.next_match) : null,
+    nextOpponentId: team.next_match && !team.next_match.is_live ? gegnerId(team.next_match) : null,
     logos: Object.fromEntries(s.rows.map(r => [r.teamId, logoDataUri(r.teamId)])),
     brand: bildMarke(),
     palette: readPalette(),

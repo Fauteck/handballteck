@@ -787,7 +787,7 @@ async function spieleSenden(chatId: string, teams: HandballTeamView[], deps: Han
   const text = textSpiele(teams, now);
   const team = teams.find(t => t.next_match);
   const m = team?.next_match ?? null;
-  if (deps.sendPhoto && team && m && m.status !== 'live') {
+  if (deps.sendPhoto && team && m && !m.is_live) {
     zeigeAktivitaet(chatId, 'upload_photo', deps);
     try {
       const png = await renderPng(await bildSpiel(m));
@@ -1623,7 +1623,7 @@ export function pruefeInlineSignatur(art: string, teamId: string, expRoh: string
 function inlineVerfuegbar(team: HandballTeamView, art: InlineArt): boolean {
   switch (art) {
     case 'tabelle': return (team.standings[0]?.rows.length ?? 0) > 0;
-    case 'spiel': return !!team.next_match && team.next_match.status !== 'live';
+    case 'spiel': return !!team.next_match && !team.next_match.is_live;
     case 'endstand': return !!team.last_match && team.last_match.score_home !== null && team.last_match.score_away !== null;
     case 'kader': return bildKader(team) !== null;
     case 'torjaeger': return playerStats(team.team_id).some(p => p.goals > 0);

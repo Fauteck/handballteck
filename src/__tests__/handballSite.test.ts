@@ -255,6 +255,57 @@ describe('Handball-Microsite', () => {
     }
   });
 
+  it('teilt die Mannschaftswahl in zwei Ebenen: Bereich oben, Mannschaften des Bereichs darunter', async () => {
+    setConfig({ site_enabled: 'true', team_ids: '96254=B-Jugend,96300=1. Damen,96301=C-Jugend' });
+    const zeile = (teamId: string, wettbewerb: string, klasse: string) => ({
+      id: `${teamId}:g1`, team_id: teamId, match_id: 'g1', season_id: 2627, starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
+      status: 'scheduled', status_name: 'scheduled', round: 1, phase_id: 12900, competition_name: wettbewerb, championship_name: klasse,
+      home_id: teamId, home_name: 'HSG Wölfe Voreifel', away_id: '96400', away_name: 'TV Palmersheim',
+      score_home: null, score_away: null, venue_name: null, venue_address: null, notified_upcoming: false, notified_result: false, updated_at: new Date().toISOString(),
+    });
+    db.insert(schema.handball_team_match).values([zeile('96300', 'Landesliga Frauen', 'Frauen'), zeile('96301', 'Kreisliga mC', 'C-Jugend')] as never).run();
+    try {
+      const html = (await get(`/${TEAM}/`)).body;
+      // Oben: nur die Bereiche, die es gibt — in fester Reihenfolge, der eigene markiert, Ziel ist die erste Mannschaft des Bereichs.
+      expect(html).toContain('<nav class="teamwahl gruppen" aria-label="Bereich wählen"><a href="../96300/">Frauen</a><a href="../96254/" aria-current="true">Jungen</a></nav>');
+      // Darunter: nur die Mannschaften des gewählten Bereichs.
+      expect(html).toContain('<nav class="teamwahl" aria-label="Mannschaft wählen"><a href="../96254/" aria-current="page">B-Jugend</a><a href="../96301/">C-Jugend</a></nav>');
+      expect(html).not.toContain('>1. Damen</a>');
+      // Ein Bereich mit einer Mannschaft braucht keine zweite Ebene.
+      const frauen = (await get('/96300/')).body;
+      expect(frauen).toContain('aria-label="Bereich wählen"');
+      expect(frauen).not.toContain('aria-label="Mannschaft wählen"');
+    } finally {
+      db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
+      db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96301')).run();
+    }
+  });
+
+  it('zeigt während des Spiels die Live-Ansicht statt „Nächstes Spiel" — auch, solange die Quelle noch „angesetzt" sagt', async () => {
+    const id = `${TEAM}:m3`;
+    const vor = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    db.update(schema.handball_team_match).set({
+      starts_at: vor,
+      live_payload: JSON.stringify({
+        fetched_at: new Date().toISOString(), home: 7, away: 5, minute: '19:40', block: '1. Halbzeit', halftime: null,
+        items: [{ minute: 18.2, home: 6, away: 5, goal: true, block: '1. Halbzeit' }, { minute: 19.6, home: 7, away: 5, goal: true, block: '1. Halbzeit' }],
+      }),
+    }).where(eq(schema.handball_team_match.id, id)).run();
+    try {
+      const res = await get(`/${TEAM}/`);
+      expect(res.body).toContain('<body data-live="1">');
+      expect(res.body).toContain('Läuft gerade');
+      expect(res.body).toContain('class="tore-gross">7:5<');
+      expect(res.body).toContain('19:40 Min. · 1. Halbzeit');
+      expect(res.body).toContain('aria-label="Letzte Tore"');
+      expect(res.body).not.toContain('<h2>Nächstes Spiel');
+      expect(res.headers['cache-control']).toBe('public, max-age=15');
+    } finally {
+      db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(), live_payload: null }).where(eq(schema.handball_team_match.id, id)).run();
+    }
+    expect((await get(`/${TEAM}/`)).body).toContain('<h2>Nächstes Spiel');
+  });
+
   it('liefert Stil und Skript mit ETag und, bei passendem Hash, dauerhaft zwischenspeicherbar', async () => {
     const html = (await get(`/${TEAM}/`)).body;
     const cssUrl = /href="\.\/(site\.css\?v=[0-9a-f]{10})"/.exec(html)![1];

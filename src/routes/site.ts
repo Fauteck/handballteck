@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import {
   siteConfig, siteTeam, renderSiteHtml, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS,
+  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg, portraits, istJugend } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
@@ -101,9 +101,9 @@ export async function siteRoutes(fastify: FastifyInstance) {
   }
 
   /** Alle Mannschaften für die Mannschaftswahl im Kopf — relative Ziele, damit die Seite unter jeder Wurzel läuft. */
-  function mannschaftswahl(): Array<{ id: string; label: string; url: string }> {
+  function mannschaftswahl(): SiteTeamLink[] {
     const sicht = handballOverview();
-    return sicht.configured ? sicht.teams.map(t => ({ id: t.team_id, label: t.label, url: `../${encodeURIComponent(t.team_id)}/` })) : [];
+    return sicht.configured ? sicht.teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: `../${encodeURIComponent(t.team_id)}/` })) : [];
   }
 
   // Die Wurzel: zur ersten Mannschaft, damit eine eigene Domain ohne Pfad ankommt.
@@ -128,7 +128,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
       players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
     });
     // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
-    const live = t.team.next_match?.status === 'live';
+    const live = t.team.next_match?.is_live === true;
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
       // Die Vorschau darf in keinem Zwischenspeicher landen, auch nicht in dem eines Proxys.
