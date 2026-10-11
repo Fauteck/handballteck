@@ -1569,32 +1569,39 @@ describe('Sechste Runde: Telegram-Funktionen', () => {
   });
 
   it('pflegt Beschreibung und Kurzbeschreibung aus dem Stand — nur bei Änderung, abschaltbar', async () => {
-    trageTeamEin({}, '123:settings-token');
-    legeTabelle(); legeSpiel({ starts_at: '2026-10-03T12:00:00.000Z' });
-    const aufrufe = telegramMitschnitt();
-    expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('gesetzt');
-    expect(aufrufe.map(a => a.method)).toEqual(['setMyDescription', 'setMyShortDescription']);
-    const lang = String(aufrufe[0].body.description);
-    const kurz = String(aufrufe[1].body.short_description);
-    expect(lang.length).toBeLessThanOrEqual(512);
-    expect(kurz.length).toBeLessThanOrEqual(120);
-    expect(lang).toContain('Tabelle: 1. Platz, 6 Punkte nach 3 Spielen');
-    expect(lang).toContain('Nächstes Spiel: Sa., 03.10. 14:00 Uhr gegen HV Erftstadt (Heimspiel)');
-    expect(kurz).toBe('🤾 HSG Wölfe Voreifel · Platz 1 · Nächstes: Sa., 03.10. vs HV Erftstadt (H)');
-    // Unverändert: kein Aufruf.
-    aufrufe.length = 0;
-    expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('unveraendert');
-    expect(aufrufe).toEqual([]);
-    // Abgeschaltet: Was im BotFather steht, bleibt.
-    dbRef.update(schemaRef.handball_team_match).set({ away_name: 'TV Palmersheim' }).run();
-    setzeConfig({ bot_auto_description: 'false' });
-    expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('aus');
-    expect(aufrufe).toEqual([]);
-    // Lange Namen: hart begrenzt.
-    const { handballOverview } = await import('../lib/handballTeam');
-    const team = handballOverview().teams[0];
-    const lange = [{ ...team, name: 'Handballspielgemeinschaft '.repeat(8) }, { ...team, team_id: 'x', name: 'Zweite Mannschaft '.repeat(10) }];
-    expect(bot.textKurzbeschreibung(lange).length).toBeLessThanOrEqual(120);
-    expect(bot.textBeschreibung([...lange, ...lange, ...lange]).length).toBeLessThanOrEqual(512);
+    // Das Spiel liegt am festen Samstag 03.10.2026 — die Uhr steht davor, sonst wäre es irgendwann „vergangen".
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
+    try {
+      trageTeamEin({}, '123:settings-token');
+      legeTabelle(); legeSpiel({ starts_at: '2026-10-03T12:00:00.000Z' });
+      const aufrufe = telegramMitschnitt();
+      expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('gesetzt');
+      expect(aufrufe.map(a => a.method)).toEqual(['setMyDescription', 'setMyShortDescription']);
+      const lang = String(aufrufe[0].body.description);
+      const kurz = String(aufrufe[1].body.short_description);
+      expect(lang.length).toBeLessThanOrEqual(512);
+      expect(kurz.length).toBeLessThanOrEqual(120);
+      expect(lang).toContain('Tabelle: 1. Platz, 6 Punkte nach 3 Spielen');
+      expect(lang).toContain('Nächstes Spiel: Sa., 03.10. 14:00 Uhr gegen HV Erftstadt (Heimspiel)');
+      expect(kurz).toBe('🤾 HSG Wölfe Voreifel · Platz 1 · Nächstes: Sa., 03.10. vs HV Erftstadt (H)');
+      // Unverändert: kein Aufruf.
+      aufrufe.length = 0;
+      expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('unveraendert');
+      expect(aufrufe).toEqual([]);
+      // Abgeschaltet: Was im BotFather steht, bleibt.
+      dbRef.update(schemaRef.handball_team_match).set({ away_name: 'TV Palmersheim' }).run();
+      setzeConfig({ bot_auto_description: 'false' });
+      expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('aus');
+      expect(aufrufe).toEqual([]);
+      // Lange Namen: hart begrenzt.
+      const { handballOverview } = await import('../lib/handballTeam');
+      const team = handballOverview().teams[0];
+      const lange = [{ ...team, name: 'Handballspielgemeinschaft '.repeat(8) }, { ...team, team_id: 'x', name: 'Zweite Mannschaft '.repeat(10) }];
+      expect(bot.textKurzbeschreibung(lange).length).toBeLessThanOrEqual(120);
+      expect(bot.textBeschreibung([...lange, ...lange, ...lange]).length).toBeLessThanOrEqual(512);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
