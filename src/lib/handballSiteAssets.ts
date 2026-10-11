@@ -13,15 +13,29 @@ export function inhaltsHash(text: string): string {
 }
 
 /**
+ * Textfarben, die auf Weiß beziehungsweise auf der dunklen Karte mindestens 4,5:1
+ * erreichen (WCAG AA) — die Rohfarben `--ad`, `--win`, `--loss` und `--p` tun das
+ * nicht überall. `lk` Links, `hd` Überschriften, `wint`/`losst` Sieg und
+ * Niederlage als Text. Eine Quelle für das Stylesheet und den Kontrast-Test.
+ */
+export const KONTRAST = {
+  hell: { lk: 'color-mix(in srgb,var(--ad) 70%,#000)', hd: 'var(--p)', wint: 'color-mix(in srgb,var(--win) 65%,#000)', losst: 'color-mix(in srgb,var(--loss) 80%,#000)' },
+  dunkel: { lk: 'var(--a)', hd: 'var(--a)', wint: 'color-mix(in srgb,var(--win) 50%,#fff)', losst: 'color-mix(in srgb,var(--loss) 55%,#fff)' },
+} as const;
+const tokens = (t: Record<string, string>) => Object.entries(t).map(([k, v]) => `--${k}:${v}`).join(';');
+const KONTRAST_HELL = tokens(KONTRAST.hell);
+const KONTRAST_DUNKEL = tokens(KONTRAST.dunkel);
+
+/**
  * Das dunkle Schema — zweimal ausgegeben: einmal für „automatisch" (folgt dem
  * Gerät, außer der Schalter steht auf hell), einmal für „dunkel" von Hand.
  * Eine Quelle, damit beide nie auseinanderlaufen.
  */
 const DUNKEL: Array<[string, string]> = [
-  ['', '--bg:#0c1a1f;--card:#12262c;--text:#e6f0f2;--muted:#9bb0b6;--line:#1f3840;color-scheme:dark'],
+  ['', `--bg:#0c1a1f;--card:#12262c;--text:#e6f0f2;--muted:#9bb0b6;--line:#1f3840;${KONTRAST_DUNKEL};color-scheme:dark`],
   ['.btn', 'background:#12262c;color:#e6f0f2'],
   ['.plan .e', 'background:#0c1a1f;color:#e6f0f2'],
-  ['tr.own td', 'background:color-mix(in srgb,var(--a) 22%,#12262c)'],
+  ['tr.own td', 'background:color-mix(in srgb,var(--a) 16%,#12262c)'],
   ['.plan li.next', 'background:color-mix(in srgb,var(--a) 14%,#12262c)'],
   ['.plan .e.w', 'background:color-mix(in srgb,var(--win) 24%,#12262c)'],
   ['.plan .e.l', 'background:color-mix(in srgb,var(--loss) 22%,#12262c)'],
@@ -37,7 +51,7 @@ ${regeln(':root[data-theme=dark]')}`;
 export function siteCss(p: FullPalette): string {
   const grund = p.primary.toLowerCase() === '#003e51' ? '#001f2b' : p.primary;
   return `
-:root{--p:${p.primary};--s:${p.secondary};--a:${p.accent};--ad:${p.accentDark};--g:${grund};--bg:#f2f6f7;--card:#ffffff;--text:#10262c;--muted:#5d7178;--line:#dde6e9;--win:#1f9d55;--loss:#c9403a;--draw:#7a8a90}
+:root{--p:${p.primary};--s:${p.secondary};--a:${p.accent};--ad:${p.accentDark};--g:${grund};--bg:#f2f6f7;--card:#ffffff;--text:#10262c;--muted:#5d7178;--line:#dde6e9;--win:#1f9d55;--loss:#c9403a;--draw:#7a8a90;${KONTRAST_HELL}}
 @font-face{font-family:'Barlow Condensed';font-weight:700;font-display:swap;src:url(./fonts/BarlowCondensed-Bold.ttf) format('truetype')}
 @font-face{font-family:'Barlow Condensed';font-weight:600;font-display:swap;src:url(./fonts/BarlowCondensed-SemiBold.ttf) format('truetype')}
 @font-face{font-family:'Barlow';font-weight:400;font-display:swap;src:url(./fonts/Barlow-Regular.ttf) format('truetype')}
@@ -47,9 +61,9 @@ export function siteCss(p: FullPalette): string {
 [hidden]{display:none !important}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 'Barlow',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
-a{color:var(--ad)}
+a{color:var(--lk)}
 h1,h2,h3{font-family:'Barlow Condensed','Barlow',system-ui,sans-serif;letter-spacing:.01em;margin:0}
-h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--p);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
 .hero{background:linear-gradient(135deg,var(--g) 0%,var(--p) 45%,var(--s) 100%);color:#fff;position:relative;overflow:hidden}
 .hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-55deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px);pointer-events:none}
@@ -87,7 +101,7 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .badge.live{background:var(--loss);color:#fff;animation:puls 1.6s ease-in-out infinite}
 @keyframes puls{50%{opacity:.6}}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--p);font:inherit;font-weight:600;text-decoration:none;cursor:pointer;line-height:1.1}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--p);font:inherit;font-weight:600;text-decoration:none;cursor:pointer;line-height:1.1}
 .btn:hover{border-color:var(--ad)}
 .btn.primary{background:var(--a);border-color:var(--a);color:var(--g)}
 .btn.ghost{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#fff}
@@ -109,10 +123,10 @@ th{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppe
 td.name,th.name{text-align:left;white-space:normal;width:100%}
 tr.own td{background:color-mix(in srgb,var(--a) 14%,#fff);font-weight:600}
 tr.own td:first-child{box-shadow:inset 4px 0 0 var(--a)}
-td.pos{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;color:var(--p)}
+td.pos{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;color:var(--hd)}
 td.pkt{font-weight:700}
 .t i{font-style:normal;font-size:.75rem;margin-left:4px}
-.t i.up{color:var(--win)}.t i.down{color:var(--loss)}
+.t i.up{color:var(--wint)}.t i.down{color:var(--losst)}
 .legend{margin:10px 0 0;font-size:.85rem;color:var(--muted)}
 .plan{list-style:none;margin:0;padding:0;display:grid}
 .plan li{display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -120,10 +134,12 @@ td.pkt{font-weight:700}
 .plan .d{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--muted);line-height:1.1}
 .plan .d small{display:block;font-weight:500}
 .plan .g{min-width:0}
+.plan .g a.titel{display:inline-block;padding:4px 0;color:inherit;text-decoration:none}
+.plan .g a.spielseite{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
 .plan .g .ha{color:var(--muted);font-size:.85rem}
 .plan .e{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.35rem;padding:2px 10px;border-radius:8px;background:var(--bg);color:var(--text)}
-.plan .e.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--win)}
-.plan .e.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--loss)}
+.plan .e.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
+.plan .e.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
 .plan .e.o{color:var(--muted);font-weight:500;font-size:.95rem;background:transparent}
 .plan li.next{background:color-mix(in srgb,var(--a) 10%,#fff);border-radius:10px;padding-left:8px;padding-right:8px;margin:0 -8px}
 .lines{margin:0;padding-left:0;list-style:none;display:grid;gap:6px}
@@ -133,7 +149,7 @@ td.pkt{font-weight:700}
 fieldset{border:0;padding:0;margin:0 0 10px}
 legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;font-size:.95rem;color:var(--a);margin-bottom:6px}
 .opts{display:flex;gap:8px;flex-wrap:wrap}
-.opts label{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.3);cursor:pointer;font-size:.95rem}
+.opts label{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.3);cursor:pointer;font-size:.95rem}
 .opts input{accent-color:var(--a)}
 .opts label:has(input:checked){background:rgba(255,255,255,.14);border-color:var(--a)}
 .status{margin:6px 0 10px;font-weight:500}
@@ -141,7 +157,7 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .channels{display:grid;gap:10px}
 .channel{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff}
 .channel[open]{border-color:rgba(255,255,255,.24)}
-.channel summary{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
+.channel summary{min-height:44px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
 .channel summary::-webkit-details-marker{display:none}
 .channel summary::after{content:"▾";font-size:1.1rem;color:var(--a);transition:transform .15s}
 .channel[open] summary::after{transform:rotate(180deg)}
@@ -152,7 +168,7 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
 .channel .body{margin-top:10px}
 .channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
-.channel a.open,.channel button.open{display:inline-block;margin:8px 14px 0 0;padding:0;border:0;background:none;font:inherit;cursor:pointer;color:var(--a);font-weight:600;text-decoration:none}
+.channel a.open,.channel button.open{display:inline-flex;align-items:center;min-height:44px;margin:4px 14px 0 0;padding:0;border:0;background:none;font:inherit;cursor:pointer;color:var(--a);font-weight:600;text-decoration:none}
 .channel a.open:hover,.channel button.open:hover{text-decoration:underline}
 .chip{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--a);color:var(--g);font-size:.7rem;letter-spacing:.06em;vertical-align:2px}
 .skip{position:absolute;left:-999px;top:8px;z-index:10;padding:8px 14px;border-radius:8px;background:#fff;color:#10262c}
@@ -160,13 +176,13 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .offline{padding:8px 16px;text-align:center;background:#7a4b00;color:#fff;font-size:.9rem}
 :focus-visible{outline:3px solid var(--a);outline-offset:2px;border-radius:4px}
 .filter{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
-.filter button{font:inherit;font-size:.9rem;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.filter button{font:inherit;font-size:.95rem;min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
 .filter button[aria-pressed=true]{background:var(--p);border-color:var(--p);color:#fff}
 .filter button.jump{margin-left:auto;border-style:dashed}
-h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;color:var(--p);margin:12px 0 4px}
+h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;color:var(--hd);margin:12px 0 4px}
 .legende{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.9rem}
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
-.hero .theme{position:absolute;top:12px;right:16px;z-index:2;width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-size:1.2rem;line-height:1;cursor:pointer}
+.hero .theme{position:absolute;top:12px;right:16px;z-index:2;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-size:1.2rem;line-height:1;cursor:pointer}
 .hero .theme:hover{background:rgba(255,255,255,.22)}
 .vorschau-band{padding:8px 16px;text-align:center;background:#7a2a8a;color:#fff;font-size:.9rem;font-weight:600}
 .portraets{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
@@ -185,22 +201,38 @@ h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight
 .gegner .form i{width:11px;height:11px}
 .gegner .res{color:rgba(255,255,255,.85)}
 details.more{grid-column:1/-1;margin-top:6px}
-details.more summary{cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:.9rem;color:var(--ad);list-style:none;display:inline-flex;align-items:center;gap:6px}
+details.more summary{cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:.9rem;color:var(--lk);list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:44px}
 details.more summary::-webkit-details-marker{display:none}
 details.more summary::before{content:"";width:0;height:0;border-left:6px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
 details.more[open] summary::before{transform:rotate(90deg)}
+.card.dark details.more summary{color:var(--a)}
+.card.dark .plan .d,.card.dark .plan .g .ha{color:rgba(255,255,255,.78)}
+.card.dark .plan li{border-color:rgba(255,255,255,.16)}
 .verlauf{margin:10px 0 4px}
 .verlauf svg{display:block;width:100%;height:auto}
 .torfolge{margin:6px 0 0;font-size:.85rem;color:var(--muted);line-height:1.6}
 .torfolge b{color:var(--text)}
 .bericht{margin-top:10px;font-size:.98rem;line-height:1.55}
-.bericht h4{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;text-transform:uppercase;color:var(--p);margin:12px 0 4px}
+.bericht h4{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;text-transform:uppercase;color:var(--hd);margin:12px 0 4px}
 .bericht p{margin:0 0 8px}
 .bericht .quelle{font-size:.85rem;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:20;max-width:calc(100vw - 32px);padding:12px 20px;border-radius:14px;border:2px solid var(--a);background:var(--g);color:#fff;font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;box-shadow:0 8px 24px rgba(0,0,0,.35);text-align:center}
+.livetore li b+b{margin-left:2px}
+details.ticker{margin-top:6px}
+.spielstand{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:6px 0 10px;text-align:center}
+.spielstand .seite{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:1.2rem;text-transform:uppercase;line-height:1.15;hyphens:auto;overflow-wrap:break-word;min-width:0}
+.spielstand .tore-gross{font-family:'Barlow Condensed',sans-serif;font-size:3.6rem;font-weight:700;line-height:1;color:var(--hd)}
+.zurueck{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
+.schuetzen{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.schuetzen li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}
+.schuetzen li:last-child{border-bottom:0}
+.tag{margin:14px 0 2px}
+main.wrap.schmal{max-width:820px;grid-template-columns:minmax(0,1fr)}
 footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid;gap:6px}
 footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none !important;transition:none !important}}
-@media (max-width:600px){.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px}.plan li{grid-template-columns:78px 1fr auto}}
+@media (pointer:coarse){.teamwahl a,.teamwahl:not(.gruppen) a{display:inline-flex;align-items:center;min-height:44px;padding-top:0;padding-bottom:0}}
+@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px}.plan li{grid-template-columns:78px 1fr auto}}
 @media (min-width:960px){
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
@@ -302,7 +334,8 @@ self.addEventListener('notificationclick', function (event) {
 export const SITE_APP_JS = `(function () {
   // Der Service Worker gehört zur Seite, nicht nur zum Push: Er hält die
   // zuletzt geladene Fassung für den Fall ohne Netz vor.
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
+  // Nur die Mannschaftsseite trägt ein Manifest; Spiel- und Übersichtsseite liegen eine Ebene tiefer und haben keinen eigenen Worker.
+  if ('serviceWorker' in navigator && document.querySelector('link[rel=manifest]')) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
 
   // Farbschema: automatisch (Gerät) → hell → dunkel → automatisch.
   var THEME_KEY = 'handball-site-theme';
@@ -344,17 +377,22 @@ export const SITE_APP_JS = `(function () {
     });
   });
 
-  // Countdown: „In 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind.
+  // Countdown: „In 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind;
+  // in der letzten Stunde zählt er sekundengenau („In 42:17 Min."), danach steht „Gleich los".
+  function zwei(n) { return (n < 10 ? '0' : '') + n; }
   function countdown() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-countdown]'), function (el) {
       var ms = Date.parse(el.getAttribute('data-countdown')) - Date.now();
-      if (!(ms > 0) || ms > 36 * 3600000) return;
-      var min = Math.ceil(ms / 60000);
-      el.textContent = min < 60 ? 'In ' + min + ' Min.' : 'In ' + Math.floor(min / 60) + ' Std. ' + (min % 60) + ' Min.';
+      var text;
+      if (ms <= 0 && ms > -300000) text = 'Gleich los';
+      else if (!(ms > 0) || ms > 36 * 3600000) return;
+      else if (ms <= 3600000) { var s = Math.ceil(ms / 1000); text = 'In ' + zwei(Math.floor(s / 60)) + ':' + zwei(s % 60) + ' Min.'; }
+      else { var min = Math.ceil(ms / 60000); text = 'In ' + Math.floor(min / 60) + ' Std. ' + (min % 60) + ' Min.'; }
+      if (el.textContent !== text) el.textContent = text;
     });
   }
   countdown();
-  setInterval(countdown, 30000);
+  setInterval(countdown, 1000);
 
   // Offline-Hinweis.
   var offline = document.querySelector('[data-offline]');
@@ -387,8 +425,31 @@ export const SITE_APP_JS = `(function () {
 
   // Live-Modus: Läuft ein Spiel, holt die Seite alle 30 Sekunden ihren eigenen
   // Stand und tauscht Spielstand, Kopfzeile, Tabelle und Spielplan aus. Ist das
-  // Spiel vorbei oder der Tab im Hintergrund, ruht sie.
+  // Spiel vorbei oder der Tab im Hintergrund, ruht sie. Fällt dabei ein Tor,
+  // zeigt ein kurzer Hinweis den neuen Stand und das Gerät vibriert (wo es das
+  // kann) — ohne Ton, solange die Seite offen ist.
   if (document.body.hasAttribute('data-live')) {
+    var hinweis = document.createElement('div');
+    hinweis.className = 'toast';
+    hinweis.setAttribute('role', 'status');
+    hinweis.setAttribute('aria-live', 'polite');
+    hinweis.hidden = true;
+    document.body.appendChild(hinweis);
+    var hinweisTimer = null;
+    var standAus = function (wurzel) {
+      var el = wurzel.querySelector('#naechstes [data-stand]');
+      var m = el ? /^(\\d+):(\\d+)$/.exec(el.getAttribute('data-stand') || '') : null;
+      return m ? { eigene: +m[1], gegner: +m[2], text: m[0] } : null;
+    };
+    var torHinweis = function (alt, neu) {
+      if (!alt || !neu || (alt.eigene === neu.eigene && alt.gegner === neu.gegner)) return;
+      var eigenes = neu.eigene > alt.eigene;
+      hinweis.textContent = (eigenes ? 'Tor! ' : neu.gegner > alt.gegner ? 'Gegentor ' : 'Neuer Stand ') + neu.text;
+      hinweis.hidden = false;
+      clearTimeout(hinweisTimer);
+      hinweisTimer = setTimeout(function () { hinweis.hidden = true; }, 6000);
+      try { if (navigator.vibrate) navigator.vibrate(eigenes ? [120, 80, 120] : [220]); } catch (e) {}
+    };
     var liveTakt = setInterval(function () {
       if (document.hidden) return;
       fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'omit' })
@@ -396,11 +457,15 @@ export const SITE_APP_JS = `(function () {
         .then(function (html) {
           if (!html) return;
           var doc = new DOMParser().parseFromString(html, 'text/html');
+          torHinweis(standAus(document), standAus(doc));
+          var tickerOffen = !!document.querySelector('#naechstes details.ticker[open]');
           ['naechstes', 'letztes', 'tabelle'].forEach(function (id) {
             var neu = doc.getElementById(id);
             var alt = document.getElementById(id);
             if (neu && alt) alt.replaceWith(neu);
           });
+          var ticker = document.querySelector('#naechstes details.ticker');
+          if (ticker && tickerOffen) ticker.open = true;
           var kopfNeu = doc.querySelector('.hero .stats');
           var kopfAlt = document.querySelector('.hero .stats');
           if (kopfNeu && kopfAlt) kopfAlt.replaceWith(kopfNeu);

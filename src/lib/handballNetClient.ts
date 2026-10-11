@@ -721,8 +721,8 @@ export async function fetchMatchEventList(matchId: string): Promise<HandballMatc
   return torfolgeAus(body.data ?? []);
 }
 
-/** Wie viele Tore die Live-Ansicht zeigt. */
-const LIVE_TORE_MAX = 6;
+/** Wie viele Tore die Live-Ansicht vorhält — genug für ein ganzes Spiel, damit der Ticker den ganzen Verlauf zeigen kann. */
+const LIVE_TORE_MAX = 150;
 
 /**
  * Der Zwischenstand eines laufenden Spiels für die Live-Ansicht der Seite:
