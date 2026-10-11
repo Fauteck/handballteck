@@ -890,8 +890,9 @@ function pushHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: strin
     <details class="channel" data-key="rss">
       <summary><span class="ico rss">${ICON.rss}</span><b>RSS-Feed</b></summary>
       <div class="body">
-        <span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader.</span>
-        <a class="open" href="./feed.xml">Feed öffnen →</a>
+        <span class="desc">Endstände, Verlegungen und das nächste Spiel im Feedreader. Adresse kopieren und dort als neuen Feed einfügen.</span>
+        <button class="open" type="button" data-copy="${h(baseUrl + 'feed.xml')}">Feed-Adresse kopieren</button>
+        <a class="open" href="./feed.xml">Rohdaten ansehen →</a>
       </div>
     </details>
   </div>
