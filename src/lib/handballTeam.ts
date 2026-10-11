@@ -32,7 +32,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
-import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs } from '../config';
+import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds } from '../config';
 import {
   HANDBALL_KIND,
   fetchActiveSeason,
@@ -42,6 +42,7 @@ import {
   fetchLineups,
   fetchMatchReport,
   fetchMatchEventList,
+  fetchMatchLive,
   HANDBALL_LOGO_HOSTS,
   klassifiziereHandballFehler,
   HandballEmptyError,
@@ -50,6 +51,7 @@ import {
   type HandballLineupSide,
   type HandballMatchEvents,
   type HandballMatchEventItem,
+  type HandballLiveState,
 } from './handballNetClient';
 import type { HandballPalette } from './handballTableImage';
 import { meldeBetreiber, entwarnung } from './alerts';
@@ -84,6 +86,32 @@ export function liveFensterOffen(now = Date.now()): boolean {
     && (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
     && now - Date.parse(r.starts_at) >= -LIVE_VORLAUF_MS
     && now - Date.parse(r.starts_at) < LIVE_BIS_MS);
+}
+
+/**
+ * Wie die Mannschaft mit dieser ID angezeigt wird: Steht sie in
+ * `CLUB_TEAM_IDS`, heißt sie `CLUB_NAME` — auch wenn handball.net sie noch
+ * unter dem Namen ihres Stammvereins führt. Eine römische Ziffer am Ende des
+ * Quellnamens („… II") bleibt erhalten, sie unterscheidet die Mannschaften
+ * eines Vereins. Alle anderen Namen bleiben, wie die Quelle sie schreibt.
+ */
+export function anzeigeName(teamId: string | number, quellname: string): string {
+  if (!clubTeamIds().has(String(teamId))) return quellname;
+  const zusatz = /\s(II|III|IV|V|VI|VII|VIII|IX|X)$/.exec(quellname.trim())?.[1];
+  return zusatz ? `${clubName()} ${zusatz}` : clubName();
+}
+
+/**
+ * Läuft das Spiel gerade? Die Quelle sagt es mit `live`; sagt sie es (noch)
+ * nicht, gilt ein angesetztes Spiel ab Anwurf als laufend — bis zur Frist, die
+ * auch der Live-Takt nutzt. Eine Seite, die in dieser Zeit „Nächstes Spiel"
+ * zeigt, wäre falsch, und ein Zwischenstand lässt sich nachreichen.
+ */
+export function laeuftGerade(status: string, startsAt: string, now = Date.now()): boolean {
+  if (status === 'live') return true;
+  if (status !== 'scheduled' && status !== 'other') return false;
+  const seit = now - Date.parse(startsAt);
+  return seit >= 0 && seit < LIVE_BIS_MS;
 }
 
 /**
@@ -621,6 +649,31 @@ async function torfolgenNachholen(teamId: string): Promise<number> {
 }
 
 /**
+ * Den Zwischenstand der laufenden Spiele einer Mannschaft holen und am Spiel
+ * ablegen — die Live-Ansicht der Seite liest ihn aus der Datenbank, eine
+ * öffentliche Seite löst keinen Abruf aus. Ein Aufruf je laufendem Spiel und
+ * Takt; scheitert er, bleibt der vorige Stand stehen.
+ */
+async function liveStandHolen(teamId: string): Promise<number> {
+  const jetzt = Date.now();
+  const laufend = db.select().from(handball_team_match).where(eq(handball_team_match.team_id, teamId)).all()
+    .filter(r => laeuftGerade(r.status, r.starts_at, jetzt));
+  let fetched = 0;
+  for (const r of laufend) {
+    fetched++;
+    try {
+      const stand = await fetchMatchLive(r.match_id);
+      db.update(handball_team_match)
+        .set({ live_payload: JSON.stringify({ ...stand, fetched_at: new Date().toISOString() }) })
+        .where(eq(handball_team_match.id, r.id)).run();
+    } catch (err) {
+      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, `[handball] Zwischenstand für Spiel ${r.match_id} nicht abrufbar`);
+    }
+  }
+  return fetched;
+}
+
+/**
  * Spielberichte nachholen, einmal je Tageslauf: Der Bot holt den Bericht nur
  * zu Spielen, deren Endstand er selbst gemeldet hat (§5) — ohne Bot oder
  * nach einem Ausfall bliebe die Microsite ohne. Nur Spiele der letzten 30
@@ -955,7 +1008,7 @@ export function playerMatchLog(teamId: string, playerId: string): HandballPlayer
     .map(z => {
       const m = spiele.get(z.match_id);
       const heim = m ? m.home_id === teamId : true;
-      return { matchId: z.match_id, startsAt: m?.starts_at ?? '', opponent: m ? (heim ? m.away_name : m.home_name) : '?', opponentId: m ? (heim ? m.away_id : m.home_id) : null, isHome: heim, goals: z.goals };
+      return { matchId: z.match_id, startsAt: m?.starts_at ?? '', opponent: m ? (heim ? anzeigeName(m.away_id, m.away_name) : anzeigeName(m.home_id, m.home_name)) : '?', opponentId: m ? (heim ? m.away_id : m.home_id) : null, isHome: heim, goals: z.goals };
     })
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 }
@@ -1130,6 +1183,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
         .where(and(eq(handball_team_match.team_id, teamId), eq(handball_team_match.status, 'finished'))).all().length;
       // Ein neu beendetes Spiel ändert die Tabelle — einmal nachholen, nicht je Tick.
       if (nachher > vorher) fetched += await tabellenHolen(teamId, nachSchon);
+      fetched += await liveStandHolen(teamId);
     }
     if (teamFehler) throw teamFehler;
   } catch (err) {
@@ -1160,8 +1214,8 @@ function ausTeamSicht(r: typeof handball_team_match.$inferSelect) {
   const heim = r.home_id === r.team_id;
   return {
     heim,
-    eigenerName: heim ? r.home_name : r.away_name,
-    gegner: heim ? r.away_name : r.home_name,
+    eigenerName: heim ? anzeigeName(r.home_id, r.home_name) : anzeigeName(r.away_id, r.away_name),
+    gegner: heim ? anzeigeName(r.away_id, r.away_name) : anzeigeName(r.home_id, r.home_name),
     eigeneTore: heim ? r.score_home : r.score_away,
     gegnerTore: heim ? r.score_away : r.score_home,
   };
@@ -1171,12 +1225,32 @@ function ausTeamSicht(r: typeof handball_team_match.$inferSelect) {
 // Sicht für den Tab
 // ---------------------------------------------------------------------------
 
+/** Der Zwischenstand eines laufenden Spiels, wie ihn der Live-Takt gespeichert hat. */
+export interface HandballLiveView extends HandballLiveState {
+  /** Wann der Live-Takt ihn geholt hat (ISO, UTC). */
+  fetched_at: string;
+}
+
+function liveAusZeile(payload: string | null): HandballLiveView | null {
+  if (!payload) return null;
+  try {
+    const roh = JSON.parse(payload) as HandballLiveView;
+    return roh && typeof roh === 'object' && typeof roh.fetched_at === 'string' && Array.isArray(roh.items) ? roh : null;
+  } catch {
+    return null;
+  }
+}
+
 export interface HandballMatchView {
   match_id: string;
   season_id: number;
   starts_at: string;
   status: string;
   status_name: string;
+  /** Läuft das Spiel gerade (`laeuftGerade`) — auch, wenn die Quelle es noch nicht meldet. */
+  is_live: boolean;
+  /** Der Zwischenstand des Live-Takts; null, solange keiner geholt wurde oder das Spiel nicht läuft. */
+  live: HandballLiveView | null;
   round: number | null;
   competition_name: string;
   home_id: string;
@@ -1221,6 +1295,16 @@ export interface HandballStandingsView {
   history_rows: HandballStandingRow[];
 }
 
+export type HandballGroup = 'herren' | 'frauen' | 'jungen' | 'maedchen';
+
+/** Die Reihenfolge und Namen der oberen Ebene der Mannschaftswahl. */
+export const HANDBALL_GROUPS: ReadonlyArray<{ id: HandballGroup; label: string }> = [
+  { id: 'herren', label: 'Herren' },
+  { id: 'frauen', label: 'Frauen' },
+  { id: 'jungen', label: 'Jungen' },
+  { id: 'maedchen', label: 'Mädchen' },
+];
+
 export interface HandballTeamView {
   team_id: string;
   name: string;
@@ -1234,6 +1318,8 @@ export interface HandballTeamView {
    */
   label: string;
   championship_name: string | null;
+  /** Die obere Ebene der Mannschaftswahl; null, wenn die Quelle weder Geschlecht noch Altersklasse verrät. */
+  group: HandballGroup | null;
   next_match: HandballMatchView | null;
   last_match: HandballMatchView | null;
   matches: HandballMatchView[];
@@ -1288,12 +1374,14 @@ function sicht(r: typeof handball_team_match.$inferSelect, rated = false): Handb
     starts_at: r.starts_at,
     status: r.status,
     status_name: r.status_name,
+    is_live: laeuftGerade(r.status, r.starts_at),
+    live: laeuftGerade(r.status, r.starts_at) ? liveAusZeile(r.live_payload) : null,
     round: r.round,
     competition_name: r.competition_name,
     home_id: r.home_id,
-    home_name: r.home_name,
+    home_name: anzeigeName(r.home_id, r.home_name),
     away_id: r.away_id,
-    away_name: r.away_name,
+    away_name: anzeigeName(r.away_id, r.away_name),
     is_home: s.heim,
     score_home: r.score_home,
     score_away: r.score_away,
@@ -1346,6 +1434,27 @@ export function automatischesLabel(name: string, rows: Array<{ competition_name:
 }
 
 /**
+ * Zu welcher Gruppe der Mannschaftswahl die Mannschaft gehört: Herren, Frauen,
+ * Jungen (mA–mE) oder Mädchen (wA–wE). Maßgeblich ist wie beim Label der
+ * Wettbewerb mit den meisten Spielen; fehlt dort das Geschlecht, helfen der
+ * Mannschaftsname und zuletzt das Label (auch ein Name aus `TEAM_IDS`:
+ * „mB-Jugend", „2. Damen"). null, wenn nichts davon eindeutig ist.
+ */
+export function gruppeVon(name: string, rows: Array<{ competition_name: string; championship_name: string | null }>, label: string | null): HandballGroup | null {
+  const zaehler = new Map<string, number>();
+  for (const r of rows) zaehler.set(r.competition_name, (zaehler.get(r.competition_name) ?? 0) + 1);
+  const wettbewerb = [...zaehler.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+  const quellen = [wettbewerb, name, label ?? ''];
+  for (const text of quellen) {
+    if (/\bmännlich(e|en)?\b/i.test(text) || /\bm(J|-?Jugend)?-?[A-E]\b/.test(text) || /\bJungen\b/i.test(text)) return 'jungen';
+    if (/\bweiblich(e|en)?\b/i.test(text) || /\bw(J|-?Jugend)?-?[A-E]\b/.test(text) || /\bMädchen\b/i.test(text)) return 'maedchen';
+    if (/\b(Männer|Herren)\b/i.test(text)) return 'herren';
+    if (/\b(Frauen|Damen)\b/i.test(text)) return 'frauen';
+  }
+  return null;
+}
+
+/**
  * Der Tab liest ausschließlich die Datenbank — **kein** Aufruf nach draußen.
  * Gefüllt hat sie der Job; steht dort nichts, sagt der Tab das.
  */
@@ -1364,7 +1473,9 @@ export function handballOverview(): HandballOverview {
     const meine = alle.filter(r => r.team_id === teamId).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     for (const r of meine) if (!updatedAt || r.updated_at > updatedAt) updatedAt = r.updated_at;
     const erste = meine[0];
-    const name = erste ? (erste.home_id === teamId ? erste.home_name : erste.away_name) : `Team ${teamId}`;
+    // Das Label und die Gruppe lesen den Namen der Quelle („… III"), angezeigt wird `anzeigeName`.
+    const quellname = erste ? (erste.home_id === teamId ? erste.home_name : erste.away_name) : `Team ${teamId}`;
+    const name = anzeigeName(teamId, quellname);
     // „Nächstes" schließt ein laufendes Spiel ein — und lässt Verlegtes ohne
     // neuen Termin außen vor, dessen altes Datum sonst als nächstes stünde.
     const naechstes = meine.find(r => (r.status === 'scheduled' || r.status === 'live')
@@ -1383,15 +1494,18 @@ export function handballOverview(): HandballOverview {
         if (t.history_payload) {
           try { history = JSON.parse(t.history_payload) as HandballStandingRow[]; } catch { history = []; }
         }
-        return { phase_id: t.phase_id, competition_name: t.competition_name, fetched_at: t.fetched_at, rows, previous_rows: previous, history_rows: history };
+        const benannt = (zeilen: HandballStandingRow[]) => zeilen.map(z => ({ ...z, teamName: anzeigeName(z.teamId, z.teamName) }));
+        return { phase_id: t.phase_id, competition_name: t.competition_name, fetched_at: t.fetched_at, rows: benannt(rows), previous_rows: previous ? benannt(previous) : null, history_rows: benannt(history) };
       });
     const gewertet = gewerteteSpiele(teamId, meine, standings, jetzt);
     const zuletzt = meine.filter(r => r.status === 'finished' || gewertet.has(r.match_id));
+    const label = teamLabelAusConfig(teamId) ?? automatischesLabel(quellname, meine) ?? erste?.championship_name ?? name;
     return {
       team_id: teamId,
       name,
-      label: teamLabelAusConfig(teamId) ?? automatischesLabel(name, meine) ?? erste?.championship_name ?? name,
+      label,
       championship_name: erste?.championship_name ?? null,
+      group: gruppeVon(quellname, meine, label),
       next_match: naechstes ? sicht(naechstes) : null,
       last_match: zuletzt.length > 0 ? sicht(zuletzt[zuletzt.length - 1], gewertet.has(zuletzt[zuletzt.length - 1].match_id)) : null,
       matches: meine.map(r => sicht(r, gewertet.has(r.match_id))),

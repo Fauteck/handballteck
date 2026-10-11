@@ -62,7 +62,9 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--p);disp
 .teamwahl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .teamwahl a{padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
 .teamwahl a:hover{background:rgba(255,255,255,.16)}
-.teamwahl a[aria-current=page]{background:var(--a);border-color:var(--a);color:var(--g)}
+.teamwahl.gruppen a{font-size:1.05rem;padding:6px 16px}
+.teamwahl:not(.gruppen) a{font-size:.85rem;padding:3px 10px}
+.teamwahl a[aria-current]{background:var(--a);border-color:var(--a);color:var(--g)}
 .hero .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:4px}
 .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;min-width:0}
 .stat b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;font-weight:700;line-height:1;color:#fff;white-space:nowrap}
@@ -95,6 +97,11 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .small{font-size:.9rem}
 .next .info{display:grid;gap:4px;margin-top:12px;font-size:1.05rem}
 .next .info b{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;text-transform:uppercase}
+.live .livestand{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-top:12px;text-align:center}
+.live .livestand .seite{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:1.15rem;text-transform:uppercase;line-height:1.15;overflow-wrap:anywhere}
+.live .tore-gross{font-family:'Barlow Condensed',sans-serif;font-size:3.4rem;font-weight:700;line-height:1}
+.livetore{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:4px;font-size:1rem}
+.livetore .min{display:inline-block;min-width:2.4em;opacity:.7}
 .result .stand{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:700;line-height:1}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}

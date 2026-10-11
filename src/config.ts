@@ -130,15 +130,32 @@ export function syncIntervalMs(): number {
 }
 
 /**
- * Takt während eines laufenden Spiels (Millisekunden). 0, der Standard: aus —
- * dann gilt `SYNC_INTERVAL_MS` und am Spieltag wird erst ab Anwurf plus 45
- * Minuten nachgefragt. Gesetzt (mindestens 20 s): Von fünf Minuten vor dem
- * Anwurf an fragt der Dienst in diesem Takt nach — für den Live-Modus der Seite.
+ * Takt während eines laufenden Spiels (Millisekunden, Standard eine Minute,
+ * mindestens 20 s). Von fünf Minuten vor dem Anwurf an fragt der Dienst in
+ * diesem Takt nach — das speist die Live-Ansicht der Seite. `0` schaltet den
+ * Live-Takt aus; dann gilt `SYNC_INTERVAL_MS` und am Spieltag wird erst ab
+ * Anwurf plus 45 Minuten nachgefragt.
  */
 export function syncLiveIntervalMs(): number {
-  const n = Number.parseInt(env('SYNC_LIVE_INTERVAL_MS') || '', 10);
+  const roh = env('SYNC_LIVE_INTERVAL_MS');
+  if (roh === undefined || roh === '') return 60 * 1000;
+  const n = Number.parseInt(roh, 10);
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.max(n, 20 * 1000);
+}
+
+/** Der Vereinsname, unter dem `CLUB_TEAM_IDS` dargestellt werden. */
+export function clubName(): string {
+  return env('CLUB_NAME') || 'HSG Wölfe Voreifel';
+}
+
+/**
+ * Mannschaften, die bei handball.net noch unter dem Namen ihres Stammvereins
+ * laufen, in der Spielvereinigung aber zum Verein gehören: Sie erscheinen
+ * überall als `CLUB_NAME` (Spielplan, Tabelle, Bilder, Bot).
+ */
+export function clubTeamIds(): Set<string> {
+  return new Set(parseTeamIds(env('CLUB_TEAM_IDS')));
 }
 
 // --- Telegram ---------------------------------------------------------------

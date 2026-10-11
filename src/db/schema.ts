@@ -84,6 +84,13 @@ export const handball_team_match = sqliteTable('handball_team_match', {
    * geholt". Für den Spielverlauf auf der Microsite.
    */
   events_payload: text('events_payload'),
+  /**
+   * Der Zwischenstand eines laufenden Spiels (Migration 0003): JSON
+   * `{ fetched_at, home, away, minute, block, items }` aus der Torfolge, vom
+   * Live-Takt geschrieben. Nur für die Live-Ansicht der Seite; mit dem
+   * Abpfiff zählt `events_payload`.
+   */
+  live_payload: text('live_payload'),
   notified_upcoming: integer('notified_upcoming', { mode: 'boolean' }).notNull().default(false),
   notified_result: integer('notified_result', { mode: 'boolean' }).notNull().default(false),
   updated_at: text('updated_at').notNull(),

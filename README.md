@@ -104,10 +104,12 @@ See `.env.example` for every variable with its default. The important ones:
 | Variable | Default | Meaning |
 |---|---|---|
 | `PUBLIC_URL` | `http://localhost:3000` | External address of this service (webhook, page links). |
-| `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). |
+| `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). The page groups the teams in two levels — Herren · Frauen · Jungen · Mädchen on top, the teams of that group below — from the competition (or the name given here: `wC-Jugend`, `2. Damen`). |
+| `CLUB_TEAM_IDS` | – | Team IDs that handball.net still lists under their original club but that belong to the club in fact: shown everywhere (page, images, bot, API) as `CLUB_NAME`. A trailing Roman numeral of the source name (`… II`) is kept. |
+| `CLUB_NAME` | `HSG Wölfe Voreifel` | The name used for `CLUB_TEAM_IDS`. |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
-| `SYNC_LIVE_INTERVAL_MS` | `0` (off) | Tick while a match is live (min 20 s); also polls from kick-off instead of kick-off + 45 min. Feeds the page's live mode. |
+| `SYNC_LIVE_INTERVAL_MS` | `60000` | Tick while a match is live (min 20 s, `0` = off); also polls from 5 minutes before kick-off instead of kick-off + 45 min. Each tick stores score, game clock and the latest goals; the page replaces „Nächstes Spiel“ by a live view and reloads itself every 30 s. |
 | `SITE_PUSH_MAX` | `2000` | Maximum number of browser push subscriptions; the subscribe route answers 503 above it. |
 | `TELEGRAM_BOT_TOKEN` | – | Enables the bot. |
 | `TELEGRAM_INVITE_CODE` | – | Restricts `/start` to invitees. |
@@ -133,7 +135,7 @@ See `.env.example` for every variable with its default. The important ones:
 | `GET /`, `GET /:teamId/…` | none | Microsite (HTML, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |
 | `GET /inline/:art.jpg` | HMAC signature in URL | Images for the bot's inline mode. |
-| `GET /api/overview` | Bearer | Teams, matches, standings, bot and site summary — the shape Todoteck's cockpit consumes. |
+| `GET /api/overview` | Bearer | Teams, matches, standings, bot and site summary — the shape Todoteck's cockpit consumes. Additive since the two-level switcher: `teams[].group` (`herren`/`frauen`/`jungen`/`maedchen`/`null`), `matches[].is_live` and `matches[].live`. |
 | `GET /api/teams/:id/details` | Bearer | Season lines, records, players, available images. |
 | `GET /api/teams/:id/bild/:art` | Bearer | PNG: `tabelle`, `kader`, `spiel`, `endstand?match=`, `verlauf`, `torjaeger`, `saison`, `spieler/:playerId`. |
 | `POST /api/sync` | Bearer | Force a fetch, then push to bot and site. |

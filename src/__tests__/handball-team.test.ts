@@ -250,6 +250,7 @@ describe('Tageslauf', () => {
     trageTeamEin();
     legeSpiel({ starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() });
     const f = quelle([spiel({ id: 'm1', date: quellzeit(Date.now() - 10 * 60 * 1000), status: { id: 3, name: 'En juego', is_live: true, is_finished: false }, result: { local: 4, visitor: 3 } })]);
+    process.env.SYNC_LIVE_INTERVAL_MS = '0';
     await mod.syncHandballTeams();
     expect(apiAufrufe(f)).toBe(0);
     process.env.SYNC_LIVE_INTERVAL_MS = '60000';
@@ -266,6 +267,7 @@ describe('Tageslauf', () => {
 
   it('wählt den Live-Takt nur, solange ein Spiel läuft oder gleich beginnt', () => {
     trageTeamEin();
+    process.env.SYNC_LIVE_INTERVAL_MS = '0';
     expect(mod.naechsterAbstandMs()).toBe(15 * 60 * 1000);
     process.env.SYNC_LIVE_INTERVAL_MS = '60000';
     try {
@@ -754,5 +756,89 @@ describe('Vereinsfarben und Mannschaften aus der Umgebung', () => {
     legeSpiel({ championship_name: 'B-Jugend' });
     legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', championship_name: 'B-Jugend 2' });
     expect(mod.handballOverview().teams.map(t => t.label)).toEqual(['B-Jugend', 'B-Jugend 2']);
+  });
+});
+
+describe('Gruppen, Vereinsname und Live-Stand', () => {
+  const r = (competition_name: string, championship_name: string | null = null) => ({ competition_name, championship_name });
+
+  it('ordnet Mannschaften Herren, Frauen, Jungen und Mädchen zu', () => {
+    expect(mod.gruppeVon('Wölfe Voreifel', [r('Oberliga Männer Gr. 1')], '1. Herren')).toBe('herren');
+    expect(mod.gruppeVon('Wölfe Voreifel II', [r('Landesliga Frauen')], '2. Damen')).toBe('frauen');
+    expect(mod.gruppeVon('HSG Wölfe Voreifel', [r('Kreisoberliga mB', 'B-Jugend')], 'mB-Jugend')).toBe('jungen');
+    expect(mod.gruppeVon('HSG Wölfe Voreifel', [r('Oberliga weibliche Jugend C', 'C-Jugend')], 'wC-Jugend')).toBe('maedchen');
+    // Das Geschlecht fehlt im Wettbewerb: der Name aus TEAM_IDS entscheidet.
+    expect(mod.gruppeVon('HSG Wölfe Voreifel', [r('Kreisliga', 'D-Jugend')], 'wD-Jugend')).toBe('maedchen');
+    expect(mod.gruppeVon('HSG Wölfe Voreifel', [r('Kreisliga', 'D-Jugend')], 'D-Jugend')).toBeNull();
+    expect(mod.gruppeVon('HSG Wölfe Voreifel', [], null)).toBeNull();
+  });
+
+  it('liefert die Gruppe in der Übersicht', () => {
+    trageTeamEin('96254,96300');
+    legeSpiel({ championship_name: 'B-Jugend' });
+    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', competition_name: 'Landesliga Frauen', championship_name: 'Frauen' });
+    expect(mod.handballOverview().teams.map(t => t.group)).toEqual(['jungen', 'frauen']);
+  });
+
+  it('zeigt Mannschaften aus CLUB_TEAM_IDS als Verein — Spielplan, Gegner und Tabelle', () => {
+    trageTeamEin('96254');
+    legeSpiel({ home_name: 'TuS Altverein', away_id: '96300', away_name: 'HV Erftstadt' });
+    dbRef.insert(schemaRef.handball_standings).values({
+      phase_id: 12800, season_id: 2627, competition_name: 'Kreisoberliga mB', fetched_at: new Date().toISOString(),
+      payload: JSON.stringify([{ round: 3, position: 1, teamId: '96254', teamName: 'TuS Altverein', played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 9, goalsAgainst: 3, goalsDiff: 6, points: 6 }]),
+    } as never).run();
+    process.env.CLUB_TEAM_IDS = '96254, 96300';
+    try {
+      const t = mod.handballOverview().teams[0];
+      expect(t.name).toBe('HSG Wölfe Voreifel');
+      expect(t.matches[0].home_name).toBe('HSG Wölfe Voreifel');
+      // Auch ein Gegner mit einer Nummer aus der Liste heißt wie der Verein.
+      expect(t.matches[0].away_name).toBe('HSG Wölfe Voreifel');
+      expect(t.standings[0].rows[0].teamName).toBe('HSG Wölfe Voreifel');
+      process.env.CLUB_NAME = 'SG Test';
+      expect(mod.handballOverview().teams[0].name).toBe('SG Test');
+    } finally {
+      delete process.env.CLUB_TEAM_IDS;
+      delete process.env.CLUB_NAME;
+    }
+    expect(mod.handballOverview().teams[0].name).toBe('TuS Altverein');
+  });
+
+  it('behält die römische Ziffer der Mannschaft beim Umbenennen', () => {
+    process.env.CLUB_TEAM_IDS = '1';
+    try {
+      expect(mod.anzeigeName('1', 'TuS Altverein II')).toBe('HSG Wölfe Voreifel II');
+      expect(mod.anzeigeName('1', 'TuS Altverein')).toBe('HSG Wölfe Voreifel');
+      expect(mod.anzeigeName('2', 'TuS Altverein II')).toBe('TuS Altverein II');
+    } finally {
+      delete process.env.CLUB_TEAM_IDS;
+    }
+  });
+
+  it('gilt ein angesetztes Spiel nach Anwurf als laufend — bis zur Frist', () => {
+    const jetzt = Date.parse('2026-10-11T15:00:00Z');
+    expect(mod.laeuftGerade('live', '2026-10-11T10:00:00Z', jetzt)).toBe(true);
+    expect(mod.laeuftGerade('scheduled', '2026-10-11T14:30:00Z', jetzt)).toBe(true);
+    expect(mod.laeuftGerade('scheduled', '2026-10-11T15:30:00Z', jetzt)).toBe(false);
+    expect(mod.laeuftGerade('scheduled', '2026-10-11T11:00:00Z', jetzt)).toBe(false);
+    expect(mod.laeuftGerade('finished', '2026-10-11T14:30:00Z', jetzt)).toBe(false);
+  });
+
+  it('holt im Live-Takt den Zwischenstand und legt ihn am Spiel ab', async () => {
+    trageTeamEin();
+    legeSpiel({ starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() });
+    const f = quelle([spiel({ id: 'm1', date: quellzeit(Date.now() - 10 * 60 * 1000), status: { id: 3, name: 'En juego', is_live: true, is_finished: false }, result: { local: 4, visitor: 3 } })]);
+    const davor = f.getMockImplementation()!;
+    f.mockImplementation((url: string) => String(url).includes('/events')
+      ? Promise.resolve(antwort({ data: [
+        { minute: '03:10', block: ' 1. Halbzeit', event_type: { name: 'Tor', is_goal: true }, score: { local: 1, visitor: 0 } },
+        { minute: '08:40', block: ' 1. Halbzeit', event_type: { name: 'Tor', is_goal: true }, score: { local: 4, visitor: 3 } },
+      ] }))
+      : davor(url));
+    await mod.syncHandballTeams();
+    const m = mod.handballOverview().teams[0].next_match!;
+    expect(m.is_live).toBe(true);
+    expect(m.live).toMatchObject({ home: 4, away: 3, minute: '08:40', block: '1. Halbzeit' });
+    expect(m.live!.items).toHaveLength(2);
   });
 });
