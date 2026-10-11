@@ -542,6 +542,105 @@ describe('Handball-Microsite', () => {
     expect((await get(`/${TEAM}/bild/irgendwas.png`)).statusCode).toBe(404);
   });
 
+  it('zeigt zu jedem gespielten Spiel eine Spielseite — mit Dateien aus der Ebene darüber, ohne eigenen Service Worker', async () => {
+    const plan = (await get(`/${TEAM}/`)).body;
+    expect(plan).toContain('href="./spiel/m1"');
+    expect(plan).not.toContain('href="./spiel/m3"');
+    const res = await get(`/${TEAM}/spiel/m1`);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+    const html = res.body;
+    expect(html).toContain('<b class="tore-gross">30:22</b>');
+    expect(html).toContain('href="../site.css?v=');
+    expect(html).toContain('src="../app.js?v=');
+    expect(html).toContain('src="../bild/endstand.png?match=m1"');
+    expect(html).toContain('<a class="zurueck" href="../">');
+    expect(html).toContain('property="og:image" content="https://todo.test.local/96254/bild/endstand.png?match=m1"');
+    expect(html).not.toContain('rel="manifest"');
+    expect(html).not.toContain('Spielbericht</h2>');
+    // Kommende Spiele haben ebenfalls eine Seite — mit Paarung statt Endstand.
+    const kommend = await get(`/${TEAM}/spiel/m3`);
+    expect(kommend.statusCode).toBe(200);
+    expect(kommend.body).toContain('<b class="tore-gross">vs.</b>');
+    expect(kommend.body).not.toContain('bild/endstand.png');
+  });
+
+  it('antwortet für unbekannte oder unzulässige Spiele und ohne Freigabe mit 404', async () => {
+    expect((await get(`/${TEAM}/spiel/gibtsnicht`)).statusCode).toBe(404);
+    expect((await get(`/${TEAM}/spiel/..%2F..%2Fx`)).statusCode).toBe(404);
+    expect((await get(`/99999/spiel/m1`)).statusCode).toBe(404);
+    setConfig({});
+    expect((await get(`/${TEAM}/spiel/m1`)).statusCode).toBe(404);
+    expect((await get('/uebersicht/')).statusCode).toBe(404);
+    expect((await get('/uebersicht')).statusCode).toBe(404);
+  });
+
+  it('zeigt eine Übersicht aller Mannschaften: Anstehendes und Gespieltes, mit Verweisen auf die Mannschaftsseiten', async () => {
+    setConfig({ site_enabled: 'true', team_ids: '96254=B-Jugend,96300=C-Jugend' });
+    db.insert(schema.handball_team_match).values({
+      id: '96300:u1', team_id: '96300', match_id: 'u1', season_id: 2627, starts_at: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+      status: 'scheduled', status_name: 'scheduled', round: 1, phase_id: 12900, competition_name: 'Kreisliga mC', championship_name: 'C-Jugend',
+      home_id: '96300', home_name: 'HSG Wölfe Voreifel', away_id: '96400', away_name: 'TV Palmersheim',
+      score_home: null, score_away: null, venue_name: 'Halle Süd', venue_address: null, notified_upcoming: false, notified_result: false, updated_at: new Date().toISOString(),
+    } as never).run();
+    try {
+      expect((await get('/uebersicht')).headers.location).toBe('uebersicht/');
+      const res = await get('/uebersicht/');
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+      const html = res.body;
+      expect(html).toContain('<h1>Alle Spiele</h1>');
+      expect(html).toContain('href="../96254/site.css?v=');
+      // Das Spiel in zwei Tagen steht unter „nächsten 7 Tagen", das von vor 90 Minuten unter „Zuletzt".
+      expect(html).toContain('href="../96300/#naechstes">C-Jugend</a>');
+      expect(html).toContain('TV Palmersheim');
+      expect(html).toContain('Halle Süd');
+      expect(html).toContain('id="zuletzt"');
+      expect(html).toContain('href="../96254/#letztes">B-Jugend</a>');
+      expect(html).toContain('<a href="../96300/">C-Jugend</a>');
+      // Die Mannschaftsseite verweist darauf, die Spielseite eine Ebene weiter oben.
+      expect((await get(`/${TEAM}/`)).body).toContain('<a href="../uebersicht/">Alle Spiele</a>');
+      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a href="../../uebersicht/">Alle Spiele</a>');
+      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a href="../../96300/">C-Jugend</a>');
+    } finally {
+      db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
+    }
+  });
+
+  it('zeigt im Live-Modus den ganzen Torverlauf — die letzten Tore offen, die früheren zum Aufklappen', async () => {
+    const id = `${TEAM}:m3`;
+    const items = Array.from({ length: 9 }, (_, i) => ({ minute: 2 + i * 2, home: i < 5 ? i + 1 : 5, away: i < 5 ? 0 : i - 4, goal: true, block: '1. Halbzeit' }));
+    db.update(schema.handball_team_match).set({
+      starts_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+      live_payload: JSON.stringify({ fetched_at: new Date().toISOString(), home: 5, away: 4, minute: '19:40', block: '1. Halbzeit', halftime: null, items }),
+    }).where(eq(schema.handball_team_match.id, id)).run();
+    try {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toContain('data-stand="5:4"');
+      expect(html).toContain('<details class="more ticker"><summary>Alle 9 Tore</summary>');
+      expect(html).toContain('aria-label="Frühere Tore"');
+      // Neueste zuerst; das Tor der Gäste ist der Gegenseite zugeschrieben.
+      expect(html).toContain('Tor für HV Erftstadt · <b>5:4</b>');
+      expect(html.indexOf('5:4</b>')).toBeLessThan(html.indexOf('1:0</b>'));
+      expect(html.match(/<li><span class="min">/g)?.length).toBe(9);
+    } finally {
+      db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(), live_payload: null }).where(eq(schema.handball_team_match.id, id)).run();
+    }
+  });
+
+  it('bringt im Skript Tor-Hinweis, sekundengenauen Countdown und den Service Worker nur mit Manifest', async () => {
+    const js = (await get(`/${TEAM}/app.js`)).body;
+    expect(js).toContain("className = 'toast'");
+    expect(js).toContain('navigator.vibrate');
+    expect(js).toContain("'Tor! '");
+    expect(js).toContain('setInterval(countdown, 1000)');
+    expect(js).toContain('Gleich los');
+    expect(js).toContain("document.querySelector('link[rel=manifest]')");
+    expect(js).toContain('details.ticker[open]');
+    // Das Muster für den Stand muss als Regex im ausgelieferten Skript stehen, nicht als „d+".
+    expect(js).toContain('/^(\\d+):(\\d+)$/');
+  });
+
   it('liefert Feed und Kalender', async () => {
     const feed = await get(`/${TEAM}/feed.xml`);
     expect(feed.statusCode).toBe(200);
