@@ -22,6 +22,7 @@ service's `/api/*`.
 | Browser push | Subscriptions per team (capped by `SITE_PUSH_MAX`), same events and texts as the bot, dead subscriptions removed on 404/410/403; a win vibrates like a goal celebration. |
 | Todoteck API | `/api/overview`, `/api/teams/:id/details`, `/api/teams/:id/bild/:art`, `/api/sync`, `/api/health` — Bearer `API_TOKEN`. |
 | Source checks | Concurrent requests for the same path are coalesced, a shared league table is fetched once per run, and the three core responses (season, matches, standings) are shape-checked with zod — a changed format fails loudly (`HandballEmptyError`) instead of producing wrong numbers. `/healthz` reports the state of the fetch (last success, failures, request counters) without error text. |
+| Settings page | `/settings` (one admin account from the environment, optionally on its own port): teams, colours, fetch intervals, Telegram switches, microsite texts and switches, a status view, a change log and an `.env` export. See *Settings page*. |
 | Operator alerts | Fetch failures (auth immediately, transient from the third run) and a suspected time-zone misreading go to the admin chats once per state. |
 
 ## Architecture
@@ -38,8 +39,7 @@ service's `/api/*`.
    (cockpit, widget, two notification events)
 ```
 
-All state is one SQLite file under `DATA_DIR`. Configuration is environment only; there is
-no settings UI.
+All state is one SQLite file under `DATA_DIR`. Configuration is the environment plus the settings page `/settings`: what is saved there wins over the environment (see *Settings page*).
 
 ## Prerequisites
 
@@ -87,7 +87,7 @@ copy is deleted afterwards. Locally, `npm run import:todoteck -- /path/to/family
 runs the same import without the marker.
 
 Configuration (team IDs, colours, bot token, microsite switches) does **not** migrate —
-it lives in the environment now.
+it lives in the environment and on the settings page now.
 
 ## Reverse proxy setup
 
@@ -97,9 +97,40 @@ domain root to this container and set `SITE_URL=https://woelfe.example.de` so th
 `https://woelfe.example.de/<team-id>/`; the domain root redirects to the first team.
 Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies in front of the service. Empty trusts none: behind a proxy all clients then share one rate-limit bucket, so a single client can lock everyone out of the page; the service logs a warning once when it sees `X-Forwarded-For` without `TRUST_PROXY`. Never trust all: a client could forge its address with `X-Forwarded-For` and bypass every limit. A hop count is not an option — Fastify ≥ 5.12 ignores it and trusts no proxy.
 
+## Settings page
+
+`/settings` edits part of the configuration without a redeploy. It is off until
+`ADMIN_PASSWORD` (at least 12 characters) is set; until then every address below it answers 404.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ADMIN_USER` | `admin` | Name of the single admin account. |
+| `ADMIN_PASSWORD` | – (page off) | Its password, from the environment only. |
+| `ADMIN_PORT` | – | Serve `/settings` on its own port instead of the public one (keep that port off the reverse proxy); the public port then no longer answers `/settings`. |
+
+- **Precedence:** the page wins over the environment, the environment over the default. Each
+  field shows its source; "Auf die Umgebung zurücksetzen" removes the saved value. A saved
+  empty value hides the environment on purpose. Values live in `settings` as `cfg.<NAME>`.
+- **On the page:** `TEAM_IDS`, `CLUB_TEAM_IDS`, `CLUB_NAME`, the three colours, `SYNC_INTERVAL_MS`,
+  `SYNC_LIVE_INTERVAL_MS`, `TELEGRAM_INVITE_CODE`, `TELEGRAM_ADMIN_CHAT_IDS`, `BOT_AUTO_DESCRIPTION`,
+  `SITE_ENABLED`, `SITE_PLAYERS`, `SITE_PUSH_MAX`, `SITE_URL`, `SITE_OPERATOR`, `SITE_FEEDBACK_MAIL`,
+  `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`, `CLUBDESK_TEAMS`.
+- **Environment only:** `PUBLIC_URL`, `PORT`, `TRUST_PROXY`, `DATA_DIR`, `DATABASE_PATH`, `SQLITE_JOURNAL_MODE`,
+  `LOG_LEVEL`, `IMPORT_TODOTECK_DB`, `TELEGRAM_BOT_TOKEN`, `API_TOKEN`, `VAPID_*` and the `ADMIN_*` account.
+  The page only shows whether the secrets are set. The bot token already runs through the same lookup, so
+  moving it onto the page later is a registry entry, not a rewrite.
+- **Applying:** most values act immediately. Teams, club name and ClubDesk start a fetch; the intervals apply
+  from the next tick. Every change is logged in `settings_audit` (secrets masked). "Als .env exportieren"
+  gives the effective values without secrets, to copy into `docker-configs`.
+- **Security:** one session in memory (8 h, lost on restart), cookie `HttpOnly; SameSite=Strict; Path=/settings`
+  (`Secure` on https), JSON-only writes with `X-CSRF-Token` and an Origin check, login limited to 5 per minute and
+  per address, constant-time comparison, `no-store`, `noindex`, no inline JavaScript. A forgotten password or
+  a wrong value is repaired in the environment: remove `ADMIN_PASSWORD`/change it and redeploy; saved values
+  are reset on the page or by deleting the `cfg.*` rows.
+
 ## Configuration
 
-See `.env.example` for every variable with its default. The important ones:
+See `.env.example` for every variable with its default. Values saved on the settings page override these. The important ones:
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -131,6 +162,7 @@ See `.env.example` for every variable with its default. The important ones:
 
 | Route | Auth | Purpose |
 |---|---|---|
+| `/settings`, `/settings/settings.js`, `/settings/api/*` | admin session | Settings page (login, state, save, sync, `.env` export). 404 without `ADMIN_PASSWORD`. |
 | `GET /healthz` | none | Liveness, version, fetch state (`sync`: last success, failures, counters — no error text). |
 | `GET /`, `GET /uebersicht/`, `GET /:teamId/…` | none | Microsite (HTML, match pages `spiel/:matchId`, overview `uebersicht/`, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |
@@ -146,14 +178,15 @@ See `.env.example` for every variable with its default. The important ones:
 Tables keep their Todoteck names (`handball_team_match`, `handball_standings`,
 `handball_bot_*`, `handball_roster`, `handball_match_player`, `handball_match_change`,
 `handball_team_logo`, `handball_site_subscription`, `handball_opponent_form`) so the
-import is one-to-one, plus `settings` (VAPID keys) and `handball_bot_subscriber.team_ids`
+import is one-to-one, plus `settings` (VAPID keys, `cfg.*` values of the settings page), `settings_audit` (its change log) and `handball_bot_subscriber.team_ids`
 (the per-chat team selection). Migrations are the SQL files in `drizzle/`, applied once
 each and recorded in `migrations`.
 
 ## Security aspects
 
-- No accounts, no cookies. The only protected surface is `/api/*` (Bearer token,
-  constant-time compare) — and it is closed entirely without `API_TOKEN`.
+- Visitors need no account and get no cookie. Two protected surfaces: `/api/*` (Bearer token,
+  constant-time compare, closed entirely without `API_TOKEN`) and `/settings` (admin account from the
+  environment, session cookie, CSRF protection; absent without `ADMIN_PASSWORD`, optionally on its own `ADMIN_PORT`).
 - The webhook checks a random path and Telegram's secret header; inline images carry a
   signed, expiring URL. Rate limits on every public route.
 - Web Push only goes to the browsers' push services (FCM, Mozilla, WNS, Apple); any
@@ -178,15 +211,16 @@ sharp (SVG → PNG/JPEG/GIF) · web-push · zod · vitest · esbuild.
 src/
   index.ts            entry: migrations, server, bot registration, scheduler
   server.ts           Fastify instance, CSP, rate limit, route registration
-  config.ts           everything from the environment
+  config.ts           everything from the environment (plus saved values of the settings page)
   db/                 connection, drizzle schema, migration runner
-  routes/             site.ts (microsite), telegram.ts (webhook, inline), api.ts (Todoteck)
+  routes/             site.ts (microsite), telegram.ts (webhook, inline), api.ts (Todoteck), settings.ts (/settings)
   import/             todoteck.ts (one-time import at startup)
   lib/                handballNetClient, handballTeam (fetch + DB),
                       handballBot (core: config, subscribers, handler, rounds),
                       handballBotTexts (pure texts + keyboards), handballBotImages (SVG),
                       handballTableImage (SVG renderer), handballSite (HTML),
                       handballSiteAssets (CSS, service worker, page script), handballSitePush,
+                      settingsRegistry/settingsStore/settingsPage (settings page),
                       telegramClient, webPush, safeFetch, alerts, …
   __tests__/          vitest
 drizzle/              SQL migrations

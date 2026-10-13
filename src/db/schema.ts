@@ -17,6 +17,18 @@ export const settings = sqliteTable('settings', {
   updated_at: text('updated_at').notNull(),
 });
 
+/** Protokoll der Einstellungsseite (Migration 0004): Geheimnisse nie im Klartext. */
+export const settings_audit = sqliteTable('settings_audit', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  at: text('at').notNull(),
+  actor: text('actor').notNull(),
+  key: text('key').notNull(),
+  /** set · reset */
+  action: text('action').notNull(),
+  old_value: text('old_value'),
+  new_value: text('new_value'),
+});
+
 /**
  * Spiele der verfolgten Handball-Mannschaften (Migration 0092,
  * Wiki „Handball-Verfolgung (handball.net)“). Eine Zeile je Mannschaft und Spiel, geschrieben
