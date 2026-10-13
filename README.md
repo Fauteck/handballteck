@@ -162,7 +162,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `/settings`, `/settings/settings.js`, `/settings/api/*` | admin session | Settings page (login, state, save, sync, `.env` export). 404 without `ADMIN_PASSWORD`. |
+| `/settings`, `/settings/settings.js`, `/settings/vorschau`, `/settings/api/*` | admin session | Settings page (login, state, save, sync, `.env` export, redirect to the secret preview). 404 without `ADMIN_PASSWORD`. |
 | `GET /healthz` | none | Liveness, version, fetch state (`sync`: last success, failures, counters — no error text). |
 | `GET /`, `GET /uebersicht/`, `GET /:teamId/…` | none | Microsite (HTML, match pages `spiel/:matchId`, overview `uebersicht/`, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |

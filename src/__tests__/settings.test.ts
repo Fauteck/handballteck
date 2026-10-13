@@ -176,6 +176,22 @@ describe('Einstellungsseite', () => {
     expect(state.json().geheimnisse.map((g: { key: string }) => g.key)).toContain('TELEGRAM_BOT_TOKEN');
   });
 
+  it('leitet zur geheimen Vorschau weiter — nur angemeldet und nur mit Schlüssel', async () => {
+    expect((await fastify.inject({ method: 'GET', url: '/settings/vorschau' })).statusCode).toBe(401);
+    const { cookie, csrf } = await anmelden();
+    expect((await fastify.inject({ method: 'GET', url: '/settings/vorschau', headers: { cookie } })).statusCode).toBe(404);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } })).json().vorschau).toBe(false);
+    const token = 'v'.repeat(40);
+    await fastify.inject({ method: 'PUT', url: '/settings/api/values', headers: { cookie, 'x-csrf-token': csrf }, payload: { aenderungen: [{ key: 'SITE_PREVIEW_TOKEN', wert: token }] } });
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } })).json().vorschau).toBe(true);
+    const res = await fastify.inject({ method: 'GET', url: '/settings/vorschau', headers: { cookie } });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe(`https://handball.test.local/96254/?vorab=${token}`);
+    expect(res.headers['cache-control']).toBe('no-store');
+    const fremd = await fastify.inject({ method: 'GET', url: '/settings/vorschau?team=999', headers: { cookie } });
+    expect(String(fremd.headers.location)).toContain('/96254/');
+  });
+
   it('lehnt eine Anmeldung mit fremder Herkunft ab', async () => {
     const res = await fastify.inject({ method: 'POST', url: '/settings/api/login', headers: { origin: 'https://boese.example' }, payload: { user: 'chef', password: PW }, remoteAddress: '203.0.113.13' });
     expect(res.statusCode).toBe(403);

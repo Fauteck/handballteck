@@ -280,6 +280,7 @@ export const SETTINGS_JS = String.raw`(function () {
       el('div', null, el('h1', { text: 'Handballteck · Einstellungen' }),
         el('div', { class: 'hint', text: 'Angemeldet als ' + state.user + (state.eigenerAnschluss ? ' · eigener Anschluss' : '') })),
       el('div', { class: 'zeile' },
+        state.vorschau ? el('a', { class: 'btn', href: '/settings/vorschau', target: '_blank', rel: 'noopener noreferrer', text: 'Vorschau öffnen' }) : null,
         el('a', { class: 'btn', href: '/settings/api/export', download: 'handballteck.env', text: 'Als .env exportieren' }),
         el('button', { type: 'button', text: 'Abmelden', onclick: function () { api('POST', '/settings/api/logout').then(function () { csrf = ''; login(); }); } }))));
     app.appendChild(tabs);
