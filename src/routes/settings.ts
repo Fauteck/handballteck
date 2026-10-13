@@ -12,7 +12,7 @@
  */
 import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { adminUser, adminPassword, adminPort, publicUrl, botToken, apiToken, configOverride, teamIds } from '../config';
+import { adminUser, adminPassword, adminPort, publicUrl, siteUrl, sitePreviewToken, botToken, apiToken, configOverride, teamIds } from '../config';
 import { EINSTELLUNGEN, GRUPPEN, STATUS_GEHEIMNISSE, findeEinstellung } from '../lib/settingsRegistry';
 import { speichere, protokoll, alsEnvBlock, quelleVon, wirksamerText, syncJetzt, type Aenderung } from '../lib/settingsStore';
 import { settingsHtml, SETTINGS_JS } from '../lib/settingsPage';
@@ -144,6 +144,7 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       csrf: s.csrf,
       user: adminUser(),
       eigenerAnschluss: adminPort() !== null,
+      vorschau: sitePreviewToken() !== null && teamIds().length > 0,
       gruppen: GRUPPEN,
       felder: EINSTELLUNGEN.map(e => {
         const geheim = e.art === 'geheim';
@@ -205,6 +206,19 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
     const s = await geschuetzt(request, reply);
     if (!s) return reply;
     return reply.send({ ok: true, angestossen: syncJetzt() });
+  });
+
+  // Die geheime Vorschau: Der Schlüssel geht nie an den Browser der Seite, die
+  // Weiterleitung setzt ihn erst hier in die Adresse — nur für Angemeldete.
+  fastify.get<{ Querystring: { team?: string } }>('/settings/vorschau', limit(20), async (request, reply) => {
+    const s = await geschuetzt(request, reply);
+    if (!s) return reply;
+    const token = sitePreviewToken();
+    const ids = teamIds();
+    if (!token || ids.length === 0) return sendeNein(reply, 404, 'not_found', 'Keine Vorschau eingerichtet (Vorschau-Schlüssel und eine Mannschaft nötig).');
+    const team = typeof request.query.team === 'string' && ids.includes(request.query.team) ? request.query.team : ids[0];
+    const basis = siteUrl() ?? publicUrl();
+    return reply.header('Cache-Control', 'no-store').redirect(`${basis}/${team}/?vorab=${encodeURIComponent(token)}`);
   });
 
   fastify.get('/settings/api/export', limit(20), async (request, reply) => {
