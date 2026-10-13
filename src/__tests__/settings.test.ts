@@ -227,7 +227,13 @@ describe('Einstellungsseite', () => {
       expect((await oeffentlich.inject({ method: 'GET', url: '/settings' })).statusCode).not.toBe(200);
       const admin = await buildServer({ logger: false, adminOnly: true });
       await admin.ready();
-      expect((await admin.inject({ method: 'GET', url: '/settings' })).statusCode).toBe(200);
+      const seite = await admin.inject({ method: 'GET', url: '/settings' });
+      expect(seite.statusCode).toBe(200);
+      // Über http im LAN darf der Browser das Skript nicht auf https hochstufen (Seite bliebe bei „Lädt …“).
+      expect(String(seite.headers['content-security-policy'])).not.toContain('upgrade-insecure-requests');
+      expect(String(seite.headers['content-security-policy'])).toContain("script-src 'self'");
+      expect(seite.headers['strict-transport-security']).toBeUndefined();
+      expect(String((await oeffentlich.inject({ method: 'GET', url: '/healthz' })).headers['content-security-policy'])).toContain('upgrade-insecure-requests');
       expect((await admin.inject({ method: 'GET', url: '/96254/' })).statusCode).toBe(404);
       await oeffentlich.close(); await admin.close();
     } finally { delete process.env.ADMIN_PORT; }

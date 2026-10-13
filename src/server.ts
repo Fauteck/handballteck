@@ -66,9 +66,15 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   // Für den Rate-Limit-Audit der Tests: jede Route zeigen, die registriert wird.
   if (opts.onRoute) fastify.addHook('onRoute', opts.onRoute);
 
+  // Der eigene Anschluss der Einstellungsseite läuft im LAN meist über http. Helmet setzt
+  // `upgrade-insecure-requests` und HSTS von sich aus: Der Browser machte dann aus
+  // http://<NAS>:3411/settings/settings.js ein https-Ziel, das es dort nicht gibt, und die
+  // Seite bliebe bei „Lädt …“. Am öffentlichen Anschluss (https über den Proxy) bleibt beides.
   await fastify.register(helmet, {
+    strictTransportSecurity: opts.adminOnly ? false : undefined,
     contentSecurityPolicy: {
       directives: {
+        ...(opts.adminOnly ? { upgradeInsecureRequests: null } : {}),
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
