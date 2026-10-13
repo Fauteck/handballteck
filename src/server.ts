@@ -1,8 +1,11 @@
 /**
- * Der HTTP-Server — ohne Anmeldung, ohne Sitzungen, ohne Cookies. Drei
+ * Der HTTP-Server — für Besucher ohne Anmeldung, ohne Sitzungen, ohne Cookies. Drei
  * öffentliche Flächen (Microsite, Telegram-Webhook, Inline-Bilder) und eine
  * mit Token (`/api/*` für das Todoteck-Cockpit), dazu `/healthz` für den
  * Container-Healthcheck.
+ *
+ * Dazu kommt die Einstellungsseite `/settings` (Konto aus der Umgebung, siehe
+ * `routes/settings.ts`) — aus, solange `ADMIN_PASSWORD` fehlt.
  *
  * Die CSP ist die der Microsite: Skripte nur von hier (kein Inline-JS —
  * `app.js` ist eine eigene Route), Stile dürfen inline stehen, Bilder als
@@ -11,10 +14,12 @@
 import Fastify, { type FastifyInstance, type RouteOptions } from 'fastify';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { trustProxy, version } from './config';
+import { trustProxy, version, adminPort } from './config';
 import { siteRoutes } from './routes/site';
 import { telegramRoutes } from './routes/telegram';
 import { apiRoutes } from './routes/api';
+import { settingsRoutes } from './routes/settings';
+import { ladeEinstellungen } from './lib/settingsStore';
 import { setServiceLogger } from './lib/serviceLogger';
 import { getBackoffSnapshot } from './lib/pollerBackoff';
 import { getHandballNetStats } from './lib/handballNetClient';
@@ -38,7 +43,9 @@ export function logUrl(url: string): string {
  */
 export const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
 
-export async function buildServer(opts: { logger?: boolean | object; onRoute?: (route: RouteOptions) => void } = {}): Promise<FastifyInstance> {
+export async function buildServer(opts: { logger?: boolean | object; onRoute?: (route: RouteOptions) => void; adminOnly?: boolean } = {}): Promise<FastifyInstance> {
+  // Die auf der Einstellungsseite gespeicherten Werte gehen der Umgebung vor.
+  if (!opts.adminOnly) ladeEinstellungen();
   const fastify = Fastify({
     logger: opts.logger ?? {
       level: process.env.LOG_LEVEL || 'info',
@@ -95,6 +102,13 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
     });
   }
 
+  // Der eigene Anschluss der Einstellungsseite (ADMIN_PORT) bietet nur sie an.
+  if (opts.adminOnly) {
+    fastify.get('/', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (_request, reply) => reply.redirect('/settings'));
+    await fastify.register(settingsRoutes);
+    return fastify;
+  }
+
   // Der Healthcheck kommt alle 30 Sekunden; mit `warn` schreibt er keine
   // Zeile pro Abruf, ein Fehler landet trotzdem im Log.
   fastify.get('/healthz', { logLevel: 'warn', config: { rateLimit: false } }, async (_request, reply) => {
@@ -120,6 +134,8 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
 
   await fastify.register(apiRoutes);
   await fastify.register(telegramRoutes);
+  // Mit ADMIN_PORT hängt die Einstellungsseite nur am eigenen Anschluss.
+  if (adminPort() === null) await fastify.register(settingsRoutes);
   await fastify.register(siteRoutes);
   return fastify;
 }

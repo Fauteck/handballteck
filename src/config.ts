@@ -3,17 +3,36 @@
  * Aufruf frisch gelesen.
  *
  * In Todoteck stand dasselbe in der Dienste-Zeile „Handball (handball.net)"
- * und war dort ohne Neustart änderbar. Ein eigener Container hat keine
- * Einstellungsseite; seine Konfiguration ist die `.env` neben der Compose
- * (siehe `.env.example`). Gelesen wird je Aufruf statt einmal beim Start,
- * damit Tests die Umgebung umschalten können und der Code an keiner Stelle
- * einen veralteten Wert festhält.
+ * und war dort ohne Neustart änderbar. Hier ist die Grundlage die `.env`
+ * neben der Compose (siehe `.env.example`); eine Auswahl davon lässt sich
+ * zusätzlich auf der Einstellungsseite `/settings` ändern, und diese Werte
+ * gehen der Umgebung vor (`setConfigOverrides`). Gelesen wird je Aufruf
+ * statt einmal beim Start, damit Tests die Umgebung umschalten können und
+ * der Code an keiner Stelle einen veralteten Wert festhält.
  */
 
 import type { HandballPalette } from './lib/handballTableImage';
 
+/**
+ * Werte aus der Einstellungsseite (`/settings`), geladen beim Start und bei
+ * jedem Speichern ersetzt. Sie gehen der Umgebung vor; ein leerer Wert hier
+ * heißt „bewusst leer“ und verdeckt die Umgebung. Ohne Eintrag gilt die
+ * Umgebung — so verhalten sich Tests und ein Dienst ohne Einstellungsseite
+ * wie bisher.
+ */
+let overrides: ReadonlyMap<string, string> = new Map();
+
+export function setConfigOverrides(map: ReadonlyMap<string, string>): void {
+  overrides = map;
+}
+
+/** Nur für die Einstellungsseite: der Wert aus der Datenbank, falls einer gesetzt ist. */
+export function configOverride(name: string): string | undefined {
+  return overrides.get(name);
+}
+
 const env = (name: string): string | undefined => {
-  const v = process.env[name];
+  const v = overrides.has(name) ? overrides.get(name) : process.env[name];
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
 };
 
@@ -269,6 +288,27 @@ export function apiToken(): string | null {
  */
 export function importTodoteckDb(): string | null {
   return env('IMPORT_TODOTECK_DB') ?? null;
+}
+
+// --- Einstellungsseite ----------------------------------------------------------
+
+/** Das Konto der Einstellungsseite: Name (Standard `admin`) und Passwort, beides aus der Umgebung. */
+export function adminUser(): string {
+  return process.env.ADMIN_USER?.trim() || 'admin';
+}
+
+/** Mindestlänge des Passworts; ein kürzeres schaltet die Seite aus (sie ist öffentlich erreichbar). */
+export const ADMIN_PASSWORD_MIN = 12;
+
+export function adminPassword(): string | null {
+  const v = process.env.ADMIN_PASSWORD;
+  return typeof v === 'string' && v.length >= ADMIN_PASSWORD_MIN ? v : null;
+}
+
+/** Ein eigener Anschluss nur für `/settings` (Option B); null: die Seite hängt am öffentlichen Anschluss. */
+export function adminPort(): number | null {
+  const n = Number.parseInt(process.env.ADMIN_PORT?.trim() ?? '', 10);
+  return Number.isFinite(n) && n > 0 && n < 65536 ? n : null;
 }
 
 export function version(): { sha: string; builtAt: string } {

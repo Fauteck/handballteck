@@ -7,7 +7,8 @@
  */
 import { runMigrations } from './db/migrate';
 import { buildServer } from './server';
-import { port, teamIds, publicUrl, importTodoteckDb, apiToken } from './config';
+import { port, teamIds, publicUrl, importTodoteckDb, apiToken, adminPort, adminPassword, ADMIN_PASSWORD_MIN } from './config';
+import { beiAenderung, setzeSyncAktion } from './lib/settingsStore';
 import { importTodoteck } from './import/todoteck';
 import { syncHandballTeams, naechsterAbstandMs, handballOverview } from './lib/handballTeam';
 import { clubdeskHolen } from './lib/clubdesk';
@@ -74,7 +75,24 @@ async function main(): Promise<void> {
   // SEC-3-003: Der Token ist das einzige Schloss vor /api/* — ein kurzer lässt sich durchprobieren.
   const token = apiToken();
   if (token && token.length < 32) fastify.log.warn(`API_TOKEN hat nur ${token.length} Zeichen — mindestens 32 nehmen (openssl rand -hex 32).`);
+  // Einstellungsseite: ein Lauf auf Knopfdruck, und nach Änderungen an Mannschaften oder Quellen sofort.
+  setzeSyncAktion(einTakt);
+  beiAenderung(keys => {
+    if (keys.some(k => ['TEAM_IDS', 'CLUB_TEAM_IDS', 'CLUB_NAME', 'CLUBDESK_URL', 'CLUBDESK_TEAMS'].includes(k))) void einTakt();
+  });
+  if (!adminPassword()) {
+    if (process.env.ADMIN_PASSWORD) fastify.log.warn(`ADMIN_PASSWORD hat weniger als ${ADMIN_PASSWORD_MIN} Zeichen — die Einstellungsseite bleibt aus.`);
+  }
   await fastify.listen({ port: port(), host: '0.0.0.0' });
+  const adminAnschluss = adminPort();
+  let adminServer: Awaited<ReturnType<typeof buildServer>> | null = null;
+  if (adminAnschluss !== null && adminPassword()) {
+    adminServer = await buildServer({ adminOnly: true });
+    await adminServer.listen({ port: adminAnschluss, host: '0.0.0.0' });
+    fastify.log.info(`Einstellungsseite auf Anschluss ${adminAnschluss} (nicht öffentlich)`);
+  } else if (adminPassword()) {
+    fastify.log.info('Einstellungsseite unter /settings');
+  }
   fastify.log.info(`Handballteck läuft — ${teamIds().length} Mannschaft(en), erreichbar unter ${publicUrl()}`);
 
   void registerHandballBotAtBoot()
@@ -98,6 +116,7 @@ async function main(): Promise<void> {
     if (taktTimer) clearTimeout(taktTimer);
     clearTimeout(start);
     await fastify.close();
+    if (adminServer) await adminServer.close();
     process.exit(0);
   };
   process.on('SIGTERM', () => { void stop('SIGTERM'); });

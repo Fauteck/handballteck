@@ -26,8 +26,16 @@ In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; ther
 
 - **German user-facing text uses Umlauts** (ä, ö, ü, ß) — bot messages, the page,
   log lines, comments, commit messages. Identifiers stay ASCII.
-- **Configuration is environment only.** No settings UI, no per-user state. A new
-  variable goes into `.env.example` with its default in the same change.
+- **Configuration is the environment plus the settings page `/settings`** (decided
+  2026-10-13; it replaces „environment only, no settings UI“). Precedence: page >
+  environment > default. Still no per-user state; the page has exactly one admin account,
+  taken from the environment (`ADMIN_USER`, `ADMIN_PASSWORD`, optional `ADMIN_PORT`).
+  A new variable goes into `.env.example` with its default in the same change; if it
+  can be edited on the page it also goes into `src/lib/settingsRegistry.ts` (the guard
+  test `settings.test.ts` keeps registry, `.env.example` and README together). Secrets
+  (`TELEGRAM_BOT_TOKEN`, `API_TOKEN`, `VAPID_*`) and what is needed before the database
+  opens (`PORT`, `DATA_DIR`, `DATABASE_PATH`, `TRUST_PROXY`, `PUBLIC_URL`, …) stay
+  environment only.
 - **No secrets in the repo.** Tokens come from `.env`, which is never committed.
 - **Schema changes only via a new file in `drizzle/`** (`NNNN_name.sql`, idempotent:
   `CREATE TABLE IF NOT EXISTS`, guarded `ALTER`). The runner applies each file once.
@@ -40,7 +48,9 @@ In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; ther
   on a server, never by hand in Portainer.
 - **OWASP applies**: the microsite, the webhook and the inline images are public.
   Every public route keeps its rate limit and its reason to be open; no inline
-  JavaScript (CSP).
+  JavaScript (CSP). `/settings` is the one place with a login and a cookie: it stays
+  off without `ADMIN_PASSWORD`, writes only with CSRF token and Origin check, never sends
+  secrets back to the browser and never logs values.
 
 ## Verification
 
