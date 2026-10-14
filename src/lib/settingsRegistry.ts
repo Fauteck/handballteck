@@ -30,6 +30,8 @@ export interface Einstellung {
   wirkung: Wirkung;
   /** Mehrzeilig bearbeiten (Listen). */
   lang?: boolean;
+  /** Je Eintrag eine Zeile mit eigenen Feldern statt einer Textliste: Team-ID und Anzeigename. Gespeichert wird weiter `id=Name,id`. */
+  zeilen?: 'mannschaften';
   /** Anzeigeeinheit bei Zahlen: der gespeicherte Wert ist in Millisekunden, die Seite zeigt Minuten/Sekunden. */
   faktor?: number;
   einheit?: string;
@@ -120,8 +122,8 @@ const mailadresse = leerOk(t => (t.length <= 120 && /^[^\s@<>"]+@[^\s@<>"]+\.[^\
 
 export const EINSTELLUNGEN: readonly Einstellung[] = [
   {
-    key: 'TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften', lang: true, standard: '', wirkung: 'abruf',
-    hinweis: 'Team-IDs aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), durch Komma oder Zeilenumbruch; die Reihenfolge ist die der Mannschaftswahl. Ein eigener Name steht hinter =, z. B. 96254=B-Jugend. Entfernte Mannschaften behalten ihre gespeicherten Spiele.',
+    key: 'TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften', lang: true, zeilen: 'mannschaften', standard: '', wirkung: 'abruf',
+    hinweis: 'Je Mannschaft eine Zeile: die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254) und, wenn die Bezeichnung von handball.net nicht übernommen werden soll, der Name, unter dem die Mannschaft erscheint (z. B. B-Jugend). Die Reihenfolge ist die der Mannschaftswahl. Entfernte Mannschaften behalten ihre gespeicherten Spiele.',
     pruefe: teams,
   },
   {

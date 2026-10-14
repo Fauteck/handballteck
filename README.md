@@ -149,6 +149,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `SITE_ENABLED` | `true` | Serve the microsite. |
 | `SITE_PLAYERS` | `false` | Show player names (youth teams!). |
 | `SITE_URL` | – | Root under which a proxy serves the pages. |
+| `SITE_FRAME_ANCESTORS` | – (none) | https origins allowed to embed the microsite in an iframe (the club website). Append `?kompakt=1` to the embedded URL: the page then drops logo and club name from its header, since the club site shows them already. |
 | `SITE_OPERATOR` / `SITE_FEEDBACK_MAIL` | – | Footer of the microsite. |
 | `SITE_PREVIEW_TOKEN` | – (off) | Secret (≥ 32 chars) for `/<team>/?vorab=<token>`: the page then also shows what is not public yet (ClubDesk photos). Responses are `private, no-store`; the token is masked in logs. |
 | `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_1`). Daily fetch of the group photo (youth only with `SITE_PLAYERS`) and, for senior teams, the squad portraits; stored downscaled as JPEG. Shown only in the preview. |

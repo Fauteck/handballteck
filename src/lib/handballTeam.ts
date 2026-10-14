@@ -1295,14 +1295,15 @@ export interface HandballStandingsView {
   history_rows: HandballStandingRow[];
 }
 
-export type HandballGroup = 'herren' | 'frauen' | 'jungen' | 'maedchen';
+export type HandballGroup = 'herren' | 'frauen' | 'jungen' | 'maedchen' | 'kinder';
 
 /** Die Reihenfolge und Namen der oberen Ebene der Mannschaftswahl. */
 export const HANDBALL_GROUPS: ReadonlyArray<{ id: HandballGroup; label: string }> = [
   { id: 'herren', label: 'Herren' },
-  { id: 'frauen', label: 'Frauen' },
-  { id: 'jungen', label: 'Jungen' },
-  { id: 'maedchen', label: 'Mädchen' },
+  { id: 'frauen', label: 'Damen' },
+  { id: 'jungen', label: 'Jugend männlich' },
+  { id: 'maedchen', label: 'Jugend weiblich' },
+  { id: 'kinder', label: 'Kinder' },
 ];
 
 export interface HandballTeamView {
@@ -1434,8 +1435,21 @@ export function automatischesLabel(name: string, rows: Array<{ competition_name:
 }
 
 /**
- * Zu welcher Gruppe der Mannschaftswahl die Mannschaft gehört: Herren, Frauen,
- * Jungen (mA–mE) oder Mädchen (wA–wE). Maßgeblich ist wie beim Label der
+ * Kinder sind E- und F-Jugend, Minis und ausdrücklich so benannte Mannschaften
+ * (auch gemischte) — sie bilden eine eigene Gruppe neben der männlichen und
+ * der weiblichen Jugend (A–D).
+ */
+const KINDER: readonly RegExp[] = [
+  /\b[mwg]?J?-?[EF]-?Jugend\b/i,
+  /\b[mwg]J-?[EF]\b/,
+  /\b[mwg][EF]\b/,
+  /\bMinis?\b/i,
+  /\bKinder\b/i,
+];
+
+/**
+ * Zu welcher Gruppe der Mannschaftswahl die Mannschaft gehört: Herren, Damen,
+ * männliche Jugend (mA–mD), weibliche Jugend (wA–wD) oder Kinder (E, F, Minis). Maßgeblich ist wie beim Label der
  * Wettbewerb mit den meisten Spielen; fehlt dort das Geschlecht, helfen der
  * Mannschaftsname und zuletzt das Label (auch ein Name aus `TEAM_IDS`:
  * „mB-Jugend", „2. Damen"). null, wenn nichts davon eindeutig ist.
@@ -1446,6 +1460,7 @@ export function gruppeVon(name: string, rows: Array<{ competition_name: string; 
   const wettbewerb = [...zaehler.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
   const quellen = [wettbewerb, name, label ?? ''];
   for (const text of quellen) {
+    if (KINDER.some(re => re.test(text))) return 'kinder';
     if (/\bmännlich(e|en)?\b/i.test(text) || /\bm(J|-?Jugend)?-?[A-E]\b/.test(text) || /\bJungen\b/i.test(text)) return 'jungen';
     if (/\bweiblich(e|en)?\b/i.test(text) || /\bw(J|-?Jugend)?-?[A-E]\b/.test(text) || /\bMädchen\b/i.test(text)) return 'maedchen';
     if (/\b(Männer|Herren)\b/i.test(text)) return 'herren';

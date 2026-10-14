@@ -69,9 +69,11 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-55deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px);pointer-events:none}
 .hero::after{content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;border:38px solid rgba(255,255,255,.05);pointer-events:none}
 .hero .wrap{position:relative;padding-top:28px;padding-bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 20px;align-items:center}
-.hero img.logo{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
+.hero img.logo{width:96px;height:96px;padding:10px;border-radius:50%;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
 .hero .initialen{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-size:2.4rem;font-weight:700;color:var(--a)}
-.hero h1{font-size:clamp(2rem,6vw,3.4rem);font-weight:700;line-height:1;text-transform:uppercase}
+.hero .kicker{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
+.hero h1{font-size:clamp(1.8rem,5.5vw,3.2rem);font-weight:700;line-height:1.05;text-transform:uppercase;overflow-wrap:anywhere}
+.hero h1 .nb{white-space:nowrap}
 .hero .sub{margin-top:6px;color:rgba(255,255,255,.82);font-size:1rem}
 .teamwahl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .teamwahl a{padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
@@ -90,7 +92,7 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .form i.w{background:var(--win)}.form i.l{background:var(--loss)}
 main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,1fr)}
 .col{display:contents}
-.s-next{order:1}.s-push{order:2}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-fotos{order:7}.s-team{order:8}
+.s-next{order:1}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-fotos{order:7}.s-team{order:8}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,38,44,.04);min-width:0}
 .card.dark{background:linear-gradient(135deg,var(--g),var(--p) 60%,var(--s));color:#fff;border-color:transparent}
 .card.dark h2{color:var(--a)}
@@ -137,14 +139,6 @@ td.pkt{font-weight:700}
 .plan .g a.titel{display:inline-block;padding:4px 0;color:inherit;text-decoration:none}
 .plan .g a.spielseite{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
 .plan .g .ha{color:var(--muted);font-size:.85rem}
-.plan.heim li{grid-template-columns:76px 1fr auto}
-.halle{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;margin:12px 0 2px;padding:8px 12px;border-left:4px solid var(--a);border-radius:0 8px 8px 0;background:color-mix(in srgb,var(--a) 10%,var(--card))}
-.halle a{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
-.mannschaften{list-style:none;margin:0;padding:0;display:grid;gap:0}
-.mannschaften li{padding:12px 0;border-bottom:1px solid var(--line);font-size:.95rem}
-.mannschaften li:last-child{border-bottom:0}
-.mannschaften a.titel{display:inline-block;padding:4px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.2rem;text-transform:uppercase;color:var(--hd);text-decoration:none}
-.mannschaften .erg{font-weight:700}.mannschaften .erg.w{color:var(--wint)}.mannschaften .erg.l{color:var(--losst)}
 .plan .e{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.35rem;padding:2px 10px;border-radius:8px;background:var(--bg);color:var(--text)}
 .plan .e.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
 .plan .e.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
@@ -161,24 +155,70 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .opts input{accent-color:var(--a)}
 .opts label:has(input:checked){background:rgba(255,255,255,.14);border-color:var(--a)}
 .status{margin:6px 0 10px;font-weight:500}
-.lead{margin:0 0 12px;color:rgba(255,255,255,.8)}
-.channels{display:grid;gap:10px}
-.channel{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff}
-.channel[open]{border-color:rgba(255,255,255,.24)}
-.channel summary{min-height:44px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
-.channel summary::-webkit-details-marker{display:none}
-.channel summary::after{content:"▾";font-size:1.1rem;color:var(--a);transition:transform .15s}
-.channel[open] summary::after{transform:rotate(180deg)}
-.channel .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--a);color:var(--g)}
-.channel .ico svg{width:22px;height:22px;fill:currentColor}
-.channel .ico.tg{background:#29a9eb;color:#fff}
-.channel .ico.rss{background:#f28a1a;color:#fff}
-.channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.channel .body{margin-top:10px}
-.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
-.channel a.open,.channel button.open{display:inline-flex;align-items:center;min-height:44px;margin:4px 14px 0 0;padding:0;border:0;background:none;font:inherit;cursor:pointer;color:var(--a);font-weight:600;text-decoration:none}
-.channel a.open:hover,.channel button.open:hover{text-decoration:underline}
-.chip{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--a);color:var(--g);font-size:.7rem;letter-spacing:.06em;vertical-align:2px}
+.verpassen{grid-column:1/-1;justify-self:end;display:grid;gap:4px;justify-items:end;margin-right:52px}
+.verpassen .titel{font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+.verpassen .icons{display:flex;gap:8px}
+.vicon{position:relative;display:grid;place-items:center;width:44px;height:44px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;text-decoration:none}
+.vicon:hover{background:rgba(255,255,255,.24)}
+.vicon svg{width:22px;height:22px;fill:currentColor}
+.vicon.tg{background:#29a9eb;border-color:#29a9eb}
+.vicon.rss{background:#f28a1a;border-color:#f28a1a}
+.vicon .punkt{position:absolute;top:6px;right:6px;width:10px;height:10px;border-radius:50%;background:var(--a);border:2px solid var(--g)}
+dialog.popup{width:min(92vw,520px);max-height:90vh;overflow:auto;padding:20px;border:1px solid rgba(255,255,255,.24);border-radius:16px;background:var(--g);color:#fff}
+dialog.popup::backdrop{background:rgba(0,0,0,.55)}
+dialog.popup h2{color:#fff}
+dialog.popup fieldset{border:0;margin:0 0 10px;padding:0}
+dialog.popup legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.85rem;color:var(--a);padding:0}
+.teilen{gap:8px}.teilen svg{width:18px;height:18px;fill:currentColor}
+.teilen.klein{min-height:44px;padding:6px 12px;font-size:.9rem;margin-left:auto;text-transform:none;font-family:'Barlow',sans-serif}
+.card:not(.dark) .btn.teilen{color:var(--p)}
+dialog.popup .teilziele{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
+dialog.popup .teilziele .btn{justify-content:center}
+dialog.popup .schliessen{margin:14px 0 0}
+.lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
+.kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin-top:4px}
+.kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
+.kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
+.kasten summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:84px;padding:14px 16px;cursor:pointer;list-style:none}
+.kasten summary::-webkit-details-marker{display:none}
+.kasten summary::after{content:"▾";font-size:1.2rem;color:var(--a);transition:transform .15s}
+.kasten[open] summary::after{transform:rotate(180deg)}
+.kasten .kopf{display:grid;gap:2px}
+.kasten .kopf b{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;text-transform:uppercase;line-height:1.05}
+.kasten .kopf small{color:rgba(255,255,255,.75);font-size:.85rem}
+.kasten.leer{opacity:.55;padding:14px 16px;min-height:84px;display:flex;align-items:center}
+.kasten .liste{list-style:none;margin:0;padding:0 8px 10px;display:grid;gap:2px}
+.kasten .liste a{display:flex;align-items:center;min-height:44px;padding:0 10px;border-radius:10px;color:#fff;text-decoration:none;font-weight:600}
+.kasten .liste a:hover{background:rgba(255,255,255,.16)}
+main.wrap.breit{grid-template-columns:minmax(0,1fr)}
+.sortieren{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 10px}
+.sortieren button{font:inherit;font-size:.95rem;min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.sortieren button[aria-pressed=true]{background:var(--p);border-color:var(--p);color:#fff}
+.tabelle-rahmen{overflow-x:auto}
+table.heim th,table.heim td{text-align:left;white-space:normal;vertical-align:top;padding:10px 8px}
+table.heim small{display:block;color:var(--muted);font-size:.8rem;font-weight:500}
+table.heim td.wann{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;white-space:nowrap}
+table.heim td.team a{font-weight:700;text-decoration:none}
+table.heim td.ort b{display:block}
+table.stand tr.bereich th{text-align:left;padding-top:14px;font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--hd);border-bottom:2px solid var(--line)}
+table.stand td b{font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;color:var(--hd)}
+table.heim td.ort a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
+table.heim tr.neu td{border-top:3px solid var(--line)}
+.erg{font-weight:700}.erg.w{color:var(--wint)}.erg.l{color:var(--losst)}
+.mannschaften{list-style:none;margin:0;padding:0;display:grid}
+.mannschaften li{padding:12px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.mannschaften li:last-child{border-bottom:0}
+.mannschaften a.titel{display:inline-block;padding:4px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.2rem;text-transform:uppercase;color:var(--hd);text-decoration:none}
+@media (max-width:640px){
+table.heim:not(.stand) thead{position:absolute;left:-9999px}
+table.heim:not(.stand),table.heim:not(.stand) tbody{display:block}
+table.heim:not(.stand) tr{display:grid;grid-template-columns:1fr;gap:2px;padding:12px 0;border-bottom:1px solid var(--line)}
+table.heim:not(.stand) td{display:block;padding:2px 0;border:0}
+table.heim:not(.stand) td::before{content:attr(data-label);display:block;font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+table.heim tr.neu{border-top:3px solid var(--line)}
+table.stand th,table.stand td{padding:8px 4px;font-size:.9rem}
+table.heim tr.neu td{border-top:0}
+}
 .skip{position:absolute;left:-999px;top:8px;z-index:10;padding:8px 14px;border-radius:8px;background:#fff;color:#10262c}
 .skip:focus{left:8px}
 .offline{padding:8px 16px;text-align:center;background:#7a4b00;color:#fff;font-size:.9rem}
@@ -192,6 +232,10 @@ h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
 .hero .theme{position:absolute;top:12px;right:16px;z-index:2;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-size:1.2rem;line-height:1;cursor:pointer}
 .hero .theme:hover{background:rgba(255,255,255,.22)}
+html.kompakt .hero img.logo,html.kompakt .hero .initialen,html.kompakt .hero .kicker,html.kompakt .hero .theme,html.kompakt footer .betreiber{display:none}
+html.kompakt .hero .wrap{grid-template-columns:minmax(0,1fr);padding-top:16px;padding-bottom:16px}
+html.kompakt .hero h1{font-size:clamp(1.5rem,4.5vw,2.4rem)}
+html.kompakt .verpassen{margin-right:0}
 .vorschau-band{padding:8px 16px;text-align:center;background:#7a2a8a;color:#fff;font-size:.9rem;font-weight:600}
 .portraets{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
 .portraets li{display:grid;gap:2px;font-size:.9rem;line-height:1.25}
@@ -240,7 +284,7 @@ footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid
 footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none !important;transition:none !important}}
 @media (pointer:coarse){.teamwahl a,.teamwahl:not(.gruppen) a{display:inline-flex;align-items:center;min-height:44px;padding-top:0;padding-bottom:0}}
-@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px}.plan li{grid-template-columns:78px 1fr auto}}
+@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
 @media (min-width:960px){
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
@@ -261,6 +305,7 @@ ${dunkel()}
  * erst hell aufblitzt und dann dunkel wird.
  */
 export const SITE_THEME_JS = `try { var t = localStorage.getItem('handball-site-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+if (/[?&]kompakt=1(&|$)/.test(location.search)) document.documentElement.className += ' kompakt';
 `;
 
 /**
@@ -345,6 +390,16 @@ export const SITE_APP_JS = `(function () {
   // Nur die Mannschaftsseite trägt ein Manifest; Spiel- und Übersichtsseite liegen eine Ebene tiefer und haben keinen eigenen Worker.
   if ('serviceWorker' in navigator && document.querySelector('link[rel=manifest]')) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
 
+  // Eingebettet in die Vereinsseite (?kompakt=1): der Kompaktmodus wandert mit jedem Verweis innerhalb der Seite.
+  if (/[?&]kompakt=1(&|$)/.test(location.search)) {
+    Array.prototype.forEach.call(document.querySelectorAll('a[href]'), function (a) {
+      var href = a.getAttribute('href') || '';
+      if (/^(https?:|mailto:|webcal:|#)/.test(href) || /kompakt=1/.test(href) || a.hasAttribute('download')) return;
+      var teile = href.split('#');
+      a.setAttribute('href', teile[0] + (teile[0].indexOf('?') >= 0 ? '&' : '?') + 'kompakt=1' + (teile[1] ? '#' + teile[1] : ''));
+    });
+  }
+
   // Farbschema: automatisch (Gerät) → hell → dunkel → automatisch.
   var THEME_KEY = 'handball-site-theme';
   var themeKnopf = document.querySelector('[data-theme-toggle]');
@@ -370,19 +425,158 @@ export const SITE_APP_JS = `(function () {
     });
   }
 
-  // Kanäle: die Kacheln starten immer eingeklappt, nichts wird gemerkt.
+  // Kurzer Hinweis am unteren Rand (Feed-Adresse kopiert u. Ä.).
+  var kurzTimer = null;
+  function kurz(text) {
+    var t = document.querySelector('.toast.kurz');
+    if (!t) {
+      t = document.createElement('div');
+      t.className = 'toast kurz';
+      t.setAttribute('role', 'status');
+      t.setAttribute('aria-live', 'polite');
+      document.body.appendChild(t);
+    }
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(kurzTimer);
+    kurzTimer = setTimeout(function () { t.hidden = true; }, 3500);
+  }
+
   // Feed-Adresse kopieren (ein Feed lässt sich im Browser nur als rohes XML öffnen).
   Array.prototype.forEach.call(document.querySelectorAll('button[data-copy]'), function (knopf) {
-    var text = knopf.textContent;
     knopf.addEventListener('click', function () {
       var adresse = knopf.getAttribute('data-copy') || '';
-      var fertig = function (ok) {
-        knopf.textContent = ok ? 'Kopiert ✓' : 'Adresse: ' + adresse;
-        setTimeout(function () { knopf.textContent = text; }, 2500);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(adresse).then(function () { fertig(true); }, function () { fertig(false); });
-      else fertig(false);
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(adresse).then(function () { kurz('Feed-Adresse kopiert'); }, function () { kurz('Adresse: ' + adresse); });
+      else kurz('Adresse: ' + adresse);
     });
+  });
+
+  // Heimspiele der Startseite sortieren: Datum, Spielort oder Herren · Damen · Jugend.
+  // Ohne Skript bleibt die Tabelle nach Datum stehen; die Chips erscheinen erst mit Skript.
+  var sortWahl = {};
+  function sortierungEinrichten() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sorttable]'), function (sortTabelle) {
+    var abschnitt = sortTabelle.closest('section');
+    var sortLeiste = abschnitt ? abschnitt.querySelector('[data-sortbar]') : null;
+    var sortKey = {
+      datum: function (z) { return z.getAttribute('data-ts') || ''; },
+      ort: function (z) { return z.getAttribute('data-ort') || '\uffff'; },
+      gruppe: function (z) { return z.getAttribute('data-gr') || '9'; }
+    };
+    var sortieren = function (art) {
+      var koerper = sortTabelle.tBodies[0];
+      var zeilen = Array.prototype.slice.call(koerper.rows);
+      zeilen.sort(function (a, b) {
+        var ka = sortKey[art](a), kb = sortKey[art](b);
+        if (ka !== kb) return ka < kb ? -1 : 1;
+        var ta = a.getAttribute('data-ts') || '', tb = b.getAttribute('data-ts') || '';
+        return ta < tb ? -1 : ta > tb ? 1 : 0;
+      });
+      var davor = null;
+      zeilen.forEach(function (z) {
+        var k = art === 'datum' ? (z.getAttribute('data-ts') || '').slice(0, 10) : sortKey[art](z);
+        z.classList.toggle('neu', art !== 'datum' && davor !== null && k !== davor);
+        davor = k;
+        koerper.appendChild(z);
+      });
+      Array.prototype.forEach.call(sortLeiste.querySelectorAll('[data-sort]'), function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-sort') === art ? 'true' : 'false');
+      });
+    };
+    if (sortLeiste) {
+      sortLeiste.hidden = false;
+      sortLeiste.addEventListener('click', function (ev) {
+        var b = ev.target && ev.target.closest ? ev.target.closest('[data-sort]') : null;
+        if (b) { sortWahl[abschnitt.id] = b.getAttribute('data-sort'); sortieren(sortWahl[abschnitt.id]); }
+      });
+      if (sortWahl[abschnitt.id] && sortWahl[abschnitt.id] !== 'datum') sortieren(sortWahl[abschnitt.id]);
+    }
+  });
+  }
+  sortierungEinrichten();
+
+  // Teilen: auf dem Telefon das Menü des Geräts (mit dem Bild als Datei, wo es das kann),
+  // sonst ein Fenster mit den Zielen und Link kopieren / Bild kopieren / Bild speichern.
+  // Das Bild wird vorab geladen: Safari verlangt, dass share() sofort auf den Tipp folgt.
+  var bilder = {};
+  function bildLaden(rel) {
+    var href = new URL(rel, location.href).href;
+    if (!bilder[href]) bilder[href] = fetch(href, { credentials: 'omit' }).then(function (r) { return r.ok ? r.blob() : null; }).catch(function () { return null; });
+    return bilder[href];
+  }
+  var teilKnoepfe = document.querySelectorAll('[data-teilen]');
+  var bildBereit = {};
+  Array.prototype.forEach.call(teilKnoepfe, function (k) {
+    k.hidden = false;
+    var rel = k.getAttribute('data-bild');
+    if (rel) bildLaden(rel).then(function (b) { bildBereit[rel] = b; });
+  });
+  var teilDialog = null;
+  function teilFenster(k) {
+    var url = k.getAttribute('data-url') || location.href;
+    var titel = k.getAttribute('data-titel') || document.title;
+    var text = k.getAttribute('data-text') || titel;
+    var rel = k.getAttribute('data-bild');
+    var bildHref = rel ? new URL(rel, location.href).href : null;
+    if (!teilDialog) {
+      teilDialog = document.createElement('dialog');
+      teilDialog.className = 'popup';
+      teilDialog.addEventListener('click', function (ev) { if (ev.target === teilDialog) teilDialog.close(); });
+      document.body.appendChild(teilDialog);
+    }
+    teilDialog.textContent = '';
+    var h2 = document.createElement('h2'); h2.textContent = 'Teilen'; teilDialog.appendChild(h2);
+    var p = document.createElement('p'); p.className = 'lead'; p.textContent = text; teilDialog.appendChild(p);
+    var ziele = document.createElement('div'); ziele.className = 'teilziele';
+    var enc = encodeURIComponent;
+    [['WhatsApp', 'https://wa.me/?text=' + enc(text + ' ' + url)],
+     ['Telegram', 'https://t.me/share/url?url=' + enc(url) + '&text=' + enc(text)],
+     ['Facebook', 'https://www.facebook.com/sharer/sharer.php?u=' + enc(url)],
+     ['LinkedIn', 'https://www.linkedin.com/sharing/share-offsite/?url=' + enc(url)]].forEach(function (z) {
+      var a = document.createElement('a'); a.className = 'btn ghost'; a.textContent = z[0]; a.href = z[1];
+      a.target = '_blank'; a.rel = 'noopener noreferrer'; ziele.appendChild(a);
+    });
+    function knopf(beschriftung, tat) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn ghost'; b.textContent = beschriftung;
+      b.addEventListener('click', function () { tat(b, beschriftung); }); ziele.appendChild(b);
+    }
+    function rueckmeldung(b, alt, ok) { b.textContent = ok ? 'Kopiert ✓' : 'Nicht möglich'; setTimeout(function () { b.textContent = alt; }, 2500); }
+    knopf('Link kopieren', function (b, alt) {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(function () { rueckmeldung(b, alt, true); }, function () { rueckmeldung(b, alt, false); });
+      else rueckmeldung(b, alt, false);
+    });
+    if (bildHref && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      knopf('Bild kopieren', function (b, alt) {
+        var blob = bildLaden(rel).then(function (x) { if (!x) throw new Error('kein Bild'); return x.type === 'image/png' ? x : new Blob([x], { type: 'image/png' }); });
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () { rueckmeldung(b, alt, true); }, function () { rueckmeldung(b, alt, false); });
+      });
+    }
+    if (bildHref) {
+      var sp = document.createElement('a'); sp.className = 'btn ghost'; sp.textContent = 'Bild speichern'; sp.href = bildHref; sp.setAttribute('download', 'woelfe-im-revier.png'); ziele.appendChild(sp);
+    }
+    teilDialog.appendChild(ziele);
+    var hinweis = document.createElement('p'); hinweis.className = 'muted small';
+    hinweis.textContent = 'Signal und Instagram haben keinen Teilen-Link für Webseiten: Link kopieren oder Bild speichern und dort einfügen. Auf dem Telefon öffnet „Teilen" direkt das Menü des Geräts.';
+    teilDialog.appendChild(hinweis);
+    var zu = document.createElement('form'); zu.method = 'dialog'; zu.className = 'schliessen';
+    var zub = document.createElement('button'); zub.className = 'btn ghost'; zub.type = 'submit'; zub.textContent = 'Schließen'; zu.appendChild(zub); teilDialog.appendChild(zu);
+    if (typeof teilDialog.showModal === 'function') teilDialog.showModal(); else teilDialog.setAttribute('open', '');
+  }
+  document.addEventListener('click', function (ev) {
+    var k = ev.target && ev.target.closest ? ev.target.closest('[data-teilen]') : null;
+    if (!k) return;
+    var url = k.getAttribute('data-url') || location.href;
+    var titel = k.getAttribute('data-titel') || document.title;
+    var text = k.getAttribute('data-text') || titel;
+    var rel = k.getAttribute('data-bild');
+    if (!navigator.share) { teilFenster(k); return; }
+    var blob = rel ? bildBereit[rel] : null;
+    var datei = null;
+    try { datei = blob ? new File([blob], 'woelfe-im-revier.png', { type: 'image/png' }) : null; } catch (e) {}
+    var mitBild = datei && navigator.canShare && navigator.canShare({ files: [datei] });
+    // Mit Datei geht der Link in den Text: Viele Ziele verwerfen url, sobald eine Datei dabei ist.
+    var daten = mitBild ? { files: [datei], title: titel, text: text + ' ' + url } : { title: titel, text: text, url: url };
+    navigator.share(daten).catch(function (e) { if (!e || e.name !== 'AbortError') teilFenster(k); });
   });
 
   // Countdown: „In 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind;
@@ -467,11 +661,14 @@ export const SITE_APP_JS = `(function () {
           var doc = new DOMParser().parseFromString(html, 'text/html');
           torHinweis(standAus(document), standAus(doc));
           var tickerOffen = !!document.querySelector('#naechstes details.ticker[open]');
-          ['naechstes', 'letztes', 'tabelle'].forEach(function (id) {
+          // Mannschaftsseite: Spiel, Letztes, Tabelle; Startseite: Läuft gerade, Heim- und Auswärtsspiele, Stand.
+          ['naechstes', 'letztes', 'tabelle', 'live', 'heimspiele', 'auswaertsspiele', 'stand'].forEach(function (id) {
             var neu = doc.getElementById(id);
             var alt = document.getElementById(id);
             if (neu && alt) alt.replaceWith(neu);
+            else if (alt && !neu && id === 'live') alt.remove();
           });
+          if (document.querySelector('[data-sorttable]')) sortierungEinrichten();
           var ticker = document.querySelector('#naechstes details.ticker');
           if (ticker && tickerOffen) ticker.open = true;
           var kopfNeu = doc.querySelector('.hero .stats');
@@ -487,14 +684,23 @@ export const SITE_APP_JS = `(function () {
     }, 30000);
   }
 
+  // Das Benachrichtigungsfenster: Die Glocke im Kopf öffnet es, ein Klick daneben oder Esc schließt es.
   var root = document.getElementById('push');
   if (!root) return;
+  var glocke = document.querySelector('[data-dialog-open=push]');
+  if (glocke) {
+    glocke.hidden = false;
+    glocke.addEventListener('click', function () {
+      if (typeof root.showModal === 'function') root.showModal(); else root.setAttribute('open', '');
+    });
+  }
+  root.addEventListener('click', function (ev) { if (ev.target === root && typeof root.close === 'function') root.close(); });
   var status = root.querySelector('[data-status]');
   var form = root.querySelector('[data-form]');
   var btnOn = root.querySelector('[data-subscribe]');
   var btnOff = root.querySelector('[data-unsubscribe]');
   var iosHint = root.querySelector('[data-ios]');
-  var aktiv = root.querySelector('[data-aktiv]');
+  var aktiv = document.querySelector('[data-aktiv]');
   var say = function (text) { status.textContent = text; };
   var isIos = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;

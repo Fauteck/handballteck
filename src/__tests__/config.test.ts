@@ -3,10 +3,10 @@
  * keinem trauen — und nie `true`, das jedem Aufrufer jede Adresse glaubte.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { trustProxy, syncLiveIntervalMs, clubName, clubTeamIds } from '../config';
+import { trustProxy, syncLiveIntervalMs, clubName, clubTeamIds, siteFrameAncestors } from '../config';
 
 afterEach(() => {
-  for (const n of ['TRUST_PROXY', 'SYNC_LIVE_INTERVAL_MS', 'CLUB_NAME', 'CLUB_TEAM_IDS']) delete process.env[n];
+  for (const n of ['TRUST_PROXY', 'SYNC_LIVE_INTERVAL_MS', 'CLUB_NAME', 'CLUB_TEAM_IDS', 'SITE_FRAME_ANCESTORS']) delete process.env[n];
 });
 
 describe('TRUST_PROXY', () => {
@@ -45,5 +45,13 @@ describe('Live-Takt und Vereinsname', () => {
     process.env.CLUB_NAME = 'SG Test';
     expect([...clubTeamIds()]).toEqual(['111', '222']);
     expect(clubName()).toBe('SG Test');
+  });
+});
+
+describe('SITE_FRAME_ANCESTORS', () => {
+  it('nimmt nur https-Herkünfte, ohne Pfad, ohne Doppelte; leer heißt niemand', () => {
+    expect(siteFrameAncestors()).toEqual([]);
+    process.env.SITE_FRAME_ANCESTORS = 'https://woelfevoreifel.clubdesk.com/spielbetrieb, http://unsicher.example, kein-link, https://woelfevoreifel.clubdesk.com';
+    expect(siteFrameAncestors()).toEqual(['https://woelfevoreifel.clubdesk.com']);
   });
 });

@@ -48,6 +48,11 @@ td,th{text-align:left;padding:4px 8px;border-top:1px solid var(--line);vertical-
 .hidden{display:none}
 .vorschau{display:inline-flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);height:28px;vertical-align:middle}
 .vorschau span{width:36px;display:block}
+.mrow{display:grid;grid-template-columns:130px 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+.mrow.kopf{font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+.mrow .knoepfe{display:flex;gap:4px}
+.mrow .knoepfe button{padding:4px 10px;min-height:40px}
+@media (max-width:560px){.mrow{grid-template-columns:1fr 1fr}.mrow .knoepfe{grid-column:1/-1}.mrow.kopf .knoepfe{display:none}}
 </style>
 </head>
 <body>
@@ -137,6 +142,67 @@ export const SETTINGS_JS = String.raw`(function () {
     return anzeige;
   }
 
+  // Mannschaften: je Zeile Team-ID und Anzeigename; gespeichert wird weiter 'id=Name,id' (siehe TEAM_IDS).
+  var ungueltig = {};
+  function mannschaftenLesen(roh) {
+    var out = [];
+    String(roh || '').split(/[,;\n]+/).forEach(function (teil) {
+      var t = teil.trim();
+      if (!t) return;
+      var i = t.indexOf('=');
+      if (i >= 0) out.push({ id: t.slice(0, i).trim(), name: t.slice(i + 1).trim() });
+      else t.split(/\s+/).forEach(function (id) { out.push({ id: id, name: '' }); });
+    });
+    return out;
+  }
+  function mannschaftenText(liste) {
+    return liste.filter(function (m) { return m.id || m.name; }).map(function (m) { return m.name ? m.id + '=' + m.name : m.id; }).join(',');
+  }
+  function mannschaftenEditor(f, ziel, fehler, geaendertMelden) {
+    var liste = mannschaftenLesen(f.wert);
+    if (liste.length === 0) liste.push({ id: '', name: '' });
+    var behaelter = el('div');
+    function pruefen() {
+      var meldung = '';
+      var gesehen = {};
+      liste.forEach(function (m) {
+        if (!m.id && !m.name) return;
+        if (!/^\d{1,12}$/.test(m.id)) meldung = meldung || 'Die Team-ID besteht nur aus Ziffern, z. B. 96254.';
+        else if (gesehen[m.id]) meldung = meldung || 'Die Team-ID ' + m.id + ' steht zweimal da.';
+        gesehen[m.id] = true;
+        if (/[,;\n]/.test(m.name) || m.name.length > 40) meldung = meldung || 'Der Name darf höchstens 40 Zeichen haben, ohne Komma und Semikolon.';
+      });
+      if (meldung) ungueltig[f.key] = true; else delete ungueltig[f.key];
+      fehler.textContent = meldung;
+    }
+    function neuZeichnen() {
+      behaelter.textContent = '';
+      behaelter.appendChild(el('div', { class: 'mrow kopf' }, el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: Bezeichnung von handball.net)' }), el('span', { class: 'knoepfe' })));
+      liste.forEach(function (m, i) {
+        var idFeld = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', placeholder: '96254', 'aria-label': 'Team-ID, Mannschaft ' + (i + 1) });
+        var nameFeld = el('input', { type: 'text', autocomplete: 'off', placeholder: 'z. B. B-Jugend', 'aria-label': 'Name, Mannschaft ' + (i + 1) });
+        idFeld.value = m.id; nameFeld.value = m.name;
+        idFeld.addEventListener('input', function () { m.id = idFeld.value.trim(); aenderung(); });
+        nameFeld.addEventListener('input', function () { m.name = nameFeld.value.trim(); aenderung(); });
+        function schieben(d) {
+          var j = i + d;
+          if (j < 0 || j >= liste.length) return;
+          var x = liste[i]; liste[i] = liste[j]; liste[j] = x;
+          neuZeichnen(); aenderung();
+        }
+        behaelter.appendChild(el('div', { class: 'mrow' }, idFeld, nameFeld,
+          el('span', { class: 'knoepfe' },
+            el('button', { type: 'button', text: '↑', 'aria-label': 'Nach oben', onclick: function () { schieben(-1); } }),
+            el('button', { type: 'button', text: '↓', 'aria-label': 'Nach unten', onclick: function () { schieben(1); } }),
+            el('button', { type: 'button', text: '✕', 'aria-label': 'Mannschaft entfernen', onclick: function () { liste.splice(i, 1); if (liste.length === 0) liste.push({ id: '', name: '' }); neuZeichnen(); aenderung(); } }))));
+      });
+      behaelter.appendChild(el('p', null, el('button', { type: 'button', text: '+ Mannschaft hinzufügen', onclick: function () { liste.push({ id: '', name: '' }); neuZeichnen(); } })));
+    }
+    function aenderung() { pruefen(); ziel.value = mannschaftenText(liste); geaendertMelden(); }
+    neuZeichnen();
+    return behaelter;
+  }
+
   function feldZeile(f) {
     var id = 'f_' + f.key;
     var eingabe;
@@ -145,6 +211,10 @@ export const SETTINGS_JS = String.raw`(function () {
       eingabe = el('select', { id: id }, el('option', { value: 'true', text: 'an' }), el('option', { value: 'false', text: 'aus' }));
       eingabe.value = (f.wert || f.standard) === 'false' ? 'false' : 'true';
       start = eingabe.value;
+    } else if (f.zeilen === 'mannschaften') {
+      eingabe = el('input', { id: id, type: 'hidden' });
+      start = mannschaftenText(mannschaftenLesen(f.wert));
+      eingabe.value = start;
     } else if (f.lang) {
       eingabe = el('textarea', { id: id, spellcheck: 'false' });
       eingabe.value = start;
@@ -160,6 +230,9 @@ export const SETTINGS_JS = String.raw`(function () {
     var kopf = el('label', { for: id, text: f.label + (f.einheit ? ' (' + f.einheit + ')' : '') },
       el('span', { class: 'badge' + (f.quelle === 'seite' ? ' seite' : ''), text: f.quelle === 'seite' ? 'von dieser Seite' : f.quelle === 'umgebung' ? 'aus der Umgebung' : 'Standard' }));
     var zeile = el('div', { class: 'zeile' }, eingabe);
+    if (f.zeilen === 'mannschaften') {
+      zeile = el('div', null, eingabe, mannschaftenEditor(f, eingabe, fehler, function () { markiere(); }));
+    }
     if (f.art === 'farbe') {
       var pick = el('input', { type: 'color', 'aria-label': f.label + ' wählen' });
       var vorschau = function () { if (/^#[0-9a-fA-F]{6}$/.test(eingabe.value)) pick.value = eingabe.value; else pick.value = f.standard; };
@@ -210,10 +283,11 @@ export const SETTINGS_JS = String.raw`(function () {
       return { key: k, wert: g.f.art === 'schalter' ? g.wert : zuRohwert(g.f, g.wert) };
     });
     if (aenderungen.length === 0) return;
+    if (!liste && Object.keys(ungueltig).length > 0) { zeigeMeldung('Bitte die markierten Mannschaften korrigieren.', true); return; }
     var teuer = aenderungen.some(function (a) { return a.key === 'SITE_PLAYERS' && a.wert === 'true'; });
     if (teuer && !window.confirm('Spielernamen werden öffentlich gezeigt — bei Jugendmannschaften auch Namen von Kindern. Wirklich einschalten?')) return;
     api('PUT', '/settings/api/values', { aenderungen: aenderungen }).then(function (r) {
-      if (r.status === 200) { geaendert = {}; ladeNeu('Gespeichert.'); }
+      if (r.status === 200) { geaendert = {}; ungueltig = {}; ladeNeu('Gespeichert.'); }
       else if (r.status === 422) {
         document.querySelectorAll('.feld').forEach(function (b) {
           var m = r.body.fehler && r.body.fehler[b._key];

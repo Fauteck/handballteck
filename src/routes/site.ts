@@ -26,7 +26,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import fs from 'node:fs';
 import { z } from 'zod';
 import {
-  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderStartHtml, renderFeedXml, renderSiteIcs, renderManifest,
+  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
   siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg, portraits, istJugend } from '../lib/clubdesk';
@@ -124,6 +124,21 @@ export async function siteRoutes(fastify: FastifyInstance) {
       .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
       .header('X-Robots-Tag', 'noindex, nofollow')
       .send(html);
+  });
+
+  // Manifest und Service Worker der Startseite — die Wurzel ist der Scope, die Mannschaften liegen darin.
+  fastify.get('/manifest.webmanifest', limit(120), async (_request, reply) => {
+    const sicht = handballOverview();
+    const erste = sicht.configured ? sicht.teams[0] : undefined;
+    if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
+    return reply.header('Content-Type', 'application/manifest+json; charset=utf-8').header('Cache-Control', 'public, max-age=3600').send(JSON.stringify(renderStartManifest(erste)));
+  });
+
+  fastify.get('/sw.js', limit(120), async (_request, reply) => {
+    const sicht = handballOverview();
+    const erste = sicht.configured ? sicht.teams[0] : undefined;
+    if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
+    return reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'no-cache').send(SITE_SW_JS);
   });
 
   /**
