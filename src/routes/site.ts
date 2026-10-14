@@ -17,15 +17,16 @@
  *
  * Alle Verweise in der Seite sind relativ, deshalb liegt sie unter einer
  * Adresse mit Schrägstrich am Ende; die Route ohne leitet dorthin um. Die
- * Wurzel `/` führt zur ersten Mannschaft; die Schaltflächen im Kopf zu den
- * anderen (`../<Team-ID>/`).
+ * Wurzel `/` ist die Startseite mit allen Mannschaften und den Heimspielen
+ * des nächsten Wochenendes; die Schaltflächen im Kopf führen zu den
+ * Mannschaften (`../<Team-ID>/`).
  */
 
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import fs from 'node:fs';
 import { z } from 'zod';
 import {
-  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderFeedXml, renderSiteIcs, renderManifest,
+  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderStartHtml, renderFeedXml, renderSiteIcs, renderManifest,
   siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg, portraits, istJugend } from '../lib/clubdesk';
@@ -106,12 +107,23 @@ export async function siteRoutes(fastify: FastifyInstance) {
     return sicht.configured ? sicht.teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: `../${encodeURIComponent(t.team_id)}/` })) : [];
   }
 
-  // Die Wurzel: zur ersten Mannschaft, damit eine eigene Domain ohne Pfad ankommt.
-  fastify.get('/', limit(120), async (_request, reply) => {
+  /**
+   * Die Wurzel ist die Startseite: Überblick über alle Mannschaften und die
+   * Heimspiele des nächsten Wochenendes samt Halle. Dateien und Mannschaften
+   * liegen unter `./<Team-ID>/`, deshalb gilt auch hier die Adresse mit
+   * Schrägstrich (die Wurzel hat ihn immer).
+   */
+  fastify.get('/', limit(60), async (_request, reply) => {
     const sicht = handballOverview();
     const erste = sicht.configured ? sicht.teams[0] : undefined;
-    if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    return reply.redirect(`${encodeURIComponent(erste.team_id)}/`, 302);
+    if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
+    const html = renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/`, stand: sicht.updated_at });
+    const live = sicht.teams.some(t => t.next_match?.is_live === true);
+    return reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
+      .header('X-Robots-Tag', 'noindex, nofollow')
+      .send(html);
   });
 
   /**

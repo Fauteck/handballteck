@@ -137,6 +137,14 @@ td.pkt{font-weight:700}
 .plan .g a.titel{display:inline-block;padding:4px 0;color:inherit;text-decoration:none}
 .plan .g a.spielseite{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
 .plan .g .ha{color:var(--muted);font-size:.85rem}
+.plan.heim li{grid-template-columns:76px 1fr auto}
+.halle{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;margin:12px 0 2px;padding:8px 12px;border-left:4px solid var(--a);border-radius:0 8px 8px 0;background:color-mix(in srgb,var(--a) 10%,var(--card))}
+.halle a{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
+.mannschaften{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.mannschaften li{padding:12px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.mannschaften li:last-child{border-bottom:0}
+.mannschaften a.titel{display:inline-block;padding:4px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.2rem;text-transform:uppercase;color:var(--hd);text-decoration:none}
+.mannschaften .erg{font-weight:700}.mannschaften .erg.w{color:var(--wint)}.mannschaften .erg.l{color:var(--losst)}
 .plan .e{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.35rem;padding:2px 10px;border-radius:8px;background:var(--bg);color:var(--text)}
 .plan .e.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
 .plan .e.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}

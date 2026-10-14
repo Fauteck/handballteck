@@ -164,7 +164,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 |---|---|---|
 | `/settings`, `/settings/settings.js`, `/settings/vorschau`, `/settings/api/*` | admin session | Settings page (login, state, save, sync, `.env` export, redirect to the secret preview). 404 without `ADMIN_PASSWORD`. |
 | `GET /healthz` | none | Liveness, version, fetch state (`sync`: last success, failures, counters — no error text). |
-| `GET /`, `GET /uebersicht/`, `GET /:teamId/…` | none | Microsite (HTML, match pages `spiel/:matchId`, overview `uebersicht/`, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`). 404 while `SITE_ENABLED=false`. |
+| `GET /`, `GET /uebersicht/`, `GET /:teamId/…` | none | Microsite (start page `/` with home games of the coming weekend grouped by day and venue, HTML, match pages `spiel/:matchId`, overview `uebersicht/`, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |
 | `GET /inline/:art.jpg` | HMAC signature in URL | Images for the bot's inline mode. |
 | `GET /api/overview` | Bearer | Teams, matches, standings, bot and site summary — the shape Todoteck's cockpit consumes. Additive since the two-level switcher: `teams[].group` (`herren`/`frauen`/`jungen`/`maedchen`/`null`), `matches[].is_live` and `matches[].live`. |

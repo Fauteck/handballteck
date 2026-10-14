@@ -248,8 +248,11 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<a href="../96300/">C-Jugend</a>');
       expect((await get('/96300/')).statusCode).toBe(200);
       const wurzel = await get('/');
-      expect(wurzel.statusCode).toBe(302);
-      expect(wurzel.headers.location).toBe('96254/');
+      expect(wurzel.statusCode).toBe(200);
+      expect(wurzel.body).toContain('<h1>Alle Mannschaften</h1>');
+      expect(wurzel.body).toContain('id="heimspiele"');
+      expect(wurzel.body).toContain('href="./96254/site.css?v=');
+      expect(wurzel.body).toContain('<a href="./96300/">C-Jugend</a>');
     } finally {
       db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
     }
@@ -605,6 +608,45 @@ describe('Handball-Microsite', () => {
     } finally {
       db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
     }
+  });
+
+  it('bestimmt das Wochenende: Montag bis Freitag das kommende, Samstag und Sonntag das laufende', async () => {
+    const { naechstesWochenende } = await import('../lib/handballSite');
+    const erwartet = { sa: '2026-10-17', so: '2026-10-18' };
+    for (const tag of ['2026-10-12', '2026-10-14', '2026-10-16', '2026-10-17', '2026-10-18']) {
+      expect(naechstesWochenende(new Date(`${tag}T10:00:00+02:00`)), tag).toEqual(erwartet);
+    }
+    expect(naechstesWochenende(new Date('2026-10-19T00:30:00+02:00'))).toEqual({ sa: '2026-10-24', so: '2026-10-25' });
+  });
+
+  it('zeigt auf der Startseite die Heimspiele des Wochenendes nach Tag und Halle — Auswärtsspiele nicht', async () => {
+    const { renderStartHtml } = await import('../lib/handballSite');
+    const { handballOverview } = await import('../lib/handballTeam');
+    const sicht = handballOverview();
+    const t = sicht.teams[0];
+    const vorlage = t.matches[0];
+    const spiel = (id: string, start: string, heim: boolean, halle: string | null, adresse: string | null) => ({
+      ...vorlage, match_id: id, starts_at: start, status: 'scheduled', is_live: false, is_home: heim, score_home: null, score_away: null, won: null, rated: false,
+      home_name: heim ? 'HSG Wölfe' : 'Gegner A', away_name: heim ? 'Gegner A' : 'HSG Wölfe', venue_name: halle, venue_address: adresse, venue_lat: null, venue_lon: null,
+    });
+    const team = { ...t, label: 'B-Jugend', next_match: null, last_match: null, matches: [
+      spiel('a', '2026-10-17T10:00:00+02:00', true, 'Halle Süd', 'Hauptstr. 1, 53332 Bornheim'),
+      spiel('b', '2026-10-17T12:00:00+02:00', true, 'Halle Süd', 'Hauptstr. 1, 53332 Bornheim'),
+      spiel('c', '2026-10-18T11:00:00+02:00', true, 'Sporthalle Nord', null),
+      spiel('d', '2026-10-18T14:00:00+02:00', false, 'Fremde Halle', null),
+      spiel('e', '2026-10-24T14:00:00+02:00', true, 'Zu spät', null),
+    ] };
+    const html = renderStartHtml([team], { teams: [], baseUrl: 'https://x.test/', stand: null, now: new Date('2026-10-14T12:00:00+02:00') });
+    expect(html).toContain('nächstes Wochenende');
+    expect(html).toContain('<b>📍 Halle Süd</b>');
+    expect(html.match(/Halle Süd/g)?.length).toBe(1);
+    expect(html).toContain('Hauptstr. 1, 53332 Bornheim');
+    expect(html).toContain('https://www.google.com/maps/search/?api=1&amp;query=Hauptstr.');
+    expect(html).toContain('<b>📍 Sporthalle Nord</b>');
+    expect(html).not.toContain('Fremde Halle');
+    expect(html).not.toContain('Zu spät');
+    expect(html).toContain('Samstag, 17.10.2026');
+    expect(html).toContain('Sonntag, 18.10.2026');
   });
 
   it('zeigt im Live-Modus den ganzen Torverlauf — die letzten Tore offen, die früheren zum Aufklappen', async () => {
