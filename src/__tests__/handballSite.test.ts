@@ -847,6 +847,40 @@ describe('Handball-Microsite', () => {
       expect(html.indexOf('<h1>Wölfe im Revier</h1>')).toBeLessThan(html.indexOf('class="kaesten'));
     });
 
+    it('sagt im Dialog, dass Verein und Mannschaft gleichzeitig gehen, und zeigt die Live-Ansicht schon vorher an', async () => {
+      const team = (await get(`/${TEAM}/`)).body;
+      expect(team).toContain('data-team="96254"');
+      expect(team).toContain('Heim- und Auswärtsspiele dieser Mannschaft');
+      expect(team).toContain('beides geht gleichzeitig');
+      expect(team).toContain('data-andere hidden');
+      expect(team).not.toContain('nur eine Anmeldung je Gerät');
+      expect(team).toContain('<b>Live ab Anwurf:</b>');
+      expect(team).not.toContain('<body data-live');
+      const start = (await get('/')).body;
+      expect(start).toContain('data-scope="club"');
+      expect(start).toContain('alle Heimspiele aller Mannschaften');
+      expect(start).toContain('<section class="card live-leer" id="live">');
+      expect(start).toContain('<b>Nächster Anwurf:</b>');
+      expect(start).not.toContain('<body data-live');
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("var PREFIX = 'handball-site-push:'");
+    });
+
+    it('schaltet die Seiten 20 Minuten vor dem Anwurf selbst auf Live und hält sie kurz im Zwischenspeicher', async () => {
+      const id = `${TEAM}:m3`;
+      db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() }).where(eq(schema.handball_team_match.id, id)).run();
+      try {
+        const team = await get(`/${TEAM}/`);
+        expect(team.body).toContain('<body data-live="1">');
+        expect(team.headers['cache-control']).toContain('max-age=15');
+        const start = await get('/');
+        expect(start.body).toContain('<body data-live="1">');
+        expect(start.headers['cache-control']).toContain('max-age=15');
+      } finally {
+        db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString() }).where(eq(schema.handball_team_match.id, id)).run();
+      }
+    });
+
     it('rendert das Wochenende als Bild, nur bei freigegebener Seite', async () => {
       const res = await get('/bild/wochenende.png');
       expect(res.statusCode).toBe(200);

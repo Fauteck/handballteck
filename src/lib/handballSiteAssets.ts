@@ -262,6 +262,12 @@ table.heim tr.neu td{border-top:0}
 .kal .chip.aus{border:1px dashed var(--muted)}
 .kal .chip.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
 .kal .chip.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
+.livehinweis{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;font-size:.95rem;line-height:1.4}
+.livehinweis .punkt{flex:none;width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--loss);animation:puls 1.8s ease-in-out infinite}
+@keyframes puls{0%,100%{opacity:1}50%{opacity:.3}}
+.card.live-leer{border-style:dashed}
+.geltung{margin:0 0 8px;font-size:.88rem;line-height:1.4;color:rgba(255,255,255,.8)}
+.geltung a{color:var(--a)}
 .kenn{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .kenn>div{border:1px solid var(--line);border-radius:10px;padding:6px 12px;min-width:0}
 .kenn dt{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
@@ -872,11 +878,48 @@ export const SITE_APP_JS = `(function () {
   }
 
   var club = root.getAttribute('data-scope') === 'club';
-  var KEY = club ? 'handball-site-push-club' : 'handball-site-push';
+  var teamId = root.getAttribute('data-team') || '*';
+  var PREFIX = 'handball-site-push:';
+  var KEY = PREFIX + (club ? '*' : teamId);
   var leadBlock = form.querySelector('[data-lead]');
   var zusammen = form.querySelector('[data-zusammen]');
-  function gemerkt() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
-  function merken(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+  function gemerkt() {
+    try {
+      // Ältere Fassungen merkten eine Wahl für alle Mannschaften unter einem Schlüssel.
+      return JSON.parse(localStorage.getItem(KEY) || (club ? 'null' : localStorage.getItem('handball-site-push') || 'null'));
+    } catch (e) { return null; }
+  }
+  function merken(v) {
+    v.label = root.getAttribute('data-label') || '';
+    try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {}
+    andere();
+  }
+  function vergessen() { try { localStorage.removeItem(KEY); } catch (e) {} andere(); }
+  // Was dieses Gerät sonst noch abonniert hat (jede Seite hat ihren eigenen Worker, also eine eigene Anmeldung).
+  var andereZeile = root.querySelector('[data-andere]');
+  function andere() {
+    if (!andereZeile) return;
+    var rest = [], hatVerein = false;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(PREFIX) !== 0 || k === KEY) continue;
+        if (k === PREFIX + '*') { hatVerein = true; continue; }
+        var w = JSON.parse(localStorage.getItem(k) || 'null');
+        if (w && w.label) rest.push(w.label);
+      }
+    } catch (e) {}
+    var text = '';
+    if (club) {
+      if (rest.length) text = 'Auf diesem Gerät zusätzlich eingeschaltet: ' + rest.join(', ') + '.';
+    } else {
+      if (hatVerein) text = 'Auf diesem Gerät sind schon alle Heimspiele des Vereins eingeschaltet. Hier lohnt sich vor allem das, was sie nicht abdecken: die Auswärtsspiele dieser Mannschaft.';
+      if (rest.length) text += (text ? ' ' : '') + 'Außerdem eingeschaltet: ' + rest.join(', ') + '.';
+    }
+    andereZeile.textContent = text;
+    andereZeile.hidden = !text;
+  }
+  andere();
   function boxen() { return Array.prototype.slice.call(form.querySelectorAll('input[name=thema]')); }
   function wahl() {
     var lead = form.querySelector('input[name=lead]:checked');
@@ -982,7 +1025,7 @@ export const SITE_APP_JS = `(function () {
       return fetch('./push', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, credentials: 'omit', body: JSON.stringify({ endpoint: sub.endpoint }) })
         .catch(function () {})
         .then(function () { return sub.unsubscribe(); });
-    }).then(function () { zeige(null); say('Ausgeschaltet.'); }).catch(function () { say('Abmelden hat nicht geklappt.'); })
+    }).then(function () { vergessen(); zeige(null); say('Ausgeschaltet.'); }).catch(function () { say('Abmelden hat nicht geklappt.'); })
       .then(function () { btnOff.disabled = false; });
   });
 })();

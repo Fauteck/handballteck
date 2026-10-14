@@ -698,6 +698,7 @@ function naechstesSpielHtml(team: HandballTeamView, now: Date, baseUrl: string):
     ${halle ? `<span>📍 ${h(halle)}</span>` : ''}
     <span class="muted small">${h(m.competition_name)}${m.round ? `, ${m.round}. Spieltag` : ''}</span>
   </div>
+  <p class="livehinweis"><span class="punkt" aria-hidden="true"></span><span><b>Live ab Anwurf:</b> Ab ${h(ZEIT.format(start))} Uhr zeigt diese Seite hier den Spielstand und die Tore. Sie aktualisiert sich alle 30 Sekunden, meldet Tore mit Vibration und schaltet sich 20 Minuten vorher selbst um.</span></p>
   ${gegnerSteckbriefHtml(team, m, now)}
   <div class="row" style="margin-top:14px">
     ${teilenHtml({ url: baseUrl, titel: `${m.home_name} gegen ${m.away_name}`, text: `${m.home_name} gegen ${m.away_name} · ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr${halle ? ` · ${halle}` : ''}`, bild: './bild/spiel.png' }).replace('class="btn teilen"', 'class="btn ghost teilen"')}
@@ -981,7 +982,7 @@ function spielerHtml(team: HandballTeamView): string {
  * Feed (Adresse kopieren). Das Fenster steht für sich am Ende der Seite
  * (`<dialog>` liegt in der obersten Ebene und wird vom Kopf nicht beschnitten).
  */
-function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null, club = false): { leiste: string; dialog: string } {
+function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null, club = false, team: { id: string; label: string } | null = null): { leiste: string; dialog: string } {
   const webcal = baseUrl.replace(/^https?:\/\//, 'webcal://') + 'kalender.ics';
   const leiste = `<div class="verpassen" role="group" aria-labelledby="verpassen-titel">
     <span class="titel" id="verpassen-titel">Nichts verpassen</span>
@@ -992,9 +993,13 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
       <button type="button" class="vicon rss" data-copy="${h(baseUrl + 'feed.xml')}" title="RSS-Feed-Adresse kopieren" aria-label="RSS-Feed-Adresse kopieren">${ICON.rss}</button>`}
     </span>
   </div>`;
-  const dialog = `<dialog class="popup" id="push" data-push="${pushEnabled ? '1' : '0'}" data-scope="${club ? 'club' : 'team'}" aria-labelledby="push-titel">
+  const dialog = `<dialog class="popup" id="push" data-push="${pushEnabled ? '1' : '0'}" data-scope="${club ? 'club' : 'team'}" data-team="${h(team?.id ?? '*')}" data-label="${h(club ? 'Alle Heimspiele' : team?.label ?? '')}" aria-labelledby="push-titel">
   <h2 id="push-titel">${club ? 'Alle Heimspiele im Browser' : 'Benachrichtigungen im Browser'}</h2>
-  <p class="lead">${club ? 'Eine Anmeldung für alle Heimspiele des Vereins, ohne eine Mannschaft zu wählen.' : 'Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.'} Wähle, was ankommen soll.</p>
+  <p class="lead">${club ? 'Eine Anmeldung, ohne eine Mannschaft zu wählen.' : 'Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.'} Wähle, was ankommen soll.</p>
+  <p class="geltung" data-geltung>${club
+    ? '<b>Gilt für:</b> alle Heimspiele aller Mannschaften des Vereins. Zusätzlich kannst du auf der Seite einer Mannschaft deren Auswärtsspiele abonnieren, beides geht gleichzeitig.'
+    : '<b>Gilt für:</b> Heim- und Auswärtsspiele dieser Mannschaft. Alle Heimspiele des Vereins gibt es zusätzlich über die Glocke auf der <a href="../">Startseite</a>, beides geht gleichzeitig.'}</p>
+  <p class="geltung" data-andere hidden></p>
   <p class="status" data-status role="status" aria-live="polite">${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — Kalender und Feed gehen trotzdem.'}</p>
   <form data-form hidden>
     <fieldset class="themen">
@@ -1016,7 +1021,7 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
         <span><b>Wochenvorschau</b><small>Donnerstagabend: „Dieses Wochenende: 4 Heimspiele“ (ohne Halle, die steht auf der Startseite)</small></span></label>` : ''}
     </fieldset>
     <p class="muted small" data-zusammen aria-live="polite"></p>
-    <p class="muted small">Nicht dabei: Aufstellungen, Spielernamen und Spielberichte. ${club ? 'Es gilt immer nur eine Anmeldung je Gerät; sie ersetzt eine frühere für eine einzelne Mannschaft.' : 'Es gilt immer nur eine Anmeldung je Gerät; sie ersetzt eine frühere.'}</p>
+    <p class="muted small">Nicht dabei: Aufstellungen, Spielernamen und Spielberichte.</p>
     <div class="row">
       <button class="btn primary" type="submit" data-subscribe>Benachrichtigungen einschalten</button>
       <button class="btn ghost" type="button" data-unsubscribe hidden>Ausschalten</button>
@@ -1056,7 +1061,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();
   const telegram = botLink && botName ? { link: botLink, handle: `@${botName}` } : null;
-  const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled, telegram);
+  const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled, telegram, false, { id: team.team_id, label: team.label });
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -1082,7 +1087,7 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <script src="./theme.js?v=${inhaltsHash(SITE_THEME_JS)}"></script>
 <link rel="stylesheet" href="./site.css?v=${siteCssText().hash}">
 </head>
-<body${naechstes?.is_live ? ' data-live="1"' : ''}>
+<body${istLiveFenster(naechstes, now) ? ' data-live="1"' : ''}>
 <a class="skip" href="#inhalt">Zum Inhalt</a>
 ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über deinen Vorschau-Link erreichbar. Fotos von der Vereinsseite, Rechte noch nicht geklärt.</div>' : ''}
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
@@ -1255,6 +1260,17 @@ export function naechstesWochenende(now: Date): { fr: string; sa: string; so: st
   return { fr: iso(new Date(sa.getTime() - 86400000)), sa: iso(sa), so: iso(new Date(sa.getTime() + 86400000)) };
 }
 
+/** Wie lange vor dem Anwurf sich die Seite schon selbst aktualisiert, damit sie beim Anpfiff von allein auf Live springt. */
+const LIVE_VORLAUF_MS = 20 * 60 * 1000;
+
+/** Läuft das Spiel oder beginnt es in den nächsten 20 Minuten? Dann darf die Seite nur kurz im Zwischenspeicher liegen. */
+export function istLiveFenster(m: HandballMatchView | null | undefined, now = new Date()): boolean {
+  if (!m) return false;
+  if (m.is_live) return true;
+  const bis = Date.parse(m.starts_at) - now.getTime();
+  return m.status === 'scheduled' && bis > 0 && bis <= LIVE_VORLAUF_MS;
+}
+
 /** Einen ISO-Tag (JJJJ-MM-TT) um n Tage verschieben. */
 function verschiebeTag(iso: string, n: number): string {
   const [j, m, t] = iso.split('-').map(Number);
@@ -1305,6 +1321,18 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       <span class="e" data-key="${h(t.team_id)}" data-label="${h(t.label)}" data-stand="${/^\d+:\d+$/.test(stand) ? stand : ''}">${stand}</span>
     </li>`;
   }).join('')}</ul>
+</section>` : '';
+
+  // Ohne laufendes Spiel steht hier, wann es wieder losgeht — sonst sieht man von der Live-Ansicht nichts.
+  const naechsteAnwuerfe = alle
+    .filter(x => x.m.status === 'scheduled' && Date.parse(x.m.starts_at) > now.getTime())
+    .sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
+  const naechster = naechsteAnwuerfe[0];
+  const liveLeerHtml = live.length === 0 ? `<section class="card live-leer" id="live">
+  <h2>Live <span class="badge">Gerade kein Spiel</span></h2>
+  <p class="livehinweis"><span class="punkt" aria-hidden="true"></span><span>${naechster
+    ? `<b>Nächster Anwurf:</b> ${h(DATUM_KURZ.format(new Date(naechster.m.starts_at)))}, ${h(ZEIT.format(new Date(naechster.m.starts_at)))} Uhr, ${h(naechster.t.label)} ${naechster.m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(naechster.m))}. `
+    : 'Zurzeit ist kein Spiel angesetzt. '}Sobald ein Spiel läuft, steht der Spielstand hier ganz oben. Die Seite aktualisiert sich dann alle 30 Sekunden und meldet Tore mit Vibration.</span></p>
 </section>` : '';
 
   const beschreibung = heimspiele.length > 0
@@ -1432,8 +1460,8 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   return unterseiteHtml({
     titel, beschreibung, url: opts.baseUrl, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
     dateien: `./${encodeURIComponent(erste.team_id)}/`,
-    kopf, inhalt: `${liveHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
-    app: { titel: titel, manifest: './manifest.webmanifest' }, live: live.length > 0,
+    kopf, inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
+    app: { titel: titel, manifest: './manifest.webmanifest' }, live: live.length > 0 || teams.some(t => istLiveFenster(t.next_match, now)),
   });
 }
 
