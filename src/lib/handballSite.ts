@@ -1215,6 +1215,138 @@ export function renderUebersichtHtml(teams: HandballTeamView[], opts: { teams: S
   });
 }
 
+/**
+ * Samstag und Sonntag des Wochenendes, das ansteht — als Berliner Kalendertage
+ * `JJJJ-MM-TT`. Von Montag bis Freitag ist es das kommende; an einem Samstag
+ * oder Sonntag das laufende, damit die Spiele von heute nicht verschwinden.
+ */
+export function naechstesWochenende(now: Date): { sa: string; so: string } {
+  const [j, m, t] = TAG_ISO.format(now).split('-').map(Number);
+  const heute = new Date(Date.UTC(j, m - 1, t));
+  const wt = heute.getUTCDay(); // 0 = Sonntag
+  const sa = new Date(heute.getTime() + (wt === 0 ? -1 : 6 - wt) * 86400000);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { sa: iso(sa), so: iso(new Date(sa.getTime() + 86400000)) };
+}
+
+function tagMonat(iso: string): string {
+  const [, m, t] = iso.split('-');
+  return `${t}.${m}.`;
+}
+
+/**
+ * Die Startseite (`/`): der Überblick über alle Mannschaften des Vereins.
+ * Oben, was läuft; dann die Heimspiele des nächsten Wochenendes auf einen
+ * Blick — je Tag nach Halle gegliedert, mit Adresse und Routenlink, damit man
+ * sieht, wo gespielt wird; darunter jede Mannschaft mit Tabellenplatz,
+ * nächstem und letztem Spiel. Liest nur, was die Übersicht schon hat.
+ */
+export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTeamLink[]; baseUrl: string; stand: string | null; now?: Date }): string {
+  const now = opts.now ?? new Date();
+  const erste = teams[0];
+  const link = (t: HandballTeamView, anker = '') => `./${encodeURIComponent(t.team_id)}/${anker}`;
+  const alle = teams.flatMap(t => t.matches.map(m => ({ t, m })));
+  const live = alle.filter(x => x.m.is_live);
+
+  const we = naechstesWochenende(now);
+  const laeuft = TAG_ISO.format(now) === we.sa || TAG_ISO.format(now) === we.so;
+  const heimspiele = alle
+    .filter(x => x.m.is_home && x.m.status !== 'cancelled' && x.m.status !== 'postponed'
+      && [we.sa, we.so].includes(TAG_ISO.format(new Date(x.m.starts_at))))
+    .sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
+
+  const liveHtml = live.length > 0 ? `<section class="card dark live" id="live">
+  <h2>Läuft gerade <span class="badge live">Live</span></h2>
+  <ul class="plan">${live.map(({ t, m }) => {
+    const stand = m.live && m.live.home !== null && m.live.away !== null ? (m.is_home ? `${m.live.home}:${m.live.away}` : `${m.live.away}:${m.live.home}`) : (eigeneTore(m) !== null ? `${eigeneTore(m)}:${gegnerTore(m)}` : '–:–');
+    return `<li>
+      <span class="d">${h(ZEIT.format(new Date(m.starts_at)))} Uhr</span>
+      <span class="g"><a class="titel" href="${h(link(t, '#naechstes'))}">${h(t.label)}</a><div class="ha">${m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(m))}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}</div></span>
+      <span class="e">${stand}</span>
+    </li>`;
+  }).join('')}</ul>
+</section>` : '';
+
+  // Je Tag nach Halle gliedern; die Halle mit dem frühesten Anwurf steht oben.
+  const tagHtml = (iso: string) => {
+    const spiele = heimspiele.filter(x => TAG_ISO.format(new Date(x.m.starts_at)) === iso);
+    const ueberschrift = h(DATUM_LANG.format(new Date(`${iso}T12:00:00Z`)));
+    if (spiele.length === 0) return `<h3 class="unter tag">${ueberschrift}</h3>\n  <p class="muted">Kein Heimspiel.</p>`;
+    const hallen = new Map<string, typeof spiele>();
+    for (const x of spiele) {
+      const schluessel = `${(x.m.venue_name ?? '').trim().toLowerCase()}|${(x.m.venue_address ?? '').trim().toLowerCase()}`;
+      hallen.set(schluessel, [...(hallen.get(schluessel) ?? []), x]);
+    }
+    return `<h3 class="unter tag">${ueberschrift}</h3>\n  ${[...hallen.values()].map(liste => {
+      const erstes = liste[0].m;
+      const routen = liste.map(x => routenLinks(x.m)).find(r => r.length > 0) ?? [];
+      const name = erstes.venue_name?.trim();
+      const adresse = erstes.venue_address?.trim();
+      return `<div class="halle">
+    <b>📍 ${name ? h(name) : 'Halle noch nicht bekannt'}</b>
+    ${adresse ? `<span class="muted small">${h(adresse)}</span>` : ''}
+    ${routen.length > 0 ? `<a href="${h(routen[0].href)}" target="_blank" rel="noopener noreferrer">🧭 Route</a>` : ''}
+  </div>
+  <ul class="plan heim">${liste.map(({ t, m }) => {
+    const fertig = (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null;
+    const rechts = m.is_live ? '<span class="e">Live</span>'
+      : fertig ? `<span class="e ${m.won === true ? 'w' : m.won === false ? 'l' : ''}">${eigeneTore(m)}:${gegnerTore(m)}</span>` : '';
+    return `<li>
+      <span class="d">${h(ZEIT.format(new Date(m.starts_at)))} Uhr</span>
+      <span class="g"><a class="titel" href="${h(link(t, '#naechstes'))}">${h(t.label)}</a><div class="ha">gegen ${h(gegnerVon(m))}${m.competition_name ? ` · ${h(m.competition_name)}` : ''}</div></span>
+      ${rechts}
+    </li>`;
+  }).join('')}</ul>`;
+    }).join('\n  ')}`;
+  };
+  const weHtml = `<section class="card" id="heimspiele">
+  <h2>Heimspiele · ${laeuft ? 'dieses' : 'nächstes'} Wochenende <span class="muted small">${tagMonat(we.sa)}–${tagMonat(we.so)}</span></h2>
+  ${heimspiele.length > 0
+    ? `${tagHtml(we.sa)}\n  ${tagHtml(we.so)}`
+    : `<p class="muted">Am Wochenende (${tagMonat(we.sa)}–${tagMonat(we.so)}) ist kein Heimspiel angesetzt.</p>`}
+</section>`;
+
+  const mannschaft = (t: HandballTeamView) => {
+    const tabelle = t.standings.find(s => s.rows.some(r => r.teamId === t.team_id));
+    const zeile = tabelle?.rows.find(r => r.teamId === t.team_id);
+    const platz = zeile ? `Platz ${zeile.position}${tabelle!.rows.length > 1 ? ` von ${tabelle!.rows.length}` : ''} · ${zeile.points} Pkt.` : null;
+    const n = t.next_match;
+    const l = t.last_match;
+    const naechstes = n
+      ? n.is_live ? `<div><b>Läuft gerade</b> · ${n.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(n))}</div>`
+        : `<div><b>Nächstes:</b> ${h(datumKurz(new Date(n.starts_at), now))}, ${h(ZEIT.format(new Date(n.starts_at)))} Uhr · ${n.is_home ? 'Heim gegen' : 'Auswärts bei'} ${h(gegnerVon(n))}${n.is_home && n.venue_name ? ` · 📍 ${h(n.venue_name)}` : ''}</div>`
+      : '<div class="muted">Kein weiteres Spiel angesetzt.</div>';
+    const zuletzt = l && l.score_home !== null && l.score_away !== null
+      ? `<div><b>Zuletzt:</b> <span class="erg ${l.won === true ? 'w' : l.won === false ? 'l' : ''}">${eigeneTore(l)}:${gegnerTore(l)}</span> ${l.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(l))}</div>` : '';
+    return `<li>
+      <a class="titel" href="${h(link(t))}">${h(t.label)}</a>${t.championship_name && t.championship_name !== t.label ? ` <span class="muted small">${h(t.championship_name)}</span>` : ''}
+      ${platz ? `<div class="muted small">${h(platz)}</div>` : ''}
+      ${naechstes}
+      ${zuletzt}
+    </li>`;
+  };
+  const mannschaftenHtml = `<section class="card" id="mannschaften">
+  <h2>Alle Mannschaften</h2>
+  <ul class="mannschaften">${teams.map(mannschaft).join('')}</ul>
+  <p style="margin:12px 0 0"><a href="./uebersicht/">Alle Spiele der nächsten sieben Tage →</a></p>
+</section>`;
+
+  const titel = `Handball · ${erste.name}`;
+  const beschreibung = heimspiele.length > 0
+    ? `${heimspiele.length} Heimspiel${heimspiele.length === 1 ? '' : 'e'} am Wochenende ${tagMonat(we.sa)}–${tagMonat(we.so)} — Überblick über alle Mannschaften`
+    : 'Überblick über alle Mannschaften: Heimspiele, Spielorte und Ergebnisse';
+  const wahl = opts.teams.length > 1
+    ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${opts.teams.map(t => `<a href="${h(`./${encodeURIComponent(t.id)}/`)}">${h(t.label)}</a>`).join('')}</nav>`
+    : '';
+  const kopf = kopfSchlicht(logoDataUri(erste.team_id), erste.name, 'Alle Mannschaften', `${erste.name} · Heimspiele und Spielorte`, wahl);
+  const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
+  return unterseiteHtml({
+    titel, beschreibung, url: opts.baseUrl, ogBild: null,
+    dateien: `./${encodeURIComponent(erste.team_id)}/`,
+    kopf, inhalt: `${liveHtml}\n${weHtml}\n${mannschaftenHtml}`, fuss,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Manifest, Service Worker, Skript
 // ---------------------------------------------------------------------------
