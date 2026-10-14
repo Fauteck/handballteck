@@ -90,7 +90,7 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .form i.w{background:var(--win)}.form i.l{background:var(--loss)}
 main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,1fr)}
 .col{display:contents}
-.s-next{order:1}.s-push{order:2}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-fotos{order:7}.s-team{order:8}
+.s-next{order:1}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-fotos{order:7}.s-team{order:8}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,38,44,.04);min-width:0}
 .card.dark{background:linear-gradient(135deg,var(--g),var(--p) 60%,var(--s));color:#fff;border-color:transparent}
 .card.dark h2{color:var(--a)}
@@ -137,14 +137,6 @@ td.pkt{font-weight:700}
 .plan .g a.titel{display:inline-block;padding:4px 0;color:inherit;text-decoration:none}
 .plan .g a.spielseite{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
 .plan .g .ha{color:var(--muted);font-size:.85rem}
-.plan.heim li{grid-template-columns:76px 1fr auto}
-.halle{display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;margin:12px 0 2px;padding:8px 12px;border-left:4px solid var(--a);border-radius:0 8px 8px 0;background:color-mix(in srgb,var(--a) 10%,var(--card))}
-.halle a{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
-.mannschaften{list-style:none;margin:0;padding:0;display:grid;gap:0}
-.mannschaften li{padding:12px 0;border-bottom:1px solid var(--line);font-size:.95rem}
-.mannschaften li:last-child{border-bottom:0}
-.mannschaften a.titel{display:inline-block;padding:4px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.2rem;text-transform:uppercase;color:var(--hd);text-decoration:none}
-.mannschaften .erg{font-weight:700}.mannschaften .erg.w{color:var(--wint)}.mannschaften .erg.l{color:var(--losst)}
 .plan .e{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.35rem;padding:2px 10px;border-radius:8px;background:var(--bg);color:var(--text)}
 .plan .e.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
 .plan .e.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
@@ -161,24 +153,62 @@ legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:
 .opts input{accent-color:var(--a)}
 .opts label:has(input:checked){background:rgba(255,255,255,.14);border-color:var(--a)}
 .status{margin:6px 0 10px;font-weight:500}
-.lead{margin:0 0 12px;color:rgba(255,255,255,.8)}
-.channels{display:grid;gap:10px}
-.channel{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff}
-.channel[open]{border-color:rgba(255,255,255,.24)}
-.channel summary{min-height:44px;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;cursor:pointer;list-style:none}
-.channel summary::-webkit-details-marker{display:none}
-.channel summary::after{content:"▾";font-size:1.1rem;color:var(--a);transition:transform .15s}
-.channel[open] summary::after{transform:rotate(180deg)}
-.channel .ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--a);color:var(--g)}
-.channel .ico svg{width:22px;height:22px;fill:currentColor}
-.channel .ico.tg{background:#29a9eb;color:#fff}
-.channel .ico.rss{background:#f28a1a;color:#fff}
-.channel b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.1}
-.channel .body{margin-top:10px}
-.channel span.desc{display:block;font-size:.9rem;color:rgba(255,255,255,.75)}
-.channel a.open,.channel button.open{display:inline-flex;align-items:center;min-height:44px;margin:4px 14px 0 0;padding:0;border:0;background:none;font:inherit;cursor:pointer;color:var(--a);font-weight:600;text-decoration:none}
-.channel a.open:hover,.channel button.open:hover{text-decoration:underline}
-.chip{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:999px;background:var(--a);color:var(--g);font-size:.7rem;letter-spacing:.06em;vertical-align:2px}
+.verpassen{grid-column:1/-1;justify-self:end;display:grid;gap:4px;justify-items:end;margin-right:52px}
+.verpassen .titel{font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+.verpassen .icons{display:flex;gap:8px}
+.vicon{position:relative;display:grid;place-items:center;width:44px;height:44px;padding:0;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer;text-decoration:none}
+.vicon:hover{background:rgba(255,255,255,.24)}
+.vicon svg{width:22px;height:22px;fill:currentColor}
+.vicon.tg{background:#29a9eb;border-color:#29a9eb}
+.vicon.rss{background:#f28a1a;border-color:#f28a1a}
+.vicon .punkt{position:absolute;top:6px;right:6px;width:10px;height:10px;border-radius:50%;background:var(--a);border:2px solid var(--g)}
+dialog.popup{width:min(92vw,520px);max-height:90vh;overflow:auto;padding:20px;border:1px solid rgba(255,255,255,.24);border-radius:16px;background:var(--g);color:#fff}
+dialog.popup::backdrop{background:rgba(0,0,0,.55)}
+dialog.popup h2{color:#fff}
+dialog.popup fieldset{border:0;margin:0 0 10px;padding:0}
+dialog.popup legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.85rem;color:var(--a);padding:0}
+dialog.popup .schliessen{margin:14px 0 0}
+.lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
+.kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin-top:4px}
+.kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
+.kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
+.kasten summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:84px;padding:14px 16px;cursor:pointer;list-style:none}
+.kasten summary::-webkit-details-marker{display:none}
+.kasten summary::after{content:"▾";font-size:1.2rem;color:var(--a);transition:transform .15s}
+.kasten[open] summary::after{transform:rotate(180deg)}
+.kasten .kopf{display:grid;gap:2px}
+.kasten .kopf b{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;text-transform:uppercase;line-height:1.05}
+.kasten .kopf small{color:rgba(255,255,255,.75);font-size:.85rem}
+.kasten.leer{opacity:.55;padding:14px 16px;min-height:84px;display:flex;align-items:center}
+.kasten .liste{list-style:none;margin:0;padding:0 8px 10px;display:grid;gap:2px}
+.kasten .liste a{display:flex;align-items:center;min-height:44px;padding:0 10px;border-radius:10px;color:#fff;text-decoration:none;font-weight:600}
+.kasten .liste a:hover{background:rgba(255,255,255,.16)}
+main.wrap.breit{grid-template-columns:minmax(0,1fr)}
+.sortieren{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 10px}
+.sortieren button{font:inherit;font-size:.95rem;min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.sortieren button[aria-pressed=true]{background:var(--p);border-color:var(--p);color:#fff}
+.tabelle-rahmen{overflow-x:auto}
+table.heim th,table.heim td{text-align:left;white-space:normal;vertical-align:top;padding:10px 8px}
+table.heim small{display:block;color:var(--muted);font-size:.8rem;font-weight:500}
+table.heim td.wann{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;white-space:nowrap}
+table.heim td.team a{font-weight:700;text-decoration:none}
+table.heim td.ort b{display:block}
+table.heim td.ort a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
+table.heim tr.neu td{border-top:3px solid var(--line)}
+.erg{font-weight:700}.erg.w{color:var(--wint)}.erg.l{color:var(--losst)}
+.mannschaften{list-style:none;margin:0;padding:0;display:grid}
+.mannschaften li{padding:12px 0;border-bottom:1px solid var(--line);font-size:.95rem}
+.mannschaften li:last-child{border-bottom:0}
+.mannschaften a.titel{display:inline-block;padding:4px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.2rem;text-transform:uppercase;color:var(--hd);text-decoration:none}
+@media (max-width:640px){
+table.heim thead{position:absolute;left:-9999px}
+table.heim,table.heim tbody{display:block}
+table.heim tr{display:grid;grid-template-columns:1fr;gap:2px;padding:12px 0;border-bottom:1px solid var(--line)}
+table.heim td{display:block;padding:2px 0;border:0}
+table.heim td::before{content:attr(data-label);display:block;font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+table.heim tr.neu{border-top:3px solid var(--line)}
+table.heim tr.neu td{border-top:0}
+}
 .skip{position:absolute;left:-999px;top:8px;z-index:10;padding:8px 14px;border-radius:8px;background:#fff;color:#10262c}
 .skip:focus{left:8px}
 .offline{padding:8px 16px;text-align:center;background:#7a4b00;color:#fff;font-size:.9rem}
@@ -370,20 +400,70 @@ export const SITE_APP_JS = `(function () {
     });
   }
 
-  // Kanäle: die Kacheln starten immer eingeklappt, nichts wird gemerkt.
+  // Kurzer Hinweis am unteren Rand (Feed-Adresse kopiert u. Ä.).
+  var kurzTimer = null;
+  function kurz(text) {
+    var t = document.querySelector('.toast.kurz');
+    if (!t) {
+      t = document.createElement('div');
+      t.className = 'toast kurz';
+      t.setAttribute('role', 'status');
+      t.setAttribute('aria-live', 'polite');
+      document.body.appendChild(t);
+    }
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(kurzTimer);
+    kurzTimer = setTimeout(function () { t.hidden = true; }, 3500);
+  }
+
   // Feed-Adresse kopieren (ein Feed lässt sich im Browser nur als rohes XML öffnen).
   Array.prototype.forEach.call(document.querySelectorAll('button[data-copy]'), function (knopf) {
-    var text = knopf.textContent;
     knopf.addEventListener('click', function () {
       var adresse = knopf.getAttribute('data-copy') || '';
-      var fertig = function (ok) {
-        knopf.textContent = ok ? 'Kopiert ✓' : 'Adresse: ' + adresse;
-        setTimeout(function () { knopf.textContent = text; }, 2500);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(adresse).then(function () { fertig(true); }, function () { fertig(false); });
-      else fertig(false);
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(adresse).then(function () { kurz('Feed-Adresse kopiert'); }, function () { kurz('Adresse: ' + adresse); });
+      else kurz('Adresse: ' + adresse);
     });
   });
+
+  // Heimspiele der Startseite sortieren: Datum, Spielort oder Herren · Damen · Jugend.
+  // Ohne Skript bleibt die Tabelle nach Datum stehen; die Chips erscheinen erst mit Skript.
+  var sortTabelle = document.querySelector('[data-sorttable]');
+  if (sortTabelle) {
+    var sortLeiste = document.querySelector('[data-sortbar]');
+    var sortKey = {
+      datum: function (z) { return z.getAttribute('data-ts') || ''; },
+      ort: function (z) { return z.getAttribute('data-ort') || '\uffff'; },
+      gruppe: function (z) { return z.getAttribute('data-gr') || '9'; }
+    };
+    var sortieren = function (art) {
+      var koerper = sortTabelle.tBodies[0];
+      var zeilen = Array.prototype.slice.call(koerper.rows);
+      zeilen.sort(function (a, b) {
+        var ka = sortKey[art](a), kb = sortKey[art](b);
+        if (ka !== kb) return ka < kb ? -1 : 1;
+        var ta = a.getAttribute('data-ts') || '', tb = b.getAttribute('data-ts') || '';
+        return ta < tb ? -1 : ta > tb ? 1 : 0;
+      });
+      var davor = null;
+      zeilen.forEach(function (z) {
+        var k = art === 'datum' ? (z.getAttribute('data-ts') || '').slice(0, 10) : sortKey[art](z);
+        z.classList.toggle('neu', art !== 'datum' && davor !== null && k !== davor);
+        davor = k;
+        koerper.appendChild(z);
+      });
+      Array.prototype.forEach.call(sortLeiste.querySelectorAll('[data-sort]'), function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-sort') === art ? 'true' : 'false');
+      });
+    };
+    if (sortLeiste) {
+      sortLeiste.hidden = false;
+      sortLeiste.addEventListener('click', function (ev) {
+        var b = ev.target && ev.target.closest ? ev.target.closest('[data-sort]') : null;
+        if (b) sortieren(b.getAttribute('data-sort'));
+      });
+    }
+  }
 
   // Countdown: „In 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind;
   // in der letzten Stunde zählt er sekundengenau („In 42:17 Min."), danach steht „Gleich los".
@@ -487,14 +567,23 @@ export const SITE_APP_JS = `(function () {
     }, 30000);
   }
 
+  // Das Benachrichtigungsfenster: Die Glocke im Kopf öffnet es, ein Klick daneben oder Esc schließt es.
   var root = document.getElementById('push');
   if (!root) return;
+  var glocke = document.querySelector('[data-dialog-open=push]');
+  if (glocke) {
+    glocke.hidden = false;
+    glocke.addEventListener('click', function () {
+      if (typeof root.showModal === 'function') root.showModal(); else root.setAttribute('open', '');
+    });
+  }
+  root.addEventListener('click', function (ev) { if (ev.target === root && typeof root.close === 'function') root.close(); });
   var status = root.querySelector('[data-status]');
   var form = root.querySelector('[data-form]');
   var btnOn = root.querySelector('[data-subscribe]');
   var btnOff = root.querySelector('[data-unsubscribe]');
   var iosHint = root.querySelector('[data-ios]');
-  var aktiv = root.querySelector('[data-aktiv]');
+  var aktiv = document.querySelector('[data-aktiv]');
   var say = function (text) { status.textContent = text; };
   var isIos = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;

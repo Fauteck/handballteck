@@ -87,13 +87,15 @@ describe('Tippflächen der Microsite', () => {
     return css.slice(i, css.indexOf('}', i));
   };
 
-  it.each(['.btn', '.filter button', '.opts label', '.channel summary', 'details.more summary'])('%s ist mindestens 44 px hoch', selektor => {
+  it.each(['.btn', '.filter button', '.opts label', '.sortieren button', 'details.more summary'])('%s ist mindestens 44 px hoch', selektor => {
     expect(regel(selektor)).toContain('min-height:44px');
   });
 
   it('macht Farbschalter, Feed-Knöpfe und Teamwahl (Touch) groß genug', () => {
     expect(regel('.hero .theme')).toMatch(/width:44px;height:44px/);
-    expect(regel('.channel a.open,.channel button.open')).toContain('min-height:44px');
+    expect(regel('.vicon')).toMatch(/width:44px;height:44px/);
+    expect(regel('.kasten .liste a')).toContain('min-height:44px');
+    expect(regel('.kasten summary')).toContain('min-height:84px');
     expect(css).toMatch(/@media \(pointer:coarse\)\{[^}]*\.teamwahl a[^}]*min-height:44px/);
   });
 });
