@@ -3,10 +3,10 @@
  * keinem trauen — und nie `true`, das jedem Aufrufer jede Adresse glaubte.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { trustProxy, syncLiveIntervalMs, clubName, clubTeamIds, siteFrameAncestors } from '../config';
+import { trustProxy, syncLiveIntervalMs, clubName, clubTeamIds, siteFrameAncestors, sitePhotos } from '../config';
 
 afterEach(() => {
-  for (const n of ['TRUST_PROXY', 'SYNC_LIVE_INTERVAL_MS', 'CLUB_NAME', 'CLUB_TEAM_IDS', 'SITE_FRAME_ANCESTORS']) delete process.env[n];
+  for (const n of ['TRUST_PROXY', 'SYNC_LIVE_INTERVAL_MS', 'CLUB_NAME', 'CLUB_TEAM_IDS', 'SITE_FRAME_ANCESTORS', 'SITE_PHOTOS']) delete process.env[n];
 });
 
 describe('TRUST_PROXY', () => {
@@ -53,5 +53,13 @@ describe('SITE_FRAME_ANCESTORS', () => {
     expect(siteFrameAncestors()).toEqual([]);
     process.env.SITE_FRAME_ANCESTORS = 'https://woelfevoreifel.clubdesk.com/spielbetrieb, http://unsicher.example, kein-link, https://woelfevoreifel.clubdesk.com';
     expect(siteFrameAncestors()).toEqual(['https://woelfevoreifel.clubdesk.com']);
+  });
+});
+
+describe('SITE_PHOTOS', () => {
+  it('liest je Mannschaft Gruppenbild und Porträts, überspringt Unbrauchbares', () => {
+    expect(sitePhotos().size).toBe(0);
+    process.env.SITE_PHOTOS = '75796=mannschaft+spieler,96254=mannschaft,abc=spieler,96300=nix';
+    expect([...sitePhotos()]).toEqual([['75796', { gruppe: true, spieler: true }], ['96254', { gruppe: true, spieler: false }]]);
   });
 });
