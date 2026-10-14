@@ -291,6 +291,15 @@ tr[data-sb]{cursor:pointer}
 tr[data-sb]:hover td{background:color-mix(in srgb,var(--p) 6%,transparent)}
 tr[data-sb]:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
 dialog.steckbrief .gegner{margin-top:0}
+.sprung{position:sticky;top:var(--oben,0px);z-index:25;background:var(--bg);border-bottom:1px solid var(--line);transition:top .2s}
+.sprung .wrap{padding-top:8px;padding-bottom:8px}
+.sprung ul{list-style:none;margin:0;padding:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.sprung ul::-webkit-scrollbar{display:none}
+.sprung a{display:inline-flex;align-items:center;min-height:44px;padding:6px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);text-decoration:none;white-space:nowrap;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:1.05rem;letter-spacing:.02em}
+.sprung a:hover{border-color:var(--p)}
+.sprung a[aria-current=true]{background:var(--p);border-color:var(--p);color:#fff}
+section[id]{scroll-margin-top:72px}
+html.mit-mini section[id]{scroll-margin-top:124px}
 .mini{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(6px + env(safe-area-inset-top)) 16px 6px;background:var(--g);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);transform:translateY(-110%);transition:transform .2s}
 .mini.sichtbar{transform:none}
 .mini .mlogo{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:rgba(255,255,255,.14);text-decoration:none}
@@ -774,6 +783,47 @@ export const SITE_APP_JS = `(function () {
     new IntersectionObserver(function (eintraege) { zeige(!eintraege[0].isIntersecting); }, { threshold: 0 }).observe(hero);
     var hoch = mini.querySelector('[data-nach-oben]');
     if (hoch) hoch.addEventListener('click', function () { window.scrollTo({ top: 0 }); });
+  })();
+
+  // Sprungleiste: klebt oben (unter dem Mini-Kopf, wenn der zu sehen ist) und markiert den Abschnitt, in dem man gerade liest.
+  (function () {
+    var leiste = document.querySelector('[data-sprung]');
+    if (!leiste) return;
+    var liste = leiste.querySelector('ul');
+    var links = Array.prototype.slice.call(leiste.querySelectorAll('a[href^="#"]'));
+    var mini = document.querySelector('[data-mini]');
+    if (mini && 'IntersectionObserver' in window) document.documentElement.classList.add('mit-mini');
+    var aktiv = null;
+    var setzen = function (a) {
+      if (a === aktiv) return;
+      if (aktiv) aktiv.removeAttribute('aria-current');
+      aktiv = a;
+      if (!a) return;
+      a.setAttribute('aria-current', 'true');
+      var li = a.parentNode;
+      if (li.offsetLeft < liste.scrollLeft || li.offsetLeft + li.offsetWidth > liste.scrollLeft + liste.clientWidth) liste.scrollLeft = li.offsetLeft - 16;
+    };
+    var markieren = function () {
+      var oben = mini && mini.classList.contains('sichtbar') ? mini.offsetHeight : 0;
+      document.documentElement.style.setProperty('--oben', oben + 'px');
+      var grenze = oben + leiste.offsetHeight + 32;
+      var treffer = null, bester = -Infinity;
+      links.forEach(function (a) {
+        var el = document.getElementById(a.getAttribute('href').slice(1));
+        if (!el) return;
+        var top = el.getBoundingClientRect().top;
+        if (top <= grenze && top > bester) { bester = top; treffer = a; }
+      });
+      // Ganz unten zählt der letzte Abschnitt, auch wenn er nicht bis nach oben reicht.
+      if (window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) treffer = links[links.length - 1];
+      setzen(treffer);
+    };
+    var geplant = false;
+    var spaeter = function () { if (geplant) return; geplant = true; requestAnimationFrame(function () { geplant = false; markieren(); }); };
+    window.addEventListener('scroll', spaeter, { passive: true });
+    window.addEventListener('resize', spaeter);
+    links.forEach(function (a) { a.addEventListener('click', function () { setzen(a); }); });
+    markieren();
   })();
 
   // Bilder laden mit einem ruhigen Platzhalter statt mit Alt-Text: Die Fläche pulsiert, bis das Bild da ist; geht es schief, bleibt sie still und leer.

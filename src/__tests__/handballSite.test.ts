@@ -885,6 +885,24 @@ describe('Handball-Microsite', () => {
       }
     });
 
+    it('setzt eine Sprungleiste mit Ankern zu den vorhandenen Abschnitten', async () => {
+      const team = (await get(`/${TEAM}/`)).body;
+      expect(team).toContain('<nav class="sprung" aria-label="Abschnitte" data-sprung>');
+      for (const [id, label] of [['naechstes', 'Spiel'], ['letztes', 'Letztes'], ['tabelle', 'Tabelle'], ['spielplan', 'Spielplan']]) {
+        expect(team).toContain(`<li><a href="#${id}">${label}</a></li>`);
+        expect(team).toContain(`id="${id}"`);
+      }
+      // Ohne Spielernamen kein Kader, also auch kein Chip dafür.
+      expect(team).not.toContain('href="#mannschaft"');
+      expect(team.indexOf('data-sprung')).toBeLessThan(team.indexOf('id="inhalt"'));
+      const start = (await get('/')).body;
+      expect(start).toContain('<li><a href="#live">Live</a></li>');
+      expect(start).toContain('<li><a href="#stand">Tabellenplätze</a></li>');
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("document.querySelector('[data-sprung]')");
+      expect((await get(`/${TEAM}/site.css`)).body).toContain('.sprung{position:sticky;top:var(--oben,0px)');
+    });
+
     it('rendert das Wochenende als Bild, nur bei freigegebener Seite', async () => {
       const res = await get('/bild/wochenende.png');
       expect(res.statusCode).toBe(200);

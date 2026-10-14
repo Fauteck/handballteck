@@ -1063,6 +1063,15 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   const botName = getHandballBotUsername();
   const telegram = botLink && botName ? { link: botLink, handle: `@${botName}` } : null;
   const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled, telegram, false, { id: team.team_id, label: team.label });
+  const abschnitte = {
+    naechstes: naechstesSpielHtml(team, now, opts.baseUrl),
+    letztes: letztesSpielHtml(team, opts.baseUrl),
+    tabelle: tabelleHtml(team, now),
+    saison: saisonHtml(team, opts.players),
+    fotos: teamFotosHtml(team, opts.players, anhang, !!opts.vorschau),
+    kader: opts.players ? spielerHtml(team) : '',
+    spielplan: spielplanHtml(team, now),
+  };
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -1093,17 +1102,26 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über deinen Vorschau-Link erreichbar. Fotos von der Vereinsseite, Rechte noch nicht geklärt.</div>' : ''}
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
 ${heroHtml(team, logo, now, opts.teams ?? [], anhang, '../', verpassen.leiste)}
+${sprungleisteHtml([
+  ['naechstes', naechstes?.is_live ? 'Live' : 'Spiel', abschnitte.naechstes],
+  ['letztes', 'Letztes', abschnitte.letztes],
+  ['tabelle', 'Tabelle', abschnitte.tabelle],
+  ['spielplan', 'Spielplan', abschnitte.spielplan],
+  ['saison', 'Saison', abschnitte.saison],
+  ['team', 'Fotos', abschnitte.fotos],
+  ['mannschaft', 'Kader', abschnitte.kader],
+])}
 <main class="wrap" id="inhalt">
 <div class="col main">
-${naechstesSpielHtml(team, now, opts.baseUrl)}
-${letztesSpielHtml(team, opts.baseUrl)}
-${tabelleHtml(team, now)}
-${saisonHtml(team, opts.players)}
-${teamFotosHtml(team, opts.players, anhang, !!opts.vorschau)}
-${opts.players ? spielerHtml(team) : ''}
+${abschnitte.naechstes}
+${abschnitte.letztes}
+${abschnitte.tabelle}
+${abschnitte.saison}
+${abschnitte.fotos}
+${abschnitte.kader}
 </div>
 <div class="col side">
-${spielplanHtml(team, now)}
+${abschnitte.spielplan}
 </div>
 </main>
 <footer class="wrap">
@@ -1169,6 +1187,17 @@ ${o.dialog ?? ''}
 </body>
 </html>
 `;
+}
+
+/**
+ * Die Sprungleiste unter dem Kopf: je vorhandenem Abschnitt ein Chip mit
+ * Anker. Ohne Skript sind es gewöhnliche Sprungmarken; mit Skript klebt sie
+ * oben und markiert den Abschnitt, in dem man gerade liest.
+ */
+function sprungleisteHtml(ziele: Array<[string, string, string]>): string {
+  const da = ziele.filter(([, , html]) => html.trim() !== '');
+  if (da.length < 2) return '';
+  return `<nav class="sprung" aria-label="Abschnitte" data-sprung><div class="wrap"><ul>${da.map(([id, label]) => `<li><a href="#${id}">${h(label)}</a></li>`).join('')}</ul></div></nav>`;
 }
 
 function initialenVon(name: string): string {
@@ -1461,7 +1490,14 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   return unterseiteHtml({
     titel, beschreibung, url: opts.baseUrl, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
     dateien: `./${encodeURIComponent(erste.team_id)}/`,
-    kopf, inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
+    kopf: kopf + sprungleisteHtml([
+      ['live', 'Live', liveHtml || liveLeerHtml],
+      ['heute', 'Heute', heuteHtml],
+      ['heimspiele', 'Heimspiele', weHtml],
+      ['auswaertsspiele', 'Auswärts', ausHtml],
+      ['letztes-wochenende', 'Ergebnisse', letzteHtml],
+      ['stand', 'Tabellenplätze', standHtml],
+    ]), inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
     app: { titel: titel, manifest: './manifest.webmanifest' }, live: live.length > 0 || teams.some(t => istLiveFenster(t.next_match, now)),
   });
 }
