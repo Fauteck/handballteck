@@ -47,6 +47,7 @@ describe('Handball-Microsite', () => {
     process.env.SITE_ENABLED = config.site_enabled ?? 'false';
     process.env.SITE_PLAYERS = config.site_players ?? 'false';
     if (config.site_url) process.env.SITE_URL = config.site_url; else delete process.env.SITE_URL;
+    if (config.site_photos) process.env.SITE_PHOTOS = config.site_photos; else delete process.env.SITE_PHOTOS;
   };
 
   beforeAll(async () => {
@@ -511,6 +512,33 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('./foto/gruppe.jpg');
       expect(html).not.toContain('./foto/7001.jpg');
       expect((await get(`/${TEAM}/foto/7001.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+    });
+
+    it('zeigt öffentlich nur, was je Mannschaft freigegeben ist (SITE_PHOTOS) — ohne Vorschau-Band, zwischenspeicherbar', async () => {
+      // Senioren: Gruppenbild und Porträts freigegeben; die Jugend nur das Gruppenbild.
+      setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_photos: `${SENIOR}=mannschaft+spieler,${TEAM}=mannschaft` });
+      const senior = await get(`/${SENIOR}/`);
+      expect(senior.headers['cache-control']).toBe('public, max-age=60');
+      expect(senior.body).not.toContain('vorschau-band');
+      expect(senior.body).toContain('<h2>Das Team</h2>');
+      expect(senior.body).toContain('<img class="bild" src="./foto/gruppe.jpg"');
+      expect(senior.body).toContain('<img src="./foto/8001.jpg"');
+      expect(senior.body).toContain('<b>Senior Eins</b>');
+      const bild = await get(`/${SENIOR}/foto/gruppe.jpg`);
+      expect(bild.statusCode).toBe(200);
+      expect(bild.headers['cache-control']).toBe('public, max-age=3600');
+      expect((await get(`/${SENIOR}/foto/8001.jpg`)).statusCode).toBe(200);
+      // Jugend: das Gruppenbild ja, Porträts nie — auch nicht mit Spielernamen.
+      setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_photos: `${SENIOR}=mannschaft+spieler,${TEAM}=mannschaft+spieler`, site_players: 'true' });
+      const jugend = (await get(`/${TEAM}/`)).body;
+      expect(jugend).toContain('./foto/gruppe.jpg');
+      expect(jugend).not.toContain('./foto/7001.jpg');
+      expect((await get(`/${TEAM}/foto/gruppe.jpg`)).statusCode).toBe(200);
+      expect((await get(`/${TEAM}/foto/7001.jpg`)).statusCode).toBe(404);
+      // Nur das Gruppenbild freigegeben: Porträts bleiben weg.
+      setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_photos: `${SENIOR}=mannschaft` });
+      expect((await get(`/${SENIOR}/`)).body).not.toContain('./foto/8001.jpg');
+      expect((await get(`/${SENIOR}/foto/8001.jpg`)).statusCode).toBe(404);
     });
   });
 

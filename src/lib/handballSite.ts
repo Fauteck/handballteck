@@ -40,7 +40,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { siteEnabled, sitePlayers, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
+import { siteEnabled, sitePlayers, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
 import {
   handballOverview, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
@@ -822,15 +822,31 @@ export function torverlaufHtml(team: HandballTeamView): string | null {
  * Senioren immer, bei der Jugend nur mit Spielernamen; die Porträts nur bei
  * Senioren und nur mit Spielernamen (sie tragen Namen). Leer ohne Fotos.
  */
-function teamFotosHtml(team: HandballTeamView, players: boolean, anhang: string): string {
+/**
+ * Ob ein Foto der Vereinsseite gezeigt werden darf — `gruppe` oder die
+ * Kontakt-ID eines Porträts. In der Vorschau: Jugend-Gruppenbild nur mit
+ * Spielernamen, Porträts nur bei Senioren mit Spielernamen. Öffentlich: nur,
+ * was die Einstellungsseite je Mannschaft freigegeben hat (`SITE_PHOTOS`);
+ * Porträts auch dann nie bei der Jugend.
+ */
+export function fotoFreigegeben(team: HandballTeamView, wer: string, players: boolean, vorschau: boolean): boolean {
   const jugend = istJugend(team.label, team.championship_name);
-  const gruppe = hatGruppenbild(team.team_id) && (!jugend || players);
-  const personen = players && !jugend ? portraits(team.team_id) : [];
+  const portraet = wer !== 'gruppe';
+  if (portraet && (jugend || !portraits(team.team_id).some(p => p.contactId === wer))) return false;
+  if (vorschau) return portraet ? players : (!jugend || players);
+  const frei = sitePhotos().get(team.team_id);
+  return !!frei && (portraet ? frei.spieler : frei.gruppe);
+}
+
+/** „Das Team": Gruppenbild und Porträts der Vereinsseite — in der Vorschau alles, öffentlich nach Freigabe. */
+function teamFotosHtml(team: HandballTeamView, players: boolean, anhang: string, vorschau: boolean): string {
+  const gruppe = hatGruppenbild(team.team_id) && fotoFreigegeben(team, 'gruppe', players, vorschau);
+  const personen = portraits(team.team_id).filter(p => fotoFreigegeben(team, p.contactId, players, vorschau));
   if (!gruppe && personen.length === 0) return '';
   const abschnitte = new Map<string, typeof personen>();
   for (const p of personen) abschnitte.set(p.section, [...(abschnitte.get(p.section) ?? []), p]);
   return `<section class="card s-fotos" id="team">
-  <h2>Das Team <span class="badge">Vorschau</span></h2>
+  <h2>Das Team${vorschau ? ' <span class="badge">Vorschau</span>' : ''}</h2>
   ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${team.name}`)}" loading="lazy" width="1600">` : ''}
   ${[...abschnitte].map(([titel, leute]) => `<h3 class="unter">${h(titel)}</h3>
   <ul class="portraets">${leute.map(p => `<li><img src="./foto/${h(p.contactId)}.jpg${h(anhang)}" alt="" loading="lazy" width="400" height="500"><b>${h(p.name)}</b>${p.position ? `<span>${h(p.position)}</span>` : ''}</li>`).join('')}</ul>`).join('')}
@@ -967,7 +983,7 @@ ${naechstesSpielHtml(team, now, opts.baseUrl)}
 ${letztesSpielHtml(team, opts.baseUrl)}
 ${tabelleHtml(team)}
 ${saisonHtml(team, opts.players)}
-${opts.vorschau ? teamFotosHtml(team, opts.players, anhang) : ''}
+${teamFotosHtml(team, opts.players, anhang, !!opts.vorschau)}
 ${opts.players ? spielerHtml(team) : ''}
 </div>
 <div class="col side">

@@ -114,7 +114,7 @@ Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies 
 - **On the page:** `TEAM_IDS`, `CLUB_TEAM_IDS`, `CLUB_NAME`, the three colours, `SYNC_INTERVAL_MS`,
   `SYNC_LIVE_INTERVAL_MS`, `TELEGRAM_INVITE_CODE`, `TELEGRAM_ADMIN_CHAT_IDS`, `BOT_AUTO_DESCRIPTION`,
   `SITE_ENABLED`, `SITE_PLAYERS`, `SITE_PUSH_MAX`, `SITE_URL`, `SITE_OPERATOR`, `SITE_FEEDBACK_MAIL`,
-  `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`, `CLUBDESK_TEAMS`.
+  `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`, `CLUBDESK_TEAMS`, `SITE_PHOTOS` (the last two inside the team rows of `TEAM_IDS`).
 - **Environment only:** `PUBLIC_URL`, `PORT`, `TRUST_PROXY`, `DATA_DIR`, `DATABASE_PATH`, `SQLITE_JOURNAL_MODE`,
   `LOG_LEVEL`, `IMPORT_TODOTECK_DB`, `TELEGRAM_BOT_TOKEN`, `API_TOKEN`, `VAPID_*` and the `ADMIN_*` account.
   The page only shows whether the secrets are set. The bot token already runs through the same lookup, so
@@ -152,7 +152,8 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `SITE_FRAME_ANCESTORS` | – (none) | https origins allowed to embed the microsite in an iframe (the club website). Append `?kompakt=1` to the embedded URL: the page then drops logo and club name from its header, since the club site shows them already. |
 | `SITE_OPERATOR` / `SITE_FEEDBACK_MAIL` | – | Footer of the microsite. |
 | `SITE_PREVIEW_TOKEN` | – (off) | Secret (≥ 32 chars) for `/<team>/?vorab=<token>`: the page then also shows what is not public yet (ClubDesk photos). Responses are `private, no-store`; the token is masked in logs. |
-| `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_1`). Daily fetch of the group photo (youth only with `SITE_PLAYERS`) and, for senior teams, the squad portraits; stored downscaled as JPEG. Shown only in the preview. |
+| `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_1`). Daily fetch of the group photo (youth only with `SITE_PLAYERS` or a released group photo) and, for senior teams, the squad portraits; stored downscaled as JPEG. Always in the preview; public per `SITE_PHOTOS`. |
+| `SITE_PHOTOS` | – (preview only) | Which ClubDesk photos a team shows publicly: `75796=mannschaft+spieler,96254=mannschaft` (`mannschaft` = group photo, `spieler` = portraits with names, seniors only). Edited per team row on `/settings`. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | generated | Web push keys; generated and stored on first use. |
 | `API_TOKEN` | – | Bearer token for `/api/*`; unset means 401 for all of it. |
 | `DATA_DIR` / `DATABASE_PATH` | `./data` | Where the SQLite file lives. |

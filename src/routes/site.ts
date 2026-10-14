@@ -27,9 +27,9 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import {
   siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
+  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
-import { fotoJpeg, portraits, istJugend } from '../lib/clubdesk';
+import { fotoJpeg } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
 import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
@@ -216,21 +216,20 @@ export async function siteRoutes(fastify: FastifyInstance) {
   });
 
   /**
-   * Fotos der Vereinsseite — nur mit gültigem Vorschau-Schlüssel, und nur, was
-   * die Seite in der Vorschau auch zeigen würde: Jugend nur mit Spielernamen,
-   * Porträts nur bei Senioren mit Spielernamen. Sonst 404 wie für Unbekanntes.
+   * Fotos der Vereinsseite — nur, was die Seite auch zeigt (`fotoFreigegeben`):
+   * mit gültigem Vorschau-Schlüssel die Vorschau-Regeln, sonst die Freigabe je
+   * Mannschaft von der Einstellungsseite. Sonst 404 wie für Unbekanntes.
    */
   fastify.get<{ Params: { teamId: string; wer: string } }>('/:teamId/foto/:wer', limit(120), async (request, reply) => {
     const t = freigegeben(request.params.teamId);
-    if (!t || !vorschauAus(request.query)) return nichtDa(reply);
+    if (!t) return nichtDa(reply);
     const wer = /^(gruppe|\d{1,12})\.jpg$/.exec(request.params.wer)?.[1];
     if (!wer) return nichtDa(reply);
-    const jugend = istJugend(t.team.label, t.team.championship_name);
-    const players = sitePlayers();
-    if (wer === 'gruppe' ? jugend && !players : jugend || !players || !portraits(t.team.team_id).some(p => p.contactId === wer)) return nichtDa(reply);
+    const vorschau = vorschauAus(request.query) !== null;
+    if (!fotoFreigegeben(t.team, wer, sitePlayers(), vorschau)) return nichtDa(reply);
     const jpeg = fotoJpeg(t.team.team_id, wer);
     if (!jpeg) return nichtDa(reply);
-    return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', 'private, max-age=3600').header('X-Robots-Tag', 'noindex').send(jpeg);
+    return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', vorschau ? 'private, max-age=3600' : 'public, max-age=3600').header('X-Robots-Tag', 'noindex').send(jpeg);
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/site.css', limit(120), async (request, reply) => {

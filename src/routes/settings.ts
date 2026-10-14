@@ -151,7 +151,7 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
         const wert = wirksamerText(e.key);
         return {
           key: e.key, gruppe: e.gruppe, art: e.art, label: e.label, hinweis: e.hinweis, standard: e.standard,
-          wirkung: e.wirkung, lang: e.lang ?? false, zeilen: e.zeilen ?? null, faktor: e.faktor ?? null, einheit: e.einheit ?? null,
+          wirkung: e.wirkung, lang: e.lang ?? false, zeilen: e.zeilen ?? null, versteckt: e.versteckt ?? false, faktor: e.faktor ?? null, einheit: e.einheit ?? null,
           quelle: quelleVon(e.key),
           umgebungWert: geheim ? null : (process.env[e.key]?.trim() ?? ''),
           // Geheimnisse gehen nie zurück an den Browser, nur ob eines gesetzt ist.

@@ -48,11 +48,14 @@ td,th{text-align:left;padding:4px 8px;border-top:1px solid var(--line);vertical-
 .hidden{display:none}
 .vorschau{display:inline-flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);height:28px;vertical-align:middle}
 .vorschau span{width:36px;display:block}
-.mrow{display:grid;grid-template-columns:130px 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+.mrow{display:grid;grid-template-columns:110px 1fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
 .mrow.kopf{font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:4px}
+.mrow .fotos{display:flex;flex-direction:column;gap:2px;font-size:.85rem;font-weight:400;white-space:nowrap}
+.mrow .fotos label{display:flex;align-items:center;gap:6px;margin:0;font-weight:400;min-height:20px}
+.mrow .fotos input{width:auto;margin:0}
 .mrow .knoepfe{display:flex;gap:4px}
 .mrow .knoepfe button{padding:4px 10px;min-height:40px}
-@media (max-width:560px){.mrow{grid-template-columns:1fr 1fr}.mrow .knoepfe{grid-column:1/-1}.mrow.kopf .knoepfe{display:none}}
+@media (max-width:720px){.mrow{grid-template-columns:1fr 1fr}.mrow .fotos,.mrow .knoepfe{grid-column:1/-1}.mrow.kopf{display:none}.mrow{padding-bottom:10px;border-bottom:1px solid var(--line)}}
 </style>
 </head>
 <body>
@@ -150,17 +153,46 @@ export const SETTINGS_JS = String.raw`(function () {
       var t = teil.trim();
       if (!t) return;
       var i = t.indexOf('=');
-      if (i >= 0) out.push({ id: t.slice(0, i).trim(), name: t.slice(i + 1).trim() });
-      else t.split(/\s+/).forEach(function (id) { out.push({ id: id, name: '' }); });
+      if (i >= 0) out.push({ id: t.slice(0, i).trim(), name: t.slice(i + 1).trim(), slug: '', gruppe: false, spieler: false });
+      else t.split(/\s+/).forEach(function (id) { out.push({ id: id, name: '', slug: '', gruppe: false, spieler: false }); });
     });
     return out;
   }
   function mannschaftenText(liste) {
     return liste.filter(function (m) { return m.id || m.name; }).map(function (m) { return m.name ? m.id + '=' + m.name : m.id; }).join(',');
   }
+  // id=wert-Listen der versteckten Felder (ClubDesk-Seite, Fotos) als Abbildung.
+  function paareLesen(roh) {
+    var out = {};
+    String(roh || '').split(/[,;\n]+/).forEach(function (teil) {
+      var i = teil.indexOf('=');
+      if (i > 0) out[teil.slice(0, i).trim()] = teil.slice(i + 1).trim();
+    });
+    return out;
+  }
+  function clubdeskText(liste) {
+    return liste.filter(function (m) { return m.id && m.slug; }).map(function (m) { return m.id + '=' + m.slug; }).join(',');
+  }
+  function fotosText(liste) {
+    return liste.filter(function (m) { return m.id && (m.gruppe || m.spieler); }).map(function (m) {
+      return m.id + '=' + [m.gruppe ? 'mannschaft' : null, m.spieler ? 'spieler' : null].filter(Boolean).join('+');
+    }).join(',');
+  }
+  function feldVon(key) { return state.felder.filter(function (x) { return x.key === key; })[0] || null; }
   function mannschaftenEditor(f, ziel, fehler, geaendertMelden) {
     var liste = mannschaftenLesen(f.wert);
-    if (liste.length === 0) liste.push({ id: '', name: '' });
+    var clubdeskFeld = feldVon('CLUBDESK_TEAMS');
+    var fotosFeld = feldVon('SITE_PHOTOS');
+    var slugs = paareLesen(clubdeskFeld ? clubdeskFeld.wert : '');
+    var fotos = paareLesen(fotosFeld ? fotosFeld.wert : '');
+    liste.forEach(function (m) {
+      m.slug = slugs[m.id] || '';
+      var rechte = (fotos[m.id] || '').toLowerCase().split('+');
+      m.gruppe = rechte.indexOf('mannschaft') >= 0;
+      m.spieler = rechte.indexOf('spieler') >= 0;
+    });
+    var startClubdesk = clubdeskText(liste), startFotos = fotosText(liste);
+    if (liste.length === 0) liste.push({ id: '', name: '', slug: '', gruppe: false, spieler: false });
     var behaelter = el('div');
     function pruefen() {
       var meldung = '';
@@ -171,34 +203,59 @@ export const SETTINGS_JS = String.raw`(function () {
         else if (gesehen[m.id]) meldung = meldung || 'Die Team-ID ' + m.id + ' steht zweimal da.';
         gesehen[m.id] = true;
         if (/[,;\n]/.test(m.name) || m.name.length > 40) meldung = meldung || 'Der Name darf höchstens 40 Zeichen haben, ohne Komma und Semikolon.';
+        if (m.slug && !/^[a-z0-9_-]{1,40}$/i.test(m.slug)) meldung = meldung || 'Die ClubDesk-Seite ist der letzte Teil der Adresse, z. B. woelfe_1.';
+        if ((m.gruppe || m.spieler) && !m.slug) meldung = meldung || 'Fotos brauchen die ClubDesk-Seite der Mannschaft.';
       });
       if (meldung) ungueltig[f.key] = true; else delete ungueltig[f.key];
       fehler.textContent = meldung;
     }
     function neuZeichnen() {
       behaelter.textContent = '';
-      behaelter.appendChild(el('div', { class: 'mrow kopf' }, el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: Bezeichnung von handball.net)' }), el('span', { class: 'knoepfe' })));
+      behaelter.appendChild(el('div', { class: 'mrow kopf' }, el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: von handball.net)' }), el('span', { text: 'ClubDesk-Seite' }), el('span', { text: 'Fotos öffentlich' }), el('span', { class: 'knoepfe' })));
       liste.forEach(function (m, i) {
         var idFeld = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', placeholder: '96254', 'aria-label': 'Team-ID, Mannschaft ' + (i + 1) });
         var nameFeld = el('input', { type: 'text', autocomplete: 'off', placeholder: 'z. B. B-Jugend', 'aria-label': 'Name, Mannschaft ' + (i + 1) });
-        idFeld.value = m.id; nameFeld.value = m.name;
+        var slugFeld = el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'z. B. woelfe_1', 'aria-label': 'ClubDesk-Seite, Mannschaft ' + (i + 1) });
+        var gruppeFeld = el('input', { type: 'checkbox', 'aria-label': 'Mannschaftsbild öffentlich, Mannschaft ' + (i + 1) });
+        var spielerFeld = el('input', { type: 'checkbox', 'aria-label': 'Spielerbilder öffentlich, Mannschaft ' + (i + 1) });
+        idFeld.value = m.id; nameFeld.value = m.name; slugFeld.value = m.slug; gruppeFeld.checked = m.gruppe; spielerFeld.checked = m.spieler;
         idFeld.addEventListener('input', function () { m.id = idFeld.value.trim(); aenderung(); });
         nameFeld.addEventListener('input', function () { m.name = nameFeld.value.trim(); aenderung(); });
+        slugFeld.addEventListener('input', function () { m.slug = slugFeld.value.trim(); aenderung(); });
+        gruppeFeld.addEventListener('change', function () { m.gruppe = gruppeFeld.checked; aenderung(); });
+        spielerFeld.addEventListener('change', function () {
+          if (spielerFeld.checked && !window.confirm('Porträts mit Namen werden öffentlich gezeigt. Nur bei Senioren und nur, wenn die Bildrechte mit dem Verein geklärt sind. Wirklich einschalten?')) { spielerFeld.checked = false; return; }
+          m.spieler = spielerFeld.checked; aenderung();
+        });
         function schieben(d) {
           var j = i + d;
           if (j < 0 || j >= liste.length) return;
           var x = liste[i]; liste[i] = liste[j]; liste[j] = x;
           neuZeichnen(); aenderung();
         }
-        behaelter.appendChild(el('div', { class: 'mrow' }, idFeld, nameFeld,
+        behaelter.appendChild(el('div', { class: 'mrow' }, idFeld, nameFeld, slugFeld,
+          el('span', { class: 'fotos' },
+            el('label', null, gruppeFeld, 'Mannschaftsbild'),
+            el('label', null, spielerFeld, 'Spielerbilder')),
           el('span', { class: 'knoepfe' },
             el('button', { type: 'button', text: '↑', 'aria-label': 'Nach oben', onclick: function () { schieben(-1); } }),
             el('button', { type: 'button', text: '↓', 'aria-label': 'Nach unten', onclick: function () { schieben(1); } }),
-            el('button', { type: 'button', text: '✕', 'aria-label': 'Mannschaft entfernen', onclick: function () { liste.splice(i, 1); if (liste.length === 0) liste.push({ id: '', name: '' }); neuZeichnen(); aenderung(); } }))));
+            el('button', { type: 'button', text: '✕', 'aria-label': 'Mannschaft entfernen', onclick: function () { liste.splice(i, 1); if (liste.length === 0) liste.push({ id: '', name: '', slug: '', gruppe: false, spieler: false }); neuZeichnen(); aenderung(); } }))));
       });
-      behaelter.appendChild(el('p', null, el('button', { type: 'button', text: '+ Mannschaft hinzufügen', onclick: function () { liste.push({ id: '', name: '' }); neuZeichnen(); } })));
+      behaelter.appendChild(el('p', null, el('button', { type: 'button', text: '+ Mannschaft hinzufügen', onclick: function () { liste.push({ id: '', name: '', slug: '', gruppe: false, spieler: false }); neuZeichnen(); } })));
     }
-    function aenderung() { pruefen(); ziel.value = mannschaftenText(liste); geaendertMelden(); }
+    // Die versteckten Felder wandern mit: geändert, sobald ihr Text vom Start abweicht.
+    function nebenfeld(feld, start, text) {
+      if (!feld) return;
+      if (text !== start) geaendert[feld.key] = { f: feld, wert: text }; else delete geaendert[feld.key];
+    }
+    function aenderung() {
+      pruefen();
+      ziel.value = mannschaftenText(liste);
+      nebenfeld(clubdeskFeld, startClubdesk, clubdeskText(liste));
+      nebenfeld(fotosFeld, startFotos, fotosText(liste));
+      geaendertMelden();
+    }
     neuZeichnen();
     return behaelter;
   }
@@ -361,7 +418,7 @@ export const SETTINGS_JS = String.raw`(function () {
     app.appendChild(meldung);
     if (aktiv === 'status') { app.appendChild(statusSeite()); return; }
     var karte = el('div', { class: 'card' }, el('h2', { text: state.gruppen[aktiv] }));
-    state.felder.filter(function (f) { return f.gruppe === aktiv; }).forEach(function (f) { karte.appendChild(feldZeile(f)); });
+    state.felder.filter(function (f) { return f.gruppe === aktiv && !f.versteckt; }).forEach(function (f) { karte.appendChild(feldZeile(f)); });
     speicherKnopf = el('button', { class: 'primary', type: 'button', text: 'Speichern', disabled: 'disabled', onclick: function () { speichern(); } });
     karte.appendChild(el('p', null, speicherKnopf));
     app.appendChild(karte);

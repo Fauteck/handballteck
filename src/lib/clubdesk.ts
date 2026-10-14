@@ -1,8 +1,8 @@
 /**
  * Fotos von der Vereinsseite bei ClubDesk: das Gruppenbild je Mannschaft
  * (Übersicht „Teams & Tabellen") und bei den Senioren die Porträts aus dem
- * Kader der Teamseite. Seit Oktober 2026, vorerst **nur in der Vorschau** der
- * Seite (`SITE_PREVIEW_TOKEN`), bis die Bildrechte mit dem Verein geklärt sind.
+ * Kader der Teamseite. In der Vorschau (`SITE_PREVIEW_TOKEN`) immer; öffentlich
+ * je Mannschaft nach Freigabe auf der Einstellungsseite (`SITE_PHOTOS`).
  *
  * Was man über die Quelle wissen muss (geprüft am 01.10.2026):
  * - Bilder gibt es nur über `/clubdesk/fileservlet?type=image&id=…&s=…`; ohne
@@ -15,15 +15,15 @@
  *
  * Abgerufen wird einmal am Tag, nach bestem Bemühen: Was scheitert, bleibt
  * beim alten Stand und meldet sich im Log — der Abruf von handball.net hängt
- * nicht daran. Jugendbilder werden nur mit `SITE_PLAYERS` überhaupt geholt,
- * Porträts nur für Senioren.
+ * nicht daran. Jugendbilder werden nur mit `SITE_PLAYERS` oder freigegebenem
+ * Gruppenbild überhaupt geholt, Porträts nur für Senioren.
  */
 
 import sharp from 'sharp';
 import { and, eq, notInArray } from 'drizzle-orm';
 import { db } from '../db';
 import { clubdesk_photo } from '../db/schema';
-import { clubdeskUrl, clubdeskTeams, sitePlayers } from '../config';
+import { clubdeskUrl, clubdeskTeams, sitePlayers, sitePhotos } from '../config';
 import { safeFetchHtml, safeFetchImage } from './safeFetch';
 import { serviceLog } from './serviceLogger';
 
@@ -175,8 +175,8 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
     for (const [teamId, slug] of zuordnung) {
       const gruppe = gruppen.find(g => g.slug === slug) ?? null;
       const jugend = istJugend(teamLabels.get(teamId), gruppe?.caption);
-      if (jugend && !sitePlayers()) {
-        // Jugendbilder nur mit SITE_PLAYERS — und dann auch nicht vorhalten.
+      if (jugend && !sitePlayers() && !sitePhotos().get(teamId)?.gruppe) {
+        // Jugendbilder nur mit SITE_PLAYERS (Vorschau) oder ausdrücklicher Freigabe — sonst auch nicht vorhalten.
         db.delete(clubdesk_photo).where(eq(clubdesk_photo.team_id, teamId)).run();
         continue;
       }

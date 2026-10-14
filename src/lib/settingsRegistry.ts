@@ -30,8 +30,10 @@ export interface Einstellung {
   wirkung: Wirkung;
   /** Mehrzeilig bearbeiten (Listen). */
   lang?: boolean;
-  /** Je Eintrag eine Zeile mit eigenen Feldern statt einer Textliste: Team-ID und Anzeigename. Gespeichert wird weiter `id=Name,id`. */
+  /** Je Eintrag eine Zeile mit eigenen Feldern statt einer Textliste: Team-ID, Anzeigename, ClubDesk-Seite, Fotos. Gespeichert wird weiter `id=Name,id`. */
   zeilen?: 'mannschaften';
+  /** Kein eigenes Feld auf der Seite — der Wert wird über den Zeilen-Editor einer anderen Einstellung gepflegt. */
+  versteckt?: boolean;
   /** Anzeigeeinheit bei Zahlen: der gespeicherte Wert ist in Millisekunden, die Seite zeigt Minuten/Sekunden. */
   faktor?: number;
   einheit?: string;
@@ -81,6 +83,19 @@ const teamIdListe = leerOk(t => {
   return ok(eintraege.map(e => e.id).join(','));
 });
 
+const fotoFreigaben = leerOk(t => {
+  const eintraege: string[] = [];
+  for (const teil of t.split(/[,;\n]+/)) {
+    const x = teil.trim();
+    if (!x) continue;
+    const [id, rechte] = x.split('=').map(s => s?.trim().toLowerCase() ?? '');
+    const teile = rechte.split('+').map(s => s.trim()).filter(Boolean);
+    if (!/^\d{1,12}$/.test(id) || teile.length === 0 || teile.some(s => s !== 'mannschaft' && s !== 'spieler')) return fehler(`„${x}“ passt nicht zu id=mannschaft oder id=mannschaft+spieler.`);
+    eintraege.push(`${id}=${[...new Set(teile)].sort().join('+')}`);
+  }
+  return ok(eintraege.join(','));
+});
+
 const httpsWurzel = (mitPfad: boolean) => leerOk(t => {
   let u: URL;
   try { u = new URL(t); } catch { return fehler('Keine gültige Adresse.'); }
@@ -123,7 +138,7 @@ const mailadresse = leerOk(t => (t.length <= 120 && /^[^\s@<>"]+@[^\s@<>"]+\.[^\
 export const EINSTELLUNGEN: readonly Einstellung[] = [
   {
     key: 'TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften', lang: true, zeilen: 'mannschaften', standard: '', wirkung: 'abruf',
-    hinweis: 'Je Mannschaft eine Zeile: die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254) und, wenn die Bezeichnung von handball.net nicht übernommen werden soll, der Name, unter dem die Mannschaft erscheint (z. B. B-Jugend). Die Reihenfolge ist die der Mannschaftswahl. Entfernte Mannschaften behalten ihre gespeicherten Spiele.',
+    hinweis: 'Je Mannschaft eine Zeile: die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen, nur bei Senioren; bei der Jugend werden nie Porträts geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge ist die der Mannschaftswahl.',
     pruefe: teams,
   },
   {
@@ -155,8 +170,9 @@ export const EINSTELLUNGEN: readonly Einstellung[] = [
   { key: 'SITE_OPERATOR', gruppe: 'microsite', art: 'text', label: 'Betreiber (Footer)', standard: '', wirkung: 'sofort', hinweis: 'Wer die Seite betreibt; steht im Footer.', pruefe: kurztext(120) },
   { key: 'SITE_FEEDBACK_MAIL', gruppe: 'microsite', art: 'text', label: 'Rückmelde-Adresse (Footer)', standard: '', wirkung: 'sofort', hinweis: 'E-Mail-Adresse für Rückmeldungen; steht im Footer.', pruefe: mailadresse },
   { key: 'SITE_PREVIEW_TOKEN', gruppe: 'microsite', art: 'geheim', label: 'Vorschau-Schlüssel', standard: '', wirkung: 'sofort', hinweis: 'Mit /<Team-ID>/?vorab=<Schlüssel> zeigt die Seite, was noch nicht öffentlich ist. Mindestens 32 Zeichen. Wird nie angezeigt, nur ersetzt.', pruefe: vorschauSchluessel },
-  { key: 'CLUBDESK_URL', gruppe: 'microsite', art: 'text', label: 'Vereinsseite bei ClubDesk', standard: '', wirkung: 'abruf', hinweis: 'Wurzel der Vereinsseite (https, ohne Pfad). Geholt wird einmal am Tag das Gruppenbild und bei Senioren die Porträts; vorerst nur in der Vorschau.', pruefe: httpsWurzel(false) },
-  { key: 'CLUBDESK_TEAMS', gruppe: 'microsite', art: 'liste', label: 'ClubDesk-Teamseiten', lang: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID die Teamseite unter /spielbetrieb/teams-und-tabellen/, z. B. 75796=woelfe_1.', pruefe: clubdeskTeams },
+  { key: 'CLUBDESK_URL', gruppe: 'microsite', art: 'text', label: 'Vereinsseite bei ClubDesk', standard: '', wirkung: 'abruf', hinweis: 'Wurzel der Vereinsseite (https, ohne Pfad). Geholt wird einmal am Tag das Gruppenbild und bei Senioren die Porträts; welche Mannschaft welche Fotos öffentlich zeigt, steht bei den Mannschaften.', pruefe: httpsWurzel(false) },
+  { key: 'CLUBDESK_TEAMS', gruppe: 'mannschaften', art: 'liste', label: 'ClubDesk-Teamseiten', lang: true, versteckt: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID die Teamseite unter /spielbetrieb/teams-und-tabellen/, z. B. 75796=woelfe_1. Gepflegt in der Mannschaftszeile.', pruefe: clubdeskTeams },
+  { key: 'SITE_PHOTOS', gruppe: 'mannschaften', art: 'liste', label: 'Fotos öffentlich', lang: true, versteckt: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID, welche Fotos der Vereinsseite öffentlich stehen: 96254=mannschaft oder 75796=mannschaft+spieler. Gepflegt in der Mannschaftszeile.', pruefe: fotoFreigaben },
 ];
 
 export const GRUPPEN: Record<Gruppe, string> = {

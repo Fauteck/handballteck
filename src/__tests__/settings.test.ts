@@ -42,6 +42,9 @@ describe('Register', () => {
     expect(p('SITE_PLAYERS', 'ja')).toEqual({ ok: true, wert: 'true' });
     expect(p('CLUBDESK_TEAMS', '75796=woelfe_1')).toEqual({ ok: true, wert: '75796=woelfe_1' });
     expect(p('CLUBDESK_TEAMS', 'x=y').ok).toBe(false);
+    expect(p('SITE_PHOTOS', '75796=spieler+mannschaft; 96254=Mannschaft')).toEqual({ ok: true, wert: '75796=mannschaft+spieler,96254=mannschaft' });
+    expect(p('SITE_PHOTOS', '75796=alles').ok).toBe(false);
+    expect(p('SITE_PHOTOS', '')).toEqual({ ok: true, wert: '' });
   });
 
   it('steht vollständig in .env.example und README', async () => {
