@@ -291,6 +291,13 @@ tr[data-sb]{cursor:pointer}
 tr[data-sb]:hover td{background:color-mix(in srgb,var(--p) 6%,transparent)}
 tr[data-sb]:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
 dialog.steckbrief .gegner{margin-top:0}
+.klappe{margin-left:auto;font:inherit;font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:500;text-transform:none;letter-spacing:0;min-height:44px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.card.dark .klappe{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.24);color:#fff}
+.vorschau{margin:0;color:var(--muted);cursor:pointer}
+[data-klappe].zu:not(#spielplan)>:not(h2):not(.vorschau){display:none}
+#spielplan.zu .filter,#spielplan.zu .kal{display:none}
+#spielplan.zu .plan li:not([data-kurz]){display:none}
+#spielplan.zu[data-ansicht=kalender] .plan{display:grid}
 .sprung{position:sticky;top:var(--oben,0px);z-index:25;background:var(--bg);border-bottom:1px solid var(--line);transition:top .2s}
 .sprung .wrap{padding-top:8px;padding-bottom:8px}
 .sprung ul{list-style:none;margin:0;padding:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
@@ -785,6 +792,54 @@ export const SITE_APP_JS = `(function () {
     if (hoch) hoch.addEventListener('click', function () { window.scrollTo({ top: 0 }); });
   })();
 
+  // Nebenabschnitte zunächst eingeklappt: eine Zeile Vorschau, ein Knopf zum Aufklappen. Der Zustand
+  // bleibt je Abschnitt im Browser; ein Anker auf einen eingeklappten Abschnitt klappt ihn auf.
+  function klappeSchluessel(sec) { return 'handball-site-klappe:' + sec.getAttribute('data-klappe'); }
+  function klappeSetzen(sec, zu, merken) {
+    sec.classList.toggle('zu', zu);
+    var v = sec.querySelector(':scope > .vorschau');
+    if (v) v.hidden = !zu;
+    var knopf = sec.querySelector(':scope > h2 > .klappe');
+    if (knopf) {
+      knopf.setAttribute('aria-expanded', zu ? 'false' : 'true');
+      knopf.textContent = sec.id === 'spielplan' ? (zu ? 'Ganzer Spielplan' : 'Kürzer') : (zu ? 'Aufklappen' : 'Zuklappen');
+    }
+    if (merken) { try { localStorage.setItem(klappeSchluessel(sec), zu ? 'zu' : 'auf'); } catch (e) {} }
+  }
+  function klappenAnwenden() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-klappe]'), function (sec) {
+      var h2 = sec.querySelector(':scope > h2');
+      if (h2 && !h2.querySelector('.klappe')) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'klappe';
+        if (sec.id) b.setAttribute('aria-controls', sec.id);
+        h2.appendChild(b);
+      }
+      var gemerkt = null;
+      try { gemerkt = localStorage.getItem(klappeSchluessel(sec)); } catch (e) {}
+      klappeSetzen(sec, gemerkt !== 'auf', false);
+    });
+    ankerOeffnen(location.hash);
+  }
+  function ankerOeffnen(hash) {
+    if (!hash || hash.length < 2) return;
+    var el = null;
+    try { el = document.getElementById(decodeURIComponent(hash.slice(1))); } catch (e) {}
+    var sec = el && el.closest ? el.closest('[data-klappe]') : null;
+    if (sec && sec.classList.contains('zu')) klappeSetzen(sec, false, false);
+  }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest('.klappe, [data-klappe] > .vorschau, a[href^="#"]') : null;
+    if (!t) return;
+    if (t.tagName === 'A') { ankerOeffnen(t.getAttribute('href')); return; }
+    var sec = t.closest('[data-klappe]');
+    klappeSetzen(sec, !sec.classList.contains('zu'), true);
+    if (sec.id === 'spielplan' && typeof planAnwenden === 'function') planAnwenden();
+  });
+  window.addEventListener('hashchange', function () { ankerOeffnen(location.hash); });
+  klappenAnwenden();
+
   // Sprungleiste: klebt oben (unter dem Mini-Kopf, wenn der zu sehen ist) und markiert den Abschnitt, in dem man gerade liest.
   (function () {
     var leiste = document.querySelector('[data-sprung]');
@@ -898,6 +953,7 @@ export const SITE_APP_JS = `(function () {
             else if (alt && !neu && id === 'live') alt.remove();
           });
           if (document.querySelector('[data-sorttable]')) sortierungEinrichten();
+          klappenAnwenden();
           var ticker = document.querySelector('#naechstes details.ticker');
           if (ticker && tickerOffen) ticker.open = true;
           var kopfNeu = doc.querySelector('.hero .stats');
@@ -905,7 +961,7 @@ export const SITE_APP_JS = `(function () {
           if (kopfNeu && kopfAlt) kopfAlt.replaceWith(kopfNeu);
           var planNeu = doc.getElementById('spielplan');
           var planAlt = document.getElementById('spielplan');
-          if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); }
+          if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); klappenAnwenden(); }
           countdown();
           titelSetzen();
           if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); titelSetzen(); }

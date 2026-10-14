@@ -903,6 +903,26 @@ describe('Handball-Microsite', () => {
       expect((await get(`/${TEAM}/site.css`)).body).toContain('.sprung{position:sticky;top:var(--oben,0px)');
     });
 
+    it('klappt Nebenabschnitte mit Skript zunächst ein, mit einer Zeile Vorschau', async () => {
+      const start = (await get('/')).body;
+      expect(start).toContain('<section class="card" id="auswaertsspiele" data-klappe="auswaerts">');
+      expect(start).toContain('<p class="vorschau" hidden>Kein Auswärtsspiel von Freitag bis Sonntag</p>');
+      expect(start).toContain('id="stand" data-klappe="stand"');
+      // Heimspiele und Live bleiben immer offen.
+      expect(start).not.toMatch(/id="heimspiele"[^>]*data-klappe/);
+      expect(start).not.toMatch(/id="live"[^>]*data-klappe/);
+      const team = (await get(`/${TEAM}/`)).body;
+      // Mit drei Spielen gibt es nichts zu kürzen; das nächste Spiel und die Tabelle bleiben offen.
+      expect(team).not.toContain('id="spielplan" data-klappe');
+      expect(team).toMatch(/<li class="next" data-kurz/);
+      expect(team).not.toMatch(/id="naechstes"[^>]*data-klappe/);
+      expect(team).not.toMatch(/id="tabelle"[^>]*data-klappe/);
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("'handball-site-klappe:'");
+      expect(js).toContain('function ankerOeffnen(hash)');
+      expect((await get(`/${TEAM}/site.css`)).body).toContain('#spielplan.zu .plan li:not([data-kurz]){display:none}');
+    });
+
     it('rendert das Wochenende als Bild, nur bei freigegebener Seite', async () => {
       const res = await get('/bild/wochenende.png');
       expect(res.statusCode).toBe(200);
