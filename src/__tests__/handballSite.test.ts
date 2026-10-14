@@ -238,7 +238,6 @@ describe('Handball-Microsite', () => {
   });
 
   it('zeigt bei mehreren Mannschaften Schaltflächen mit relativen Zielen, die Wurzel führt zur ersten', async () => {
-    expect((await get(`/${TEAM}/`)).body).not.toContain('class="teamwahl"');
     setConfig({ site_enabled: 'true', team_ids: '96254=B-Jugend,96300=C-Jugend' });
     db.insert(schema.handball_team_match).values({
       id: '96300:c1', team_id: '96300', match_id: 'c1', season_id: 2627, starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
@@ -249,11 +248,11 @@ describe('Handball-Microsite', () => {
     try {
       const html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('<a href="../96254/" aria-current="page">B-Jugend</a>');
-      expect(html).toContain('<a href="../96300/">C-Jugend</a>');
+      expect(html).toContain('<li><a href="../96300/">C-Jugend</a></li>');
       expect((await get('/96300/')).statusCode).toBe(200);
       const wurzel = await get('/');
       expect(wurzel.statusCode).toBe(200);
-      expect(wurzel.body).toContain('<h1>Wölfe im Revier</h1>');
+      expect(wurzel.body).toContain('<a class="heim titel" href="./"><span class="kicker">HSG Wölfe Voreifel</span><h1>Wölfe im Revier</h1></a>');
       // Installierbar: Manifest und Service Worker an der Wurzel, Dateien von der ersten Mannschaft.
       expect(wurzel.body).toContain('<link rel="manifest" href="./manifest.webmanifest">');
       expect(wurzel.body).toContain('<meta name="apple-mobile-web-app-title" content="Wölfe im Revier">');
@@ -264,8 +263,7 @@ describe('Handball-Microsite', () => {
       expect((await get('/sw.js')).headers['content-type']).toContain('javascript');
       // Kopf der Mannschaftsseite: Vereinsname klein darüber, die Mannschaft als Titel.
       const team = (await get(`/${TEAM}/`)).body;
-      expect(team).toContain('<div class="kicker">HSG Wölfe Voreifel</div>');
-      expect(team).toContain('<h1>B-Jugend</h1>');
+      expect(team).toContain('<span class="kicker">HSG Wölfe Voreifel</span><h1>B-Jugend</h1>');
       // Fünf große Bereichskästen; die Mannschaften klappen darunter auf.
       expect(wurzel.body.match(/class="kasten[ "]/g)?.length).toBe(5);
       expect(wurzel.body).toContain('<details class="kasten" name="bereich" data-bereich="jungen">');
@@ -278,7 +276,7 @@ describe('Handball-Microsite', () => {
     }
   });
 
-  it('teilt die Mannschaftswahl in zwei Ebenen: Bereich oben, Mannschaften des Bereichs darunter', async () => {
+  it('zeigt auf jeder Seite die Bereichskästen der Startseite, der eigene offen; Titel führt zur Startseite', async () => {
     setConfig({ site_enabled: 'true', team_ids: '96254=B-Jugend,96300=1. Damen,96301=C-Jugend' });
     const zeile = (teamId: string, wettbewerb: string, klasse: string) => ({
       id: `${teamId}:g1`, team_id: teamId, match_id: 'g1', season_id: 2627, starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
@@ -289,15 +287,23 @@ describe('Handball-Microsite', () => {
     db.insert(schema.handball_team_match).values([zeile('96300', 'Landesliga Frauen', 'Frauen'), zeile('96301', 'Kreisliga mC', 'C-Jugend')] as never).run();
     try {
       const html = (await get(`/${TEAM}/`)).body;
-      // Oben: nur die Bereiche, die es gibt — in fester Reihenfolge, der eigene markiert, Ziel ist die erste Mannschaft des Bereichs.
-      expect(html).toContain('<nav class="teamwahl gruppen" aria-label="Bereich wählen"><a href="../96300/">Damen</a><a href="../96254/" aria-current="true">Jugend männlich</a></nav>');
-      // Darunter: nur die Mannschaften des gewählten Bereichs.
-      expect(html).toContain('<nav class="teamwahl" aria-label="Mannschaft wählen"><a href="../96254/" aria-current="page">B-Jugend</a><a href="../96301/">C-Jugend</a></nav>');
-      expect(html).not.toContain('>1. Damen</a>');
-      // Ein Bereich mit einer Mannschaft braucht keine zweite Ebene.
-      const frauen = (await get('/96300/')).body;
-      expect(frauen).toContain('aria-label="Bereich wählen"');
-      expect(frauen).not.toContain('aria-label="Mannschaft wählen"');
+      // Dieselben fünf Kästen wie auf der Startseite; der eigene Bereich ist offen, die eigene Mannschaft markiert.
+      expect(html.match(/class="kasten[ "]/g)?.length).toBe(5);
+      expect(html).toContain('<details class="kasten aktiv" name="bereich" data-bereich="jungen" open>');
+      expect(html).toContain('<li><a href="../96254/" aria-current="page">B-Jugend</a></li><li><a href="../96301/">C-Jugend</a></li>');
+      expect(html).toContain('<details class="kasten" name="bereich" data-bereich="frauen">');
+      expect(html).toContain('<li><a href="../96300/">1. Damen</a></li>');
+      expect(html).toContain('<div class="kasten leer" aria-disabled="true"><span class="kopf"><b>Kinder</b>');
+      // Titel und Vereinsname führen zur Startseite; auf der Spielseite eine Ebene höher.
+      expect(html).toContain('<a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span><h1>B-Jugend</h1></a>');
+      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a class="heim titel" href="../../">');
+      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<li><a href="../../96300/">1. Damen</a></li>');
+      // Die Vorschau trägt ihren Schlüssel in jeden Verweis.
+      process.env.SITE_PREVIEW_TOKEN = 'p'.repeat(40);
+      const vorschau = (await get(`/${TEAM}/?vorab=${'p'.repeat(40)}`)).body;
+      expect(vorschau).toContain(`<a href="../96301/?vorab=${'p'.repeat(40)}">C-Jugend</a>`);
+      expect(vorschau).toContain(`<a class="heim titel" href="../?vorab=${'p'.repeat(40)}">`);
+      delete process.env.SITE_PREVIEW_TOKEN;
     } finally {
       db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
       db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96301')).run();
@@ -625,40 +631,10 @@ describe('Handball-Microsite', () => {
     expect((await get(`/99999/spiel/m1`)).statusCode).toBe(404);
     setConfig({});
     expect((await get(`/${TEAM}/spiel/m1`)).statusCode).toBe(404);
+    // Die frühere Übersicht gibt es nicht mehr.
+    setConfig({ site_enabled: 'true' });
     expect((await get('/uebersicht/')).statusCode).toBe(404);
     expect((await get('/uebersicht')).statusCode).toBe(404);
-  });
-
-  it('zeigt eine Übersicht aller Mannschaften: Anstehendes und Gespieltes, mit Verweisen auf die Mannschaftsseiten', async () => {
-    setConfig({ site_enabled: 'true', team_ids: '96254=B-Jugend,96300=C-Jugend' });
-    db.insert(schema.handball_team_match).values({
-      id: '96300:u1', team_id: '96300', match_id: 'u1', season_id: 2627, starts_at: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
-      status: 'scheduled', status_name: 'scheduled', round: 1, phase_id: 12900, competition_name: 'Kreisliga mC', championship_name: 'C-Jugend',
-      home_id: '96300', home_name: 'HSG Wölfe Voreifel', away_id: '96400', away_name: 'TV Palmersheim',
-      score_home: null, score_away: null, venue_name: 'Halle Süd', venue_address: null, notified_upcoming: false, notified_result: false, updated_at: new Date().toISOString(),
-    } as never).run();
-    try {
-      expect((await get('/uebersicht')).headers.location).toBe('uebersicht/');
-      const res = await get('/uebersicht/');
-      expect(res.statusCode).toBe(200);
-      expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
-      const html = res.body;
-      expect(html).toContain('<h1>Alle Spiele</h1>');
-      expect(html).toContain('href="../96254/site.css?v=');
-      // Das Spiel in zwei Tagen steht unter „nächsten 7 Tagen", das von vor 90 Minuten unter „Zuletzt".
-      expect(html).toContain('href="../96300/#naechstes">C-Jugend</a>');
-      expect(html).toContain('TV Palmersheim');
-      expect(html).toContain('Halle Süd');
-      expect(html).toContain('id="zuletzt"');
-      expect(html).toContain('href="../96254/#letztes">B-Jugend</a>');
-      expect(html).toContain('<a href="../96300/">C-Jugend</a>');
-      // Die Mannschaftsseite verweist darauf, die Spielseite eine Ebene weiter oben.
-      expect((await get(`/${TEAM}/`)).body).toContain('<a href="../uebersicht/">Alle Spiele</a>');
-      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a href="../../uebersicht/">Alle Spiele</a>');
-      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a href="../../96300/">C-Jugend</a>');
-    } finally {
-      db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
-    }
   });
 
   it('bestimmt das Wochenende (Fr–So): Montag bis Freitag das kommende, Samstag und Sonntag das laufende', async () => {

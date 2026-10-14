@@ -406,34 +406,27 @@ function formStrip(team: HandballTeamView): string {
 }
 
 /**
- * Die Mannschaftswahl in zwei Ebenen: oben Herren · Frauen · Jungen · Mädchen
- * (nur, was es gibt), darunter die Mannschaften der gewählten Gruppe.
- * Mannschaften, deren Gruppe die Quelle nicht verrät, sammeln sich unter
- * „Weitere". Gibt es nur eine Gruppe, entfällt die obere Ebene; hat die Gruppe
- * nur eine Mannschaft, die untere. Reine Verweise (`../<Team-ID>/`), kein
- * Skript nötig; die gewählte Gruppe und Mannschaft sind markiert.
+ * Die Navigation jeder Seite: fünf große Kästen (Herren, Damen, Jugend
+ * männlich, Jugend weiblich, Kinder), ein Klick klappt darunter die
+ * Mannschaften auf. Reine `<details>` — kein Skript nötig; mit `name` ist
+ * immer nur einer offen, auf der Mannschaftsseite der eigene Bereich. Eine
+ * Gruppe ohne Mannschaft bleibt als gedämpfter Kasten stehen, damit die fünf
+ * immer da sind. Die Verweise sind relativ (`url` je Seite), `anhang` trägt
+ * den Vorschau-Schlüssel weiter.
  */
-function teamWahlHtml(team: HandballTeamView, mannschaften: SiteTeamLink[], anhang: string): string {
-  if (mannschaften.length < 2) return '';
-  const gruppen: Array<{ id: HandballGroup | 'weitere'; label: string; teams: SiteTeamLink[] }> = [
-    ...HANDBALL_GROUPS.map(g => ({ id: g.id as HandballGroup | 'weitere', label: g.label, teams: mannschaften.filter(t => t.group === g.id) })),
-    { id: 'weitere' as HandballGroup | 'weitere', label: 'Weitere', teams: mannschaften.filter(t => t.group === null) },
-  ].filter(g => g.teams.length > 0);
-  const aktuell = gruppen.find(g => g.teams.some(t => t.id === team.team_id)) ?? gruppen[0];
-  const link = (t: SiteTeamLink, text: string, aktiv: boolean, art: 'page' | 'true') =>
-    `<a href="${h(t.url + anhang)}"${aktiv ? ` aria-current="${art}"` : ''}>${h(text)}</a>`;
-  const oben = gruppen.length > 1
-    ? `<nav class="teamwahl gruppen" aria-label="Bereich wählen">${gruppen.map(g => link(g.teams[0], g.label, g === aktuell, 'true')).join('')}</nav>`
-    : '';
-  const unten = aktuell.teams.length > 1
-    ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${aktuell.teams.map(t => link(t, t.label, t.id === team.team_id, 'page')).join('')}</nav>`
-    : '';
-  return oben + unten;
-}
-
-/** Der Verweis auf die Übersicht aller Mannschaften — nur, wo es mehr als eine gibt. */
-function alleSpieleLink(mannschaften: SiteTeamLink[], url: string): string {
-  return mannschaften.length < 2 ? '' : `<nav class="teamwahl" aria-label="Übersicht"><a href="${h(url)}">Alle Spiele</a></nav>`;
+function gruppenKaesten(teams: SiteTeamLink[], aktuell: string | null, anhang = ''): string {
+  const spalten: Array<{ id: string; label: string; teams: SiteTeamLink[] }> = HANDBALL_GROUPS.map(g => ({ id: g.id, label: g.label, teams: teams.filter(t => t.group === g.id) }));
+  const weitere = teams.filter(t => t.group === null);
+  if (weitere.length > 0) spalten.push({ id: 'weitere', label: 'Weitere', teams: weitere });
+  return `<nav class="kaesten" aria-label="Mannschaften nach Bereich">${spalten.map(g => {
+    const offen = g.teams.some(t => t.id === aktuell);
+    return g.teams.length === 0
+      ? `<div class="kasten leer" aria-disabled="true"><span class="kopf"><b>${h(g.label)}</b><small>keine Mannschaft</small></span></div>`
+      : `<details class="kasten${offen ? ' aktiv' : ''}" name="bereich" data-bereich="${h(g.id)}"${offen ? ' open' : ''}>
+    <summary><span class="kopf"><b>${h(g.label)}</b><small>${g.teams.length} ${g.teams.length === 1 ? 'Mannschaft' : 'Mannschaften'}</small></span></summary>
+    <ul class="liste">${g.teams.map(t => `<li><a href="${h(t.url + anhang)}"${t.id === aktuell ? ' aria-current="page"' : ''}>${h(t.label)}</a></li>`).join('')}</ul>
+  </details>`;
+  }).join('')}</nav>`;
 }
 
 /**
@@ -441,7 +434,7 @@ function alleSpieleLink(mannschaften: SiteTeamLink[], url: string): string {
  * Punkte, Bilanz, Tore, Form, nächstes Spiel), damit die Frage „wie
  * stehen wir?" beantwortet ist, bevor jemand scrollt.
  */
-function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: SiteTeamLink[], anhang = '', uebersichtUrl = '../uebersicht/', verpassen = ''): string {
+function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: SiteTeamLink[], anhang = '', startUrl = '../', verpassen = ''): string {
   const zeile = eigeneZeile(team);
   const saison = saisonLabel(team.matches[0]?.season_id);
   const wettbewerb = [team.championship_name, team.standings[0]?.competition_name ?? team.matches[0]?.competition_name].filter(Boolean).join(' · ');
@@ -461,18 +454,16 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
     const start = new Date(naechstes.starts_at);
     kacheln.push(`<div class="stat"><b class="a"${naechstes.is_live ? '' : ` data-countdown="${h(naechstes.starts_at)}"`}>${naechstes.is_live ? 'Jetzt' : h(inTagen(start, now))}</b><span>${naechstes.is_live ? 'Spiel läuft' : `Nächstes Spiel · ${h(DATUM_KURZ.format(start))}`}</span></div>`);
   }
-  const wahl = teamWahlHtml(team, mannschaften, anhang) + alleSpieleLink(mannschaften, uebersichtUrl);
   return `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen}
-  ${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}
+  <a class="heim" href="${h(startUrl + anhang)}" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}</a>
   <div>
-    ${wahl}
-    <div class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</div>
-    <h1>${h(team.label)}</h1>
+    <a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span><h1>${h(team.label)}</h1></a>
     <div class="sub">${h(wettbewerb)}${saison ? ` · Saison ${h(saison)}` : ''}</div>
   </div>
   ${kacheln.length > 0 ? `<div class="stats">${kacheln.join('')}</div>` : ''}
+  ${gruppenKaesten(mannschaften, team.team_id, anhang)}
 </div></header>`;
 }
 
@@ -976,7 +967,7 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <a class="skip" href="#inhalt">Zum Inhalt</a>
 ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über deinen Vorschau-Link erreichbar. Fotos von der Vereinsseite, Rechte noch nicht geklärt.</div>' : ''}
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
-${heroHtml(team, logo, now, opts.teams ?? [], anhang, '../uebersicht/', verpassen.leiste)}
+${heroHtml(team, logo, now, opts.teams ?? [], anhang, '../', verpassen.leiste)}
 <main class="wrap" id="inhalt">
 <div class="col main">
 ${naechstesSpielHtml(team, now, opts.baseUrl)}
@@ -1008,7 +999,7 @@ ${verpassen.dialog}
 
 /**
  * Das gemeinsame Gerüst der Unterseiten. Sie liegen eine Ebene tiefer als die
- * Mannschaftsseite (`/<Team-ID>/spiel/<Spiel>` und `/uebersicht/`), ihre
+ * Mannschaftsseite (`/<Team-ID>/spiel/<Spiel>`) oder sind die Startseite; ihre
  * Dateien holen sie deshalb über `dateien` (Stil, Skript und Schrift liegen
  * unter der Mannschaft). Kein Manifest und kein eigener Service Worker — der
  * gehört der Mannschaftsseite.
@@ -1058,18 +1049,6 @@ function initialenVon(name: string): string {
   return name.split(/\s+/).filter(w => /^[A-ZÄÖÜ]/.test(w)).map(w => w[0]).join('').slice(0, 3) || 'HB';
 }
 
-function kopfSchlicht(logo: string | null, name: string, titel: string, untertitel: string, wahl: string): string {
-  return `<header class="hero"><div class="wrap">
-  <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
-  ${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(name))}</div>`}
-  <div>
-    ${wahl}
-    <h1>${h(titel)}</h1>
-    <div class="sub">${h(untertitel)}</div>
-  </div>
-</div></header>`;
-}
-
 /** Die Mannschaftswahl für Unterseiten, die eine Ebene tiefer liegen als die Mannschaftsseite. */
 function teamsEineEbeneTiefer(teams: SiteTeamLink[]): SiteTeamLink[] {
   return teams.map(t => ({ ...t, url: `../${t.url}` }));
@@ -1103,7 +1082,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   const verlauf = fertig ? spielverlaufSvg(m) : null;
   const schuetzen = opts.players && fertig ? playerGames(team.team_id).filter(g => g.matchId === m.match_id && g.goals > 0) : [];
   const bild = fertig ? `../bild/endstand.png?match=${encodeURIComponent(m.match_id)}` : null;
-  const kopf = heroHtml(team, logo, now, teamsEineEbeneTiefer(opts.teams ?? []), '', '../../uebersicht/');
+  const kopf = heroHtml(team, logo, now, teamsEineEbeneTiefer(opts.teams ?? []), '', '../../');
   const inhalt = `<p><a class="zurueck" href="../">← Zur Mannschaftsseite</a></p>
 <section class="card" id="spiel">
   <h2>${fertig ? 'Endstand' : m.is_live ? 'Läuft gerade' : 'Spiel'}${status && !fertig ? ` <span class="badge">${h(status)}</span>` : ''}</h2>
@@ -1141,83 +1120,6 @@ ${schuetzen.length > 0 ? `<section class="card" id="schuetzen">
   });
 }
 
-/** Wie weit die Übersicht nach vorn und zurück schaut. */
-const UEBERSICHT_TAGE = 7;
-
-/**
- * Die Übersicht aller Mannschaften des Vereins: was gerade läuft, was in den
- * nächsten sieben Tagen ansteht (nach Tagen gegliedert) und was in den
- * letzten sieben gespielt wurde. Für Eltern und Trainer, die mehr als eine
- * Mannschaft im Blick haben. Liest nur, was die Übersicht schon hat.
- */
-export function renderUebersichtHtml(teams: HandballTeamView[], opts: { teams: SiteTeamLink[]; baseUrl: string; stand: string | null; now?: Date }): string {
-  const now = opts.now ?? new Date();
-  const bis = now.getTime() + UEBERSICHT_TAGE * 86400000;
-  const seit = now.getTime() - UEBERSICHT_TAGE * 86400000;
-  const erste = teams[0];
-  const link = (t: HandballTeamView, anker: string) => `../${encodeURIComponent(t.team_id)}/#${anker}`;
-  const zeile = (t: HandballTeamView, m: HandballMatchView, ergebnis: string, anker: string) => `<li>
-      <span class="d">${h(ZEIT.format(new Date(m.starts_at)))} Uhr<small>${h(datumKurz(new Date(m.starts_at), now))}</small></span>
-      <span class="g"><a class="titel" href="${h(link(t, anker))}">${h(t.label)}</a><div class="ha">${m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(m))}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}</div></span>
-      ${ergebnis}
-    </li>`;
-  const alle = teams.flatMap(t => t.matches.map(m => ({ t, m })));
-  const live = alle.filter(x => x.m.is_live);
-  const kommend = alle
-    .filter(x => !x.m.is_live && x.m.status === 'scheduled' && Date.parse(x.m.starts_at) >= now.getTime() && Date.parse(x.m.starts_at) <= bis)
-    .sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
-  const zuletzt = alle
-    .filter(x => (x.m.status === 'finished' || x.m.rated) && x.m.score_home !== null && x.m.score_away !== null
-      && Date.parse(x.m.starts_at) <= now.getTime() && Date.parse(x.m.starts_at) >= seit)
-    .sort((a, b) => b.m.starts_at.localeCompare(a.m.starts_at));
-
-  const liveHtml = live.length > 0 ? `<section class="card dark live" id="live">
-  <h2>Läuft gerade <span class="badge live">Live</span></h2>
-  <ul class="plan">${live.map(({ t, m }) => {
-    const stand = m.live && m.live.home !== null && m.live.away !== null ? (m.is_home ? `${m.live.home}:${m.live.away}` : `${m.live.away}:${m.live.home}`) : (eigeneTore(m) !== null ? `${eigeneTore(m)}:${gegnerTore(m)}` : '–:–');
-    return zeile(t, m, `<span class="e">${stand}</span>`, 'naechstes');
-  }).join('')}</ul>
-</section>` : '';
-
-  // Nach Kalendertag gliedern; die Sortierung nach Anwurf gilt schon.
-  const tage = new Map<string, typeof kommend>();
-  for (const x of kommend) {
-    const tag = TAG_ISO.format(new Date(x.m.starts_at));
-    tage.set(tag, [...(tage.get(tag) ?? []), x]);
-  }
-  const kommendHtml = `<section class="card" id="anstehend">
-  <h2>Die nächsten ${UEBERSICHT_TAGE} Tage</h2>
-  ${kommend.length > 0
-    ? [...tage.values()].map(liste => `<h3 class="unter tag">${h(DATUM_LANG.format(new Date(liste[0].m.starts_at)))}</h3>
-  <ul class="plan">${liste.map(({ t, m }) => zeile(t, m, `<span class="e o">${m.is_home ? 'Heim' : 'Auswärts'}</span>`, 'naechstes')).join('')}</ul>`).join('')
-    : `<p class="muted">In den nächsten ${UEBERSICHT_TAGE} Tagen steht kein Spiel an.</p>
-  <ul class="plan">${teams.filter(t => t.next_match && !t.next_match.is_live).map(t => zeile(t, t.next_match!, `<span class="e o">${h(inTagen(new Date(t.next_match!.starts_at), now))}</span>`, 'naechstes')).join('')}</ul>`}
-</section>`;
-
-  const zuletztHtml = zuletzt.length > 0 ? `<section class="card" id="zuletzt">
-  <h2>Zuletzt gespielt</h2>
-  <ul class="plan">${zuletzt.map(({ t, m }) => {
-    const klasse = m.won === true ? 'w' : m.won === false ? 'l' : '';
-    return zeile(t, m, `<span class="e ${klasse}" title="${m.won === true ? 'gewonnen' : m.won === false ? 'verloren' : 'unentschieden'}">${eigeneTore(m)}:${gegnerTore(m)}</span>`, 'letztes');
-  }).join('')}</ul>
-</section>` : '';
-
-  const titel = `Alle Spiele · ${erste.name}`;
-  const beschreibung = live.length > 0
-    ? `${live.length} Spiel${live.length === 1 ? '' : 'e'} laufen gerade — Übersicht aller Mannschaften`
-    : kommend.length > 0 ? `${kommend.length} Spiel${kommend.length === 1 ? '' : 'e'} in den nächsten ${UEBERSICHT_TAGE} Tagen — Übersicht aller Mannschaften` : 'Spiele und Ergebnisse aller Mannschaften';
-  const wahl = opts.teams.length > 1
-    ? `<nav class="teamwahl" aria-label="Mannschaft wählen">${opts.teams.map(t => `<a href="${h(t.url)}">${h(t.label)}</a>`).join('')}</nav>`
-    : '';
-  const kopf = kopfSchlicht(logoDataUri(erste.team_id), erste.name, 'Alle Spiele', `${erste.name} · alle Mannschaften`, wahl);
-  const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
-  return unterseiteHtml({
-    titel, beschreibung, url: opts.baseUrl, ogBild: null,
-    dateien: `../${encodeURIComponent(erste.team_id)}/`,
-    kopf, inhalt: `${liveHtml}\n${kommendHtml}\n${zuletztHtml}`, fuss,
-  });
-}
-
 /**
  * Freitag, Samstag und Sonntag des Wochenendes, das ansteht — als Berliner
  * Kalendertage `JJJJ-MM-TT`. Von Montag bis Freitag ist es das kommende; an
@@ -1241,24 +1143,6 @@ function tagMonat(iso: string): string {
 /** Die Reihenfolge „Herren, Damen, Jugend" für die Sortierung der Heimspiele; Weitere zuletzt. */
 const GRUPPEN_RANG: Record<string, number> = { herren: 0, frauen: 1, jungen: 2, maedchen: 3, kinder: 4 };
 const GRUPPEN_KURZ: Record<string, string> = { herren: 'Herren', frauen: 'Damen', jungen: 'Jugend m', maedchen: 'Jugend w', kinder: 'Kinder' };
-
-/**
- * Die fünf großen Kästen unter dem Titel der Startseite: je Gruppe einer, ein
- * Klick klappt darunter die Mannschaften auf. Reine `<details>` — kein
- * Skript nötig; mit `name` ist immer nur einer offen. Eine Gruppe ohne
- * Mannschaft bleibt als gedämpfter Kasten stehen, damit die fünf immer da sind.
- */
-function gruppenKaesten(teams: HandballTeamView[], link: (t: HandballTeamView) => string): string {
-  const spalten: Array<{ id: string; label: string; teams: HandballTeamView[] }> = HANDBALL_GROUPS.map(g => ({ id: g.id, label: g.label, teams: teams.filter(t => t.group === g.id) }));
-  const weitere = teams.filter(t => t.group === null);
-  if (weitere.length > 0) spalten.push({ id: 'weitere', label: 'Weitere', teams: weitere });
-  return `<nav class="kaesten" aria-label="Mannschaften nach Bereich">${spalten.map(g => g.teams.length === 0
-    ? `<div class="kasten leer" aria-disabled="true"><span class="kopf"><b>${h(g.label)}</b><small>keine Mannschaft</small></span></div>`
-    : `<details class="kasten" name="bereich" data-bereich="${h(g.id)}">
-    <summary><span class="kopf"><b>${h(g.label)}</b><small>${g.teams.length} ${g.teams.length === 1 ? 'Mannschaft' : 'Mannschaften'}</small></span></summary>
-    <ul class="liste">${g.teams.map(t => `<li><a href="${h(link(t))}">${h(t.label)}</a></li>`).join('')}</ul>
-  </details>`).join('')}</nav>`;
-}
 
 /**
  * Die Startseite (`/`), „Wölfe im Revier": der Überblick über alle
@@ -1363,20 +1247,18 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       .filter(g => g.teams.length > 0)
       .map(g => `<tbody><tr class="bereich"><th scope="rowgroup" colspan="4">${h(g.label)}</th></tr>${g.teams.map(standZeile).join('')}</tbody>`).join('')}
   </table></div>
-  <p style="margin:12px 0 0"><a href="./uebersicht/">Alle Spiele der nächsten sieben Tage →</a></p>
 </section>`;
 
   const titel = 'Wölfe im Revier';
   const logo = logoDataUri(erste.team_id);
   const kopf = `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
-  ${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}
+  <a class="heim" href="./" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
   <div>
-    <div class="kicker">${h(clubName())}</div>
-    <h1>${h(titel)}</h1>
+    <a class="heim titel" href="./"><span class="kicker">${h(clubName())}</span><h1>${h(titel)}</h1></a>
     <div class="sub">Heimspiele, Spielorte und Ergebnisse aller Mannschaften</div>
   </div>
-  ${gruppenKaesten(teams, t => link(t))}
+  ${gruppenKaesten(teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: link(t) })), null)}
 </div></header>`;
   const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
   return unterseiteHtml({
@@ -1441,7 +1323,7 @@ export function renderStartManifest(erste: HandballTeamView): Record<string, unk
     ],
     shortcuts: [
       { name: 'Heimspiele', url: './#heimspiele' },
-      { name: 'Alle Spiele', url: './uebersicht/' },
+      { name: 'So stehen wir', url: './#stand' },
     ],
   };
 }

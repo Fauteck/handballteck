@@ -71,16 +71,12 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .hero .wrap{position:relative;padding-top:28px;padding-bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 20px;align-items:center}
 .hero img.logo{width:96px;height:96px;padding:10px;border-radius:50%;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
 .hero .initialen{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-size:2.4rem;font-weight:700;color:var(--a)}
-.hero .kicker{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
+.hero a.heim{color:inherit;text-decoration:none;display:block}
+.hero a.heim.titel:hover h1{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.hero .kicker{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
 .hero h1{font-size:clamp(1.8rem,5.5vw,3.2rem);font-weight:700;line-height:1.05;text-transform:uppercase;overflow-wrap:anywhere}
 .hero h1 .nb{white-space:nowrap}
 .hero .sub{margin-top:6px;color:rgba(255,255,255,.82);font-size:1rem}
-.teamwahl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.teamwahl a{padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
-.teamwahl a:hover{background:rgba(255,255,255,.16)}
-.teamwahl.gruppen a{font-size:1.05rem;padding:6px 16px}
-.teamwahl:not(.gruppen) a{font-size:.85rem;padding:3px 10px}
-.teamwahl a[aria-current]{background:var(--a);border-color:var(--a);color:var(--g)}
 .hero .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:4px}
 .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;min-width:0}
 .stat b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;font-weight:700;line-height:1;color:#fff;white-space:nowrap}
@@ -179,6 +175,7 @@ dialog.popup .schliessen{margin:14px 0 0}
 .kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin-top:4px}
 .kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
 .kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
+.kasten .liste a[aria-current]{background:var(--a);color:var(--g)}
 .kasten summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:84px;padding:14px 16px;cursor:pointer;list-style:none}
 .kasten summary::-webkit-details-marker{display:none}
 .kasten summary::after{content:"▾";font-size:1.2rem;color:var(--a);transition:transform .15s}
@@ -283,12 +280,13 @@ main.wrap.schmal{max-width:820px;grid-template-columns:minmax(0,1fr)}
 footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid;gap:6px}
 footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none !important;transition:none !important}}
-@media (pointer:coarse){.teamwahl a,.teamwahl:not(.gruppen) a{display:inline-flex;align-items:center;min-height:44px;padding-top:0;padding-bottom:0}}
 @media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
 @media (min-width:960px){
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
-.hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto minmax(0,1fr) auto;gap:16px 28px}
+.hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto max-content minmax(0,1fr);gap:16px 28px}
+.hero .wrap>div:not(.stats){max-width:440px}
+.hero h1{white-space:nowrap;overflow-wrap:normal}
 .hero img.logo,.hero .initialen{width:120px;height:120px}
 .hero .stats{grid-column:auto;grid-template-columns:repeat(3,minmax(110px,1fr));margin-top:0}
 .season .body{grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:start}

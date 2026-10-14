@@ -26,7 +26,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import fs from 'node:fs';
 import { z } from 'zod';
 import {
-  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
+  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
   siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg } from '../lib/clubdesk';
@@ -139,31 +139,6 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
     return reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'no-cache').send(SITE_SW_JS);
-  });
-
-  /**
-   * Die Übersicht aller Mannschaften des Vereins (`/uebersicht/`): was läuft,
-   * was in den nächsten Tagen ansteht, was zuletzt gespielt wurde. Steht vor
-   * `/:teamId`, die Team-ID besteht nur aus Ziffern — es gibt keine Verwechslung.
-   */
-  fastify.get('/uebersicht', limit(120), async (_request, reply) => {
-    const sicht = handballOverview();
-    const erste = sicht.configured ? sicht.teams[0] : undefined;
-    if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    return reply.redirect('uebersicht/', 301);
-  });
-
-  fastify.get('/uebersicht/', limit(60), async (_request, reply) => {
-    const sicht = handballOverview();
-    const erste = sicht.configured ? sicht.teams[0] : undefined;
-    if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    const html = renderUebersichtHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/uebersicht/`, stand: sicht.updated_at });
-    const live = sicht.teams.some(t => t.next_match?.is_live === true);
-    return reply
-      .header('Content-Type', 'text/html; charset=utf-8')
-      .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
-      .header('X-Robots-Tag', 'noindex, nofollow')
-      .send(html);
   });
 
   // Ohne Schrägstrich: umleiten, damit `./bild/…` und der Service-Worker-Scope stimmen.
