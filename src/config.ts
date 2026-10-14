@@ -213,6 +213,20 @@ export function sitePlayers(): boolean {
  * Schrägstrich am Ende; null, wenn keine gesetzt oder unbrauchbar ist (dann
  * gilt `PUBLIC_URL`). Nur eine vollständige https-Adresse ohne Parameter.
  */
+/**
+ * Herkünfte, die die Microsite in einen Rahmen (iframe) einbetten dürfen —
+ * die Vereinsseite. Nur https-Herkünfte ohne Pfad, durch Komma. Leer: keine.
+ */
+export function siteFrameAncestors(): string[] {
+  const out: string[] = [];
+  for (const teil of (env('SITE_FRAME_ANCESTORS') || '').split(/[\s,;]+/)) {
+    const t = teil.trim();
+    if (!t) continue;
+    try { const u = new URL(t); if (u.protocol === 'https:' && !out.includes(u.origin)) out.push(u.origin); } catch { /* ungültig: weglassen */ }
+  }
+  return out;
+}
+
 export function siteUrl(): string | null {
   const v = env('SITE_URL');
   if (!v) return null;

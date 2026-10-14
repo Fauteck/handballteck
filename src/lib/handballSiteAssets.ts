@@ -69,9 +69,11 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-55deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px);pointer-events:none}
 .hero::after{content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;border:38px solid rgba(255,255,255,.05);pointer-events:none}
 .hero .wrap{position:relative;padding-top:28px;padding-bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 20px;align-items:center}
-.hero img.logo{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
+.hero img.logo{width:96px;height:96px;padding:10px;border-radius:50%;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
 .hero .initialen{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-size:2.4rem;font-weight:700;color:var(--a)}
-.hero h1{font-size:clamp(2rem,6vw,3.4rem);font-weight:700;line-height:1;text-transform:uppercase}
+.hero .kicker{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
+.hero h1{font-size:clamp(1.8rem,5.5vw,3.2rem);font-weight:700;line-height:1.05;text-transform:uppercase;overflow-wrap:anywhere}
+.hero h1 .nb{white-space:nowrap}
 .hero .sub{margin-top:6px;color:rgba(255,255,255,.82);font-size:1rem}
 .teamwahl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .teamwahl a{padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
@@ -198,6 +200,7 @@ table.heim small{display:block;color:var(--muted);font-size:.8rem;font-weight:50
 table.heim td.wann{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;white-space:nowrap}
 table.heim td.team a{font-weight:700;text-decoration:none}
 table.heim td.ort b{display:block}
+table.stand td b{font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;color:var(--hd)}
 table.heim td.ort a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
 table.heim tr.neu td{border-top:3px solid var(--line)}
 .erg{font-weight:700}.erg.w{color:var(--wint)}.erg.l{color:var(--losst)}
@@ -206,12 +209,13 @@ table.heim tr.neu td{border-top:3px solid var(--line)}
 .mannschaften li:last-child{border-bottom:0}
 .mannschaften a.titel{display:inline-block;padding:4px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.2rem;text-transform:uppercase;color:var(--hd);text-decoration:none}
 @media (max-width:640px){
-table.heim thead{position:absolute;left:-9999px}
-table.heim,table.heim tbody{display:block}
-table.heim tr{display:grid;grid-template-columns:1fr;gap:2px;padding:12px 0;border-bottom:1px solid var(--line)}
-table.heim td{display:block;padding:2px 0;border:0}
-table.heim td::before{content:attr(data-label);display:block;font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+table.heim:not(.stand) thead{position:absolute;left:-9999px}
+table.heim:not(.stand),table.heim:not(.stand) tbody{display:block}
+table.heim:not(.stand) tr{display:grid;grid-template-columns:1fr;gap:2px;padding:12px 0;border-bottom:1px solid var(--line)}
+table.heim:not(.stand) td{display:block;padding:2px 0;border:0}
+table.heim:not(.stand) td::before{content:attr(data-label);display:block;font-family:'Barlow Condensed',sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 table.heim tr.neu{border-top:3px solid var(--line)}
+table.stand th,table.stand td{padding:8px 4px;font-size:.9rem}
 table.heim tr.neu td{border-top:0}
 }
 .skip{position:absolute;left:-999px;top:8px;z-index:10;padding:8px 14px;border-radius:8px;background:#fff;color:#10262c}
@@ -227,6 +231,10 @@ h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
 .hero .theme{position:absolute;top:12px;right:16px;z-index:2;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-size:1.2rem;line-height:1;cursor:pointer}
 .hero .theme:hover{background:rgba(255,255,255,.22)}
+html.kompakt .hero img.logo,html.kompakt .hero .initialen,html.kompakt .hero .kicker,html.kompakt .hero .theme,html.kompakt footer .betreiber{display:none}
+html.kompakt .hero .wrap{grid-template-columns:minmax(0,1fr);padding-top:16px;padding-bottom:16px}
+html.kompakt .hero h1{font-size:clamp(1.5rem,4.5vw,2.4rem)}
+html.kompakt .verpassen{margin-right:0}
 .vorschau-band{padding:8px 16px;text-align:center;background:#7a2a8a;color:#fff;font-size:.9rem;font-weight:600}
 .portraets{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px}
 .portraets li{display:grid;gap:2px;font-size:.9rem;line-height:1.25}
@@ -275,7 +283,7 @@ footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid
 footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none !important;transition:none !important}}
 @media (pointer:coarse){.teamwahl a,.teamwahl:not(.gruppen) a{display:inline-flex;align-items:center;min-height:44px;padding-top:0;padding-bottom:0}}
-@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px}.plan li{grid-template-columns:78px 1fr auto}}
+@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
 @media (min-width:960px){
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
@@ -296,6 +304,7 @@ ${dunkel()}
  * erst hell aufblitzt und dann dunkel wird.
  */
 export const SITE_THEME_JS = `try { var t = localStorage.getItem('handball-site-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+if (/[?&]kompakt=1(&|$)/.test(location.search)) document.documentElement.className += ' kompakt';
 `;
 
 /**
@@ -380,6 +389,16 @@ export const SITE_APP_JS = `(function () {
   // Nur die Mannschaftsseite trägt ein Manifest; Spiel- und Übersichtsseite liegen eine Ebene tiefer und haben keinen eigenen Worker.
   if ('serviceWorker' in navigator && document.querySelector('link[rel=manifest]')) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
 
+  // Eingebettet in die Vereinsseite (?kompakt=1): der Kompaktmodus wandert mit jedem Verweis innerhalb der Seite.
+  if (/[?&]kompakt=1(&|$)/.test(location.search)) {
+    Array.prototype.forEach.call(document.querySelectorAll('a[href]'), function (a) {
+      var href = a.getAttribute('href') || '';
+      if (/^(https?:|mailto:|webcal:|#)/.test(href) || /kompakt=1/.test(href) || a.hasAttribute('download')) return;
+      var teile = href.split('#');
+      a.setAttribute('href', teile[0] + (teile[0].indexOf('?') >= 0 ? '&' : '?') + 'kompakt=1' + (teile[1] ? '#' + teile[1] : ''));
+    });
+  }
+
   // Farbschema: automatisch (Gerät) → hell → dunkel → automatisch.
   var THEME_KEY = 'handball-site-theme';
   var themeKnopf = document.querySelector('[data-theme-toggle]');
@@ -433,9 +452,11 @@ export const SITE_APP_JS = `(function () {
 
   // Heimspiele der Startseite sortieren: Datum, Spielort oder Herren · Damen · Jugend.
   // Ohne Skript bleibt die Tabelle nach Datum stehen; die Chips erscheinen erst mit Skript.
-  var sortTabelle = document.querySelector('[data-sorttable]');
-  if (sortTabelle) {
-    var sortLeiste = document.querySelector('[data-sortbar]');
+  var sortWahl = {};
+  function sortierungEinrichten() {
+  Array.prototype.forEach.call(document.querySelectorAll('[data-sorttable]'), function (sortTabelle) {
+    var abschnitt = sortTabelle.closest('section');
+    var sortLeiste = abschnitt ? abschnitt.querySelector('[data-sortbar]') : null;
     var sortKey = {
       datum: function (z) { return z.getAttribute('data-ts') || ''; },
       ort: function (z) { return z.getAttribute('data-ort') || '\uffff'; },
@@ -465,10 +486,13 @@ export const SITE_APP_JS = `(function () {
       sortLeiste.hidden = false;
       sortLeiste.addEventListener('click', function (ev) {
         var b = ev.target && ev.target.closest ? ev.target.closest('[data-sort]') : null;
-        if (b) sortieren(b.getAttribute('data-sort'));
+        if (b) { sortWahl[abschnitt.id] = b.getAttribute('data-sort'); sortieren(sortWahl[abschnitt.id]); }
       });
+      if (sortWahl[abschnitt.id] && sortWahl[abschnitt.id] !== 'datum') sortieren(sortWahl[abschnitt.id]);
     }
+  });
   }
+  sortierungEinrichten();
 
   // Teilen: auf dem Telefon das Menü des Geräts (mit dem Bild als Datei, wo es das kann),
   // sonst ein Fenster mit den Zielen und Link kopieren / Bild kopieren / Bild speichern.
@@ -636,11 +660,14 @@ export const SITE_APP_JS = `(function () {
           var doc = new DOMParser().parseFromString(html, 'text/html');
           torHinweis(standAus(document), standAus(doc));
           var tickerOffen = !!document.querySelector('#naechstes details.ticker[open]');
-          ['naechstes', 'letztes', 'tabelle'].forEach(function (id) {
+          // Mannschaftsseite: Spiel, Letztes, Tabelle; Startseite: Läuft gerade, Heim- und Auswärtsspiele, Stand.
+          ['naechstes', 'letztes', 'tabelle', 'live', 'heimspiele', 'auswaertsspiele', 'stand'].forEach(function (id) {
             var neu = doc.getElementById(id);
             var alt = document.getElementById(id);
             if (neu && alt) alt.replaceWith(neu);
+            else if (alt && !neu && id === 'live') alt.remove();
           });
+          if (document.querySelector('[data-sorttable]')) sortierungEinrichten();
           var ticker = document.querySelector('#naechstes details.ticker');
           if (ticker && tickerOffen) ticker.open = true;
           var kopfNeu = doc.querySelector('.hero .stats');

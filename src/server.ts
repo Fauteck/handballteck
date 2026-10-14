@@ -14,7 +14,7 @@
 import Fastify, { type FastifyInstance, type RouteOptions } from 'fastify';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { trustProxy, version, adminPort } from './config';
+import { trustProxy, version, adminPort, siteFrameAncestors } from './config';
 import { siteRoutes } from './routes/site';
 import { telegramRoutes } from './routes/telegram';
 import { apiRoutes } from './routes/api';
@@ -83,7 +83,8 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
         connectSrc: ["'self'"],
         manifestSrc: ["'self'"],
         workerSrc: ["'self'"],
-        frameAncestors: ["'none'"],
+        // Die Vereinsseite darf die Microsite einbetten (SITE_FRAME_ANCESTORS); sonst niemand.
+        frameAncestors: siteFrameAncestors().length > 0 ? siteFrameAncestors() : ["'none'"],
       },
     },
     // Die Microsite wird per Link in WhatsApp und Telegram geteilt; deren
