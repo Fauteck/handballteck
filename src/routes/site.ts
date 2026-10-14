@@ -27,7 +27,7 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import {
   siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, wochenendePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
+  siteImagePng, wochenendePng, istLiveFenster, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
@@ -119,7 +119,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
     const html = renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/`, stand: sicht.updated_at, pushEnabled: sitePushConfig().enabled });
-    const live = sicht.teams.some(t => t.next_match?.is_live === true);
+    const live = sicht.teams.some(t => istLiveFenster(t.next_match));
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
@@ -166,7 +166,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
       players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
     });
     // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
-    const live = t.team.next_match?.is_live === true;
+    const live = istLiveFenster(t.team.next_match);
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
       // Die Vorschau darf in keinem Zwischenspeicher landen, auch nicht in dem eines Proxys.
