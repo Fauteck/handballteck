@@ -668,6 +668,8 @@ describe('Handball-Microsite', () => {
     expect(heim).not.toContain('Fremde Halle');
     expect(html.slice(html.indexOf('id="auswaertsspiele"'))).toContain('Fremde Halle');
     expect(html).toContain('<h2>So stehen wir</h2>');
+    // Nach Bereich gruppiert wie die Kästen im Kopf.
+    expect(html).toContain('<tr class="bereich"><th scope="rowgroup" colspan="4">Jugend männlich</th></tr>');
     expect(html).not.toContain('Alle Mannschaften</h2>');
     expect(html).not.toContain('Zu spät');
     expect(html).not.toContain('Zu früh');

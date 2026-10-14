@@ -200,6 +200,7 @@ table.heim small{display:block;color:var(--muted);font-size:.8rem;font-weight:50
 table.heim td.wann{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;white-space:nowrap}
 table.heim td.team a{font-weight:700;text-decoration:none}
 table.heim td.ort b{display:block}
+table.stand tr.bereich th{text-align:left;padding-top:14px;font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--hd);border-bottom:2px solid var(--line)}
 table.stand td b{font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;color:var(--hd)}
 table.heim td.ort a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
 table.heim tr.neu td{border-top:3px solid var(--line)}

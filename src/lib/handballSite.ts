@@ -1325,7 +1325,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const weHtml = wochenendTabelle('heimspiele', `Heimspiele · ${wann} Wochenende`, heimspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Heimspiel angesetzt.`);
   const ausHtml = wochenendTabelle('auswaertsspiele', `Auswärtsspiele · ${wann} Wochenende`, auswaertsspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Auswärtsspiel angesetzt.`);
 
-  // Der Stand: je Mannschaft Platz, Punkte und das letzte Ergebnis — eine Zeile, kein Spielplan.
+  // Der Stand: je Mannschaft Platz, Punkte und das letzte Ergebnis — eine Zeile, kein Spielplan; nach Bereich gruppiert wie die Kästen im Kopf.
   const standZeile = (t: HandballTeamView) => {
     const tabelle = t.standings.find(s => s.rows.some(r => r.teamId === t.team_id));
     const zeile = tabelle?.rows.find(r => r.teamId === t.team_id);
@@ -1333,7 +1333,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
     const zuletzt = l && l.score_home !== null && l.score_away !== null
       ? `<span class="erg ${l.won === true ? 'w' : l.won === false ? 'l' : ''}">${eigeneTore(l)}:${gegnerTore(l)}</span> ${l.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(l))}` : '<span class="muted">noch kein Spiel</span>';
     return `<tr>
-      <td class="team" data-label="Mannschaft"><a href="${h(link(t))}">${h(t.label)}</a>${t.group ? `<small>${h(GRUPPEN_KURZ[t.group])}</small>` : ''}</td>
+      <td class="team" data-label="Mannschaft"><a href="${h(link(t))}">${h(t.label)}</a></td>
       <td data-label="Platz">${zeile ? `<b>${zeile.position}.</b><small>von ${tabelle!.rows.length}</small>` : '<span class="muted">–</span>'}</td>
       <td data-label="Punkte">${zeile ? `<b>${zeile.points}</b><small>${zeile.played} Sp.</small>` : '<span class="muted">–</span>'}</td>
       <td data-label="Zuletzt">${zuletzt}</td>
@@ -1343,7 +1343,9 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   <h2>So stehen wir</h2>
   <div class="tabelle-rahmen"><table class="heim stand">
     <thead><tr><th scope="col">Mannschaft</th><th scope="col">Platz</th><th scope="col">Punkte</th><th scope="col">Zuletzt</th></tr></thead>
-    <tbody>${teams.map(standZeile).join('')}</tbody>
+    ${[...HANDBALL_GROUPS.map(g => ({ label: g.label, teams: teams.filter(t => t.group === g.id) })), { label: 'Weitere', teams: teams.filter(t => t.group === null) }]
+      .filter(g => g.teams.length > 0)
+      .map(g => `<tbody><tr class="bereich"><th scope="rowgroup" colspan="4">${h(g.label)}</th></tr>${g.teams.map(standZeile).join('')}</tbody>`).join('')}
   </table></div>
   <p style="margin:12px 0 0"><a href="./uebersicht/">Alle Spiele der nächsten sieben Tage →</a></p>
 </section>`;
