@@ -364,12 +364,24 @@ export function siteCssText(): { text: string; hash: string } {
 }
 
 /** Inline-Icons für die Kanäle — `currentColor`, damit sie die Farbe der Kachel nehmen. */
-const ICON: Record<'bell' | 'send' | 'calendar' | 'rss', string> = {
+const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share', string> = {
+  share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2L8.9 13.7a3 3 0 0 0 0-3.4l6.7-3.5A3 3 0 1 0 15 5a3 3 0 0 0 .1.7L8.4 9.2a3 3 0 1 0 0 5.6l6.7 3.5A3 3 0 1 0 18 16z"/></svg>',
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v4.2L4 15v1h16v-1l-2-2.8V8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22z"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6z"/></svg>',
   rss: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4a16 16 0 0 1 16 16h-3A13 13 0 0 0 4 7zm0 6a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7zm2 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>',
 };
+
+/**
+ * Der Teilen-Knopf. Ohne Skript bleibt er verborgen; das Skript (`app.js`)
+ * öffnet auf dem Telefon das Teilen-Menü des Geräts — mit dem Bild als Datei,
+ * wo das Gerät das kann — und zeigt sonst ein Fenster mit WhatsApp, Telegram,
+ * Facebook, LinkedIn, Link kopieren, Bild kopieren und Bild speichern.
+ * `url` ist absolut (der Empfänger sieht sie), `bild` relativ zur Seite.
+ */
+function teilenHtml(o: { url: string; titel: string; text: string; bild?: string | null }): string {
+  return `<button type="button" class="btn teilen" data-teilen data-url="${h(o.url)}" data-titel="${h(o.titel)}" data-text="${h(o.text)}"${o.bild ? ` data-bild="${h(o.bild)}"` : ''} hidden>${ICON.share} Teilen</button>`;
+}
 
 /** Der Kalendertag in deutscher Ortszeit als Zahl — für „heute", „morgen", „in 6 Tagen". */
 const TAG_ISO = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Berlin' });
@@ -624,7 +636,7 @@ function liveSpielHtml(m: HandballMatchView, now: Date): string {
 </section>`;
 }
 
-function naechstesSpielHtml(team: HandballTeamView, now: Date): string {
+function naechstesSpielHtml(team: HandballTeamView, now: Date, baseUrl: string): string {
   const m = team.next_match;
   if (!m) {
     return `<section class="card dark next s-next" id="naechstes"><h2>Nächstes Spiel</h2><p class="muted">Kein weiteres Spiel angesetzt.</p></section>`;
@@ -645,13 +657,14 @@ function naechstesSpielHtml(team: HandballTeamView, now: Date): string {
   </div>
   ${gegnerSteckbriefHtml(team, m, now)}
   <div class="row" style="margin-top:14px">
+    ${teilenHtml({ url: baseUrl, titel: `${m.home_name} gegen ${m.away_name}`, text: `${m.home_name} gegen ${m.away_name} · ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr${halle ? ` · ${halle}` : ''}`, bild: './bild/spiel.png' }).replace('class="btn teilen"', 'class="btn ghost teilen"')}
     ${routen.map(r => `<a class="btn ghost" href="${h(r.href)}" target="_blank" rel="noopener noreferrer">🧭 ${h(r.label)}</a>`).join('')}
     <a class="btn ghost" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">Spielseite auf handball.net</a>
   </div>
 </section>`;
 }
 
-function letztesSpielHtml(team: HandballTeamView): string {
+function letztesSpielHtml(team: HandballTeamView, baseUrl: string): string {
   const m = team.last_match;
   if (!m || m.score_home === null || m.score_away === null) return '';
   const start = new Date(m.starts_at);
@@ -668,6 +681,7 @@ function letztesSpielHtml(team: HandballTeamView): string {
       <div class="muted">${m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(m))} · ${h(DATUM_LANG.format(start))}${hz ? ` · ${hz}` : ''}</div>
     </div>
     <div class="row">
+      ${teilenHtml({ url: `${baseUrl}spiel/${encodeURIComponent(m.match_id)}`, titel: `${m.home_name} ${m.score_home}:${m.score_away} ${m.away_name}`, text: `Endstand: ${m.home_name} ${m.score_home}:${m.score_away} ${m.away_name}`, bild: `./bild/endstand.png?match=${encodeURIComponent(m.match_id)}` })}
       <a class="btn" href="${h(`./spiel/${encodeURIComponent(m.match_id)}`)}">Spielseite</a>
       ${m.report_url ? `<a class="btn" href="${h(m.report_url)}" target="_blank" rel="noopener noreferrer">Spielberichtsbogen (PDF)</a>` : ''}
       <a class="btn" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">handball.net</a>
@@ -948,8 +962,8 @@ ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über
 ${heroHtml(team, logo, now, opts.teams ?? [], anhang, '../uebersicht/', verpassen.leiste)}
 <main class="wrap" id="inhalt">
 <div class="col main">
-${naechstesSpielHtml(team, now)}
-${letztesSpielHtml(team)}
+${naechstesSpielHtml(team, now, opts.baseUrl)}
+${letztesSpielHtml(team, opts.baseUrl)}
 ${tabelleHtml(team)}
 ${saisonHtml(team, opts.players)}
 ${opts.vorschau ? teamFotosHtml(team, opts.players, anhang) : ''}
@@ -982,7 +996,7 @@ ${verpassen.dialog}
  * unter der Mannschaft). Kein Manifest und kein eigener Service Worker — der
  * gehört der Mannschaftsseite.
  */
-function unterseiteHtml(o: { breit?: boolean; titel: string; beschreibung: string; url: string; ogBild: string | null; dateien: string; kopf: string; inhalt: string; fuss: string }): string {
+function unterseiteHtml(o: { breit?: boolean; ogLogo?: boolean; titel: string; beschreibung: string; url: string; ogBild: string | null; dateien: string; kopf: string; inhalt: string; fuss: string }): string {
   const palette = vervollstaendigePalette(readPalette());
   return `<!doctype html>
 <html lang="de">
@@ -998,7 +1012,9 @@ function unterseiteHtml(o: { breit?: boolean; titel: string; beschreibung: strin
 <meta property="og:title" content="${h(o.titel)}">
 <meta property="og:description" content="${h(o.beschreibung)}">
 <meta property="og:url" content="${h(o.url)}">
-${o.ogBild ? `<meta property="og:image" content="${h(o.ogBild)}">\n<meta property="og:image:width" content="1600">\n<meta property="og:image:height" content="900">\n<meta name="twitter:card" content="summary_large_image">` : ''}
+${o.ogBild ? (o.ogLogo
+    ? `<meta property="og:image" content="${h(o.ogBild)}">\n<meta property="og:image:width" content="512">\n<meta property="og:image:height" content="512">\n<meta name="twitter:card" content="summary">`
+    : `<meta property="og:image" content="${h(o.ogBild)}">\n<meta property="og:image:width" content="1600">\n<meta property="og:image:height" content="900">\n<meta name="twitter:card" content="summary_large_image">`) : ''}
 <link rel="icon" href="${o.dateien}logo.png" type="image/png">
 <script src="${o.dateien}theme.js?v=${inhaltsHash(SITE_THEME_JS)}"></script>
 <link rel="stylesheet" href="${o.dateien}site.css?v=${siteCssText().hash}">
@@ -1085,6 +1101,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   </div>
   ${bild ? `<img class="bild" style="margin-top:14px" src="${h(bild)}" width="800" height="450" alt="${h(`Endstand ${m.home_name} ${m.score_home}:${m.score_away} ${m.away_name}`)}" loading="lazy">` : ''}
   <div class="row" style="margin-top:14px">
+    ${teilenHtml({ url: `${opts.baseUrl}spiel/${encodeURIComponent(m.match_id)}`, titel, text: stand ? `Endstand: ${m.home_name} ${stand} ${m.away_name}` : `${paarung} · ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr`, bild })}
     ${routen.map(r => `<a class="btn" href="${h(r.href)}" target="_blank" rel="noopener noreferrer">🧭 ${h(r.label)}</a>`).join('')}
     ${m.report_url ? `<a class="btn" href="${h(m.report_url)}" target="_blank" rel="noopener noreferrer">Spielberichtsbogen (PDF)</a>` : ''}
     <a class="btn" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">Auf handball.net</a>
@@ -1262,6 +1279,9 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   }).join('')}</ul>
 </section>` : '';
 
+  const beschreibung = heimspiele.length > 0
+    ? `${heimspiele.length} Heimspiel${heimspiele.length === 1 ? '' : 'e'} am Wochenende ${tagMonat(we.fr)}–${tagMonat(we.so)} — Überblick über alle Mannschaften`
+    : 'Überblick über alle Mannschaften: Heimspiele, Spielorte und Ergebnisse';
   const zeilen = heimspiele.map(({ t, m }) => {
     const start = new Date(m.starts_at);
     const fertig = (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null;
@@ -1280,7 +1300,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   });
   const sortierung = [['datum', 'Datum'], ['ort', 'Spielort'], ['gruppe', 'Herren · Damen · Jugend']] as const;
   const weHtml = `<section class="card" id="heimspiele">
-  <h2>Heimspiele · ${laeuft ? 'dieses' : 'nächstes'} Wochenende <span class="muted small">${tagMonat(we.fr)}–${tagMonat(we.so)}</span></h2>
+  <h2>Heimspiele · ${laeuft ? 'dieses' : 'nächstes'} Wochenende <span class="muted small">${tagMonat(we.fr)}–${tagMonat(we.so)}</span>${teilenHtml({ url: opts.baseUrl, titel: 'Wölfe im Revier', text: beschreibung }).replace('class="btn teilen"', 'class="btn teilen klein"')}</h2>
   ${heimspiele.length > 0 ? `<div class="sortieren" data-sortbar hidden role="group" aria-label="Heimspiele sortieren">
     <span class="muted small">Sortieren nach</span>
     ${sortierung.map(([k, t], i) => `<button type="button" data-sort="${k}" aria-pressed="${i === 0 ? 'true' : 'false'}">${t}</button>`).join('')}
@@ -1318,9 +1338,6 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 </section>`;
 
   const titel = 'Wölfe im Revier';
-  const beschreibung = heimspiele.length > 0
-    ? `${heimspiele.length} Heimspiel${heimspiele.length === 1 ? '' : 'e'} am Wochenende ${tagMonat(we.fr)}–${tagMonat(we.so)} — Überblick über alle Mannschaften`
-    : 'Überblick über alle Mannschaften: Heimspiele, Spielorte und Ergebnisse';
   const logo = logoDataUri(erste.team_id);
   const kopf = `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
@@ -1333,7 +1350,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 </div></header>`;
   const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
   return unterseiteHtml({
-    titel, beschreibung, url: opts.baseUrl, ogBild: null,
+    titel, beschreibung, url: opts.baseUrl, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
     dateien: `./${encodeURIComponent(erste.team_id)}/`,
     kopf, inhalt: `${liveHtml}\n${weHtml}\n${mannschaftenHtml}`, fuss, breit: true,
   });

@@ -167,6 +167,11 @@ dialog.popup::backdrop{background:rgba(0,0,0,.55)}
 dialog.popup h2{color:#fff}
 dialog.popup fieldset{border:0;margin:0 0 10px;padding:0}
 dialog.popup legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.85rem;color:var(--a);padding:0}
+.teilen{gap:8px}.teilen svg{width:18px;height:18px;fill:currentColor}
+.teilen.klein{min-height:44px;padding:6px 12px;font-size:.9rem;margin-left:auto;text-transform:none;font-family:'Barlow',sans-serif}
+.card:not(.dark) .btn.teilen{color:var(--p)}
+dialog.popup .teilziele{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
+dialog.popup .teilziele .btn{justify-content:center}
 dialog.popup .schliessen{margin:14px 0 0}
 .lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
 .kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin-top:4px}
@@ -464,6 +469,90 @@ export const SITE_APP_JS = `(function () {
       });
     }
   }
+
+  // Teilen: auf dem Telefon das Menü des Geräts (mit dem Bild als Datei, wo es das kann),
+  // sonst ein Fenster mit den Zielen und Link kopieren / Bild kopieren / Bild speichern.
+  // Das Bild wird vorab geladen: Safari verlangt, dass share() sofort auf den Tipp folgt.
+  var bilder = {};
+  function bildLaden(rel) {
+    var href = new URL(rel, location.href).href;
+    if (!bilder[href]) bilder[href] = fetch(href, { credentials: 'omit' }).then(function (r) { return r.ok ? r.blob() : null; }).catch(function () { return null; });
+    return bilder[href];
+  }
+  var teilKnoepfe = document.querySelectorAll('[data-teilen]');
+  var bildBereit = {};
+  Array.prototype.forEach.call(teilKnoepfe, function (k) {
+    k.hidden = false;
+    var rel = k.getAttribute('data-bild');
+    if (rel) bildLaden(rel).then(function (b) { bildBereit[rel] = b; });
+  });
+  var teilDialog = null;
+  function teilFenster(k) {
+    var url = k.getAttribute('data-url') || location.href;
+    var titel = k.getAttribute('data-titel') || document.title;
+    var text = k.getAttribute('data-text') || titel;
+    var rel = k.getAttribute('data-bild');
+    var bildHref = rel ? new URL(rel, location.href).href : null;
+    if (!teilDialog) {
+      teilDialog = document.createElement('dialog');
+      teilDialog.className = 'popup';
+      teilDialog.addEventListener('click', function (ev) { if (ev.target === teilDialog) teilDialog.close(); });
+      document.body.appendChild(teilDialog);
+    }
+    teilDialog.textContent = '';
+    var h2 = document.createElement('h2'); h2.textContent = 'Teilen'; teilDialog.appendChild(h2);
+    var p = document.createElement('p'); p.className = 'lead'; p.textContent = text; teilDialog.appendChild(p);
+    var ziele = document.createElement('div'); ziele.className = 'teilziele';
+    var enc = encodeURIComponent;
+    [['WhatsApp', 'https://wa.me/?text=' + enc(text + ' ' + url)],
+     ['Telegram', 'https://t.me/share/url?url=' + enc(url) + '&text=' + enc(text)],
+     ['Facebook', 'https://www.facebook.com/sharer/sharer.php?u=' + enc(url)],
+     ['LinkedIn', 'https://www.linkedin.com/sharing/share-offsite/?url=' + enc(url)]].forEach(function (z) {
+      var a = document.createElement('a'); a.className = 'btn ghost'; a.textContent = z[0]; a.href = z[1];
+      a.target = '_blank'; a.rel = 'noopener noreferrer'; ziele.appendChild(a);
+    });
+    function knopf(beschriftung, tat) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn ghost'; b.textContent = beschriftung;
+      b.addEventListener('click', function () { tat(b, beschriftung); }); ziele.appendChild(b);
+    }
+    function rueckmeldung(b, alt, ok) { b.textContent = ok ? 'Kopiert ✓' : 'Nicht möglich'; setTimeout(function () { b.textContent = alt; }, 2500); }
+    knopf('Link kopieren', function (b, alt) {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(function () { rueckmeldung(b, alt, true); }, function () { rueckmeldung(b, alt, false); });
+      else rueckmeldung(b, alt, false);
+    });
+    if (bildHref && window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      knopf('Bild kopieren', function (b, alt) {
+        var blob = bildLaden(rel).then(function (x) { if (!x) throw new Error('kein Bild'); return x.type === 'image/png' ? x : new Blob([x], { type: 'image/png' }); });
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () { rueckmeldung(b, alt, true); }, function () { rueckmeldung(b, alt, false); });
+      });
+    }
+    if (bildHref) {
+      var sp = document.createElement('a'); sp.className = 'btn ghost'; sp.textContent = 'Bild speichern'; sp.href = bildHref; sp.setAttribute('download', 'woelfe-im-revier.png'); ziele.appendChild(sp);
+    }
+    teilDialog.appendChild(ziele);
+    var hinweis = document.createElement('p'); hinweis.className = 'muted small';
+    hinweis.textContent = 'Signal und Instagram haben keinen Teilen-Link für Webseiten: Link kopieren oder Bild speichern und dort einfügen. Auf dem Telefon öffnet „Teilen" direkt das Menü des Geräts.';
+    teilDialog.appendChild(hinweis);
+    var zu = document.createElement('form'); zu.method = 'dialog'; zu.className = 'schliessen';
+    var zub = document.createElement('button'); zub.className = 'btn ghost'; zub.type = 'submit'; zub.textContent = 'Schließen'; zu.appendChild(zub); teilDialog.appendChild(zu);
+    if (typeof teilDialog.showModal === 'function') teilDialog.showModal(); else teilDialog.setAttribute('open', '');
+  }
+  document.addEventListener('click', function (ev) {
+    var k = ev.target && ev.target.closest ? ev.target.closest('[data-teilen]') : null;
+    if (!k) return;
+    var url = k.getAttribute('data-url') || location.href;
+    var titel = k.getAttribute('data-titel') || document.title;
+    var text = k.getAttribute('data-text') || titel;
+    var rel = k.getAttribute('data-bild');
+    if (!navigator.share) { teilFenster(k); return; }
+    var blob = rel ? bildBereit[rel] : null;
+    var datei = null;
+    try { datei = blob ? new File([blob], 'woelfe-im-revier.png', { type: 'image/png' }) : null; } catch (e) {}
+    var mitBild = datei && navigator.canShare && navigator.canShare({ files: [datei] });
+    // Mit Datei geht der Link in den Text: Viele Ziele verwerfen url, sobald eine Datei dabei ist.
+    var daten = mitBild ? { files: [datei], title: titel, text: text + ' ' + url } : { title: titel, text: text, url: url };
+    navigator.share(daten).catch(function (e) { if (!e || e.name !== 'AbortError') teilFenster(k); });
+  });
 
   // Countdown: „In 2 Std. 14 Min." für das nächste Spiel, solange es weniger als 36 Stunden sind;
   // in der letzten Stunde zählt er sekundengenau („In 42:17 Min."), danach steht „Gleich los".

@@ -659,6 +659,26 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('data-ort="halle süd" data-gr="2"');
   });
 
+  it('bietet Teilen an: Knöpfe mit absoluter Adresse und Bild, Vorschaubild für jeden geteilten Link, gültiges Skript', async () => {
+    const { SITE_APP_JS } = await import('../lib/handballSite');
+    expect(() => new Function(SITE_APP_JS)).not.toThrow();
+    const team = (await get(`/${TEAM}/`)).body;
+    // Nächstes Spiel: die Mannschaftsseite (deren Vorschaubild ist das Spielbild), letztes: die Spielseite mit Endstandbild.
+    expect(team).toContain('data-url="https://todo.test.local/96254/" data-titel=');
+    expect(team).toContain('data-bild="./bild/spiel.png"');
+    expect(team).toContain('data-url="https://todo.test.local/96254/spiel/m2"');
+    expect(team).toContain('data-bild="./bild/endstand.png?match=m2"');
+    expect(team).toMatch(/<button type="button" class="btn teilen" data-teilen[^>]* hidden>/);
+    const spiel = (await get(`/${TEAM}/spiel/m1`)).body;
+    expect(spiel).toContain('data-url="https://todo.test.local/96254/spiel/m1"');
+    expect(spiel).toContain('property="og:image" content="https://todo.test.local/96254/bild/endstand.png?match=m1"');
+    // Die Startseite hat ein Vorschaubild (das Logo) und teilt sich selbst.
+    const start = (await get('/')).body;
+    expect(start).toContain('property="og:image" content="https://todo.test.local/96254/logo.png"');
+    expect(start).toContain('name="twitter:card" content="summary"');
+    expect(start).toContain('data-teilen data-url="https://todo.test.local/"');
+  });
+
   it('ordnet E- und F-Jugend und Minis den Kindern zu, A–D den Jugendgruppen', async () => {
     const { gruppeVon } = await import('../lib/handballTeam');
     const g = (wettbewerb: string, name = 'HSG') => gruppeVon(name, [{ competition_name: wettbewerb, championship_name: null }], null);
