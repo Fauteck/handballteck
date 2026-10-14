@@ -289,7 +289,9 @@ describe('Handball-Microsite', () => {
       const html = (await get(`/${TEAM}/`)).body;
       // Dieselben fünf Kästen wie auf der Startseite; der eigene Bereich ist offen, die eigene Mannschaft markiert.
       expect(html.match(/class="kasten[ "]/g)?.length).toBe(5);
-      expect(html).toContain('<details class="kasten aktiv" name="bereich" data-bereich="jungen" open>');
+      expect(html).toContain('<nav class="kaesten flach"');
+      expect(html).toContain('<details class="kasten aktiv" name="bereich" data-bereich="jungen">');
+      expect(html).not.toContain(' open>');
       expect(html).toContain('<li><a href="../96254/" aria-current="page">B-Jugend</a></li><li><a href="../96301/">C-Jugend</a></li>');
       expect(html).toContain('<details class="kasten" name="bereich" data-bereich="frauen">');
       expect(html).toContain('<li><a href="../96300/">1. Damen</a></li>');
