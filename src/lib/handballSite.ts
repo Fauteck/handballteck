@@ -499,10 +499,11 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   return `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen}
-  ${gruppenKaesten(mannschaften, team.team_id, anhang, true)}
   <a class="heim" href="${h(startUrl + anhang)}" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}</a>
-  <div>
-    <a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span><h1>${h(team.label)}</h1></a>
+  <div class="verein"><a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span></a></div>
+  ${gruppenKaesten(mannschaften, team.team_id, anhang, true)}
+  <div class="teaminfo">
+    <h1>${h(team.label)}</h1>
     <div class="sub">${h(wettbewerb)}${saison ? ` · Saison ${h(saison)}` : ''}</div>
   </div>
   ${kacheln.length > 0 ? `<div class="stats">${kacheln.join('')}</div>` : ''}
@@ -1446,11 +1447,11 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();
   const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled === true, botLink && botName ? { link: botLink, handle: `@${botName}` } : null, true);
-  const kopf = `<header class="hero"><div class="wrap">
+  const kopf = `<header class="hero start"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen.leiste}
   <a class="heim" href="./" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
-  <div>
+  <div class="verein">
     <a class="heim titel" href="./"><span class="kicker">${h(clubName())}</span><h1>${h(titel)}</h1></a>
     <div class="sub">Heimspiele, Spielorte und Ergebnisse aller Mannschaften</div>
   </div>

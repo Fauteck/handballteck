@@ -187,6 +187,20 @@ dialog.popup .teilziele .btn{justify-content:center}
 dialog.popup .schliessen{margin:14px 0 0}
 .lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
 .kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin:0 0 6px}
+/* Logo und Vereinsname ganz oben, die Wege daneben (links vom Farbschalter) statt in einer eigenen Zeile; das Team steht als Text unter der Navigation */
+.hero .wrap{padding-top:16px}
+.hero .verpassen{position:absolute;top:10px;right:68px;margin:0;z-index:2}
+.hero .teaminfo{grid-column:1/-1;min-width:0}
+.hero .verein{min-width:0}
+.hero .verein .kicker{font-size:1.15rem}
+html.kompakt .hero .verein{display:none}
+html.kompakt .hero .verpassen{position:static;grid-column:1/-1;justify-self:end}
+@media (max-width:700px){
+.hero .verein{grid-column:2;grid-row:1}
+.hero .verein .kicker{font-size:1.05rem;letter-spacing:.06em}
+.hero .wrap>a.heim{grid-row:1/3}
+.hero .verpassen{position:static;grid-column:2;grid-row:2;justify-self:start;justify-items:start;align-self:start}
+}
 .verpassen+.kaesten{margin-top:-4px}
 .hero .theme+.kaesten{margin-top:44px}
 html.kompakt .hero .theme+.kaesten{margin-top:0}
@@ -347,7 +361,9 @@ footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
 .hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto max-content minmax(0,1fr);gap:16px 28px}
-.hero .wrap>div:not(.stats){max-width:440px}
+.hero .wrap>div:not(.stats):not(.verein):not(.teaminfo){max-width:440px}
+.hero .verein{grid-column:2/-1}
+.hero .teaminfo{grid-column:1/3}
 .hero h1{white-space:nowrap;overflow-wrap:normal}
 .hero img.logo,.hero .initialen{width:120px;height:120px}
 .hero .stats{grid-column:auto;grid-template-columns:repeat(3,minmax(110px,1fr));margin-top:0}

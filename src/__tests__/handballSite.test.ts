@@ -266,7 +266,11 @@ describe('Handball-Microsite', () => {
       expect((await get('/sw.js')).headers['content-type']).toContain('javascript');
       // Kopf der Mannschaftsseite: Vereinsname klein darüber, die Mannschaft als Titel.
       const team = (await get(`/${TEAM}/`)).body;
-      expect(team).toContain('<span class="kicker">HSG Wölfe Voreifel</span><h1>B-Jugend</h1>');
+      // Logo und Vereinsname oben (führen zur Startseite), das Team als Text unter der Navigation.
+      expect(team).toContain('<div class="verein"><a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a></div>');
+      expect(team).toContain('<div class="teaminfo">\n    <h1>B-Jugend</h1>');
+      expect(team.indexOf('class="kaesten')).toBeLessThan(team.indexOf('<h1>B-Jugend</h1>'));
+      expect(team.indexOf('class="verein"')).toBeLessThan(team.indexOf('class="kaesten'));
       // Fünf große Bereichskästen; die Mannschaften klappen darunter auf.
       expect(wurzel.body.match(/class="kasten[ "]/g)?.length).toBe(5);
       expect(wurzel.body).toContain('<details class="kasten" name="bereich" data-bereich="jungen">');
@@ -300,7 +304,7 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<li><a href="../96300/">1. Damen</a></li>');
       expect(html).toContain('<div class="kasten leer" aria-disabled="true"><span class="kopf"><b>Kinder</b>');
       // Titel und Vereinsname führen zur Startseite; auf der Spielseite eine Ebene höher.
-      expect(html).toContain('<a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span><h1>B-Jugend</h1></a>');
+      expect(html).toContain('<a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a>');
       expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a class="heim titel" href="../../">');
       expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<li><a href="../../96300/">1. Damen</a></li>');
       // Die Vorschau trägt ihren Schlüssel in jeden Verweis.
