@@ -406,8 +406,8 @@ function formStrip(team: HandballTeamView): string {
 }
 
 /**
- * Die Navigation jeder Seite: fünf große Kästen (Herren, Damen, Jugend
- * männlich, Jugend weiblich, Kinder), ein Klick klappt darunter die
+ * Die Navigation jeder Seite, oben im Kopf über Logo und Titel: fünf große
+ * Kästen (Herren, Damen, Jugend männlich, Jugend weiblich, Kinder), ein Klick klappt darunter die
  * Mannschaften auf. Reine `<details>` — kein Skript nötig; mit `name` ist
  * immer nur einer offen, auf der Mannschaftsseite der eigene Bereich. Eine
  * Gruppe ohne Mannschaft bleibt als gedämpfter Kasten stehen, damit die fünf
@@ -457,13 +457,13 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   return `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen}
+  ${gruppenKaesten(mannschaften, team.team_id, anhang)}
   <a class="heim" href="${h(startUrl + anhang)}" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}</a>
   <div>
     <a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span><h1>${h(team.label)}</h1></a>
     <div class="sub">${h(wettbewerb)}${saison ? ` · Saison ${h(saison)}` : ''}</div>
   </div>
   ${kacheln.length > 0 ? `<div class="stats">${kacheln.join('')}</div>` : ''}
-  ${gruppenKaesten(mannschaften, team.team_id, anhang)}
 </div></header>`;
 }
 
@@ -1253,12 +1253,12 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const logo = logoDataUri(erste.team_id);
   const kopf = `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
+  ${gruppenKaesten(teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: link(t) })), null)}
   <a class="heim" href="./" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
   <div>
     <a class="heim titel" href="./"><span class="kicker">${h(clubName())}</span><h1>${h(titel)}</h1></a>
     <div class="sub">Heimspiele, Spielorte und Ergebnisse aller Mannschaften</div>
   </div>
-  ${gruppenKaesten(teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: link(t) })), null)}
 </div></header>`;
   const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
   return unterseiteHtml({

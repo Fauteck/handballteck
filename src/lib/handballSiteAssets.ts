@@ -172,7 +172,10 @@ dialog.popup .teilziele{display:grid;grid-template-columns:repeat(auto-fit,minma
 dialog.popup .teilziele .btn{justify-content:center}
 dialog.popup .schliessen{margin:14px 0 0}
 .lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
-.kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin-top:4px}
+.kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin:0 0 6px}
+.verpassen+.kaesten{margin-top:-4px}
+.hero .theme+.kaesten{margin-top:44px}
+html.kompakt .hero .theme+.kaesten{margin-top:0}
 .kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
 .kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
 .kasten .liste a[aria-current]{background:var(--a);color:var(--g)}
