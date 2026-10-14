@@ -145,9 +145,11 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('<div class="col side">');
     expect(html).not.toContain('s-push');
     expect(html).toContain('class="card s-plan"');
-    // Kennzahlen im Kopf: Platz von N, Punkte, Bilanz, Tore, nächstes Spiel in Tagen.
+    // Drei Kennzahlen im Kopf: Platz von N, Form, nächstes Spiel. Punkte, Bilanz und Tore stehen in der Tabellenkarte.
     expect(html).toContain('<b class="a">1.<small>von 2</small></b><span>Platz</span>');
-    expect(html).toContain('<b>1-0-1</b>');
+    expect(html.match(/<div class="stat">/g)).toHaveLength(3);
+    expect(html).toContain('<div><dt>Siege · Unent. · Niederl.</dt><dd>1-0-1</dd></div>');
+    expect(html).toContain('<div><dt>Punkte</dt><dd>2<small>2 Sp.</small></dd></div>');
     expect(html).toContain('In 7 Tagen');
     // Die Wege: Icons im Kopf unter „Nichts verpassen" (Glocke, Kalender, Feed), kein Telegram, solange kein Bot registriert ist.
     expect(html).toContain('id="verpassen-titel">Nichts verpassen</span>');
@@ -769,6 +771,94 @@ describe('Handball-Microsite', () => {
     expect(ics.headers['content-type']).toContain('text/calendar');
     expect(ics.body).toContain('BEGIN:VCALENDAR');
     expect(ics.body).toContain('UID:handball-m3@todoteck');
+  });
+
+  describe('Seitenfunktionen: Mini-Kopf, Kalender, Steckbrief, Tagesansicht', () => {
+    it('trägt auf der Mannschaftsseite einen Mini-Kopf, der nur mit Skript erscheint', async () => {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toContain('<div class="mini" data-mini hidden inert>');
+      expect(html).toContain('1. Platz');
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain('IntersectionObserver');
+      expect(js).toContain("document.querySelector('[data-mini]')");
+      expect((await get(`/${TEAM}/site.css`)).body).toContain('html.kompakt .mini{display:none}');
+    });
+
+    it('zeigt den Spielplan zusätzlich als Monatskalender mit Heim/Auswärts-Buchstaben', async () => {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toContain('data-ansicht="kalender"');
+      expect(html).toContain('<div class="kal" data-kalender>');
+      // m1: Heimsieg 30:22 vor einer Woche, m2: Auswärtsniederlage 20:25, m3: kommendes Heimspiel.
+      expect(html).toMatch(/<a class="chip heim w" href="\.\/spiel\/m1"[^>]*>H 30:22<\/a>/);
+      expect(html).toMatch(/<a class="chip aus l" href="\.\/spiel\/m2"[^>]*>A 20:25<\/a>/);
+      expect(html).toMatch(/<span class="chip heim"[^>]*>H \d\d:\d\d<\/span>/);
+      expect(html).toContain('data-monat-weiter');
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain('handball-site-ansicht');
+    });
+
+    it('öffnet zu jeder fremden Tabellenzeile den Steckbrief als Fenster', async () => {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toContain('data-sb="sb-96300"');
+      expect(html).toContain('<dialog class="popup steckbrief" id="sb-96300"');
+      // Die eigene Zeile bleibt eine Zeile.
+      expect(html).not.toContain('data-sb="sb-96254"');
+      // Der Direktvergleich im Steckbrief nennt das Hinspiel (m2, auswärts 20:25 verloren, ohne m3).
+      const sb = html.slice(html.indexOf('id="sb-96300"'));
+      expect(sb).toContain('2. Platz');
+      expect((await get(`/${TEAM}/app.js`)).body).toContain("tr[data-sb]");
+    });
+
+    it('zeigt auf der Startseite Heute und die Ergebnisse des letzten Wochenendes', async () => {
+      const heuteSpiel = (id: string, start: string, status: string, a: number | null, b: number | null) => ({
+        id: `${TEAM}:${id}`, team_id: TEAM, match_id: id, season_id: 2627, starts_at: start,
+        status, status_name: status, round: 5, phase_id: 12800, competition_name: 'Kreisoberliga mB', championship_name: 'B-Jugend',
+        home_id: TEAM, home_name: 'HSG Wölfe Voreifel', away_id: '96300', away_name: 'HV Erftstadt',
+        score_home: a, score_away: b, venue_name: 'Sporthalle Heimerzheim', venue_address: 'Schulstraße 1', notified_upcoming: false, notified_result: false, updated_at: new Date().toISOString(),
+      });
+      // Heute 12:00 und 14:00 Ortszeit (kommend) – damit der Test zu jeder Tageszeit denselben Tag trifft.
+      const heute = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin' }).format(new Date());
+      const mittag = new Date(`${heute}T11:00:00Z`).toISOString();
+      const nachmittag = new Date(`${heute}T13:00:00Z`).toISOString();
+      db.insert(schema.handball_team_match).values([heuteSpiel('t1', mittag, 'scheduled', null, null), heuteSpiel('t2', nachmittag, 'scheduled', null, null)] as never).run();
+      try {
+        const start = (await get('/')).body;
+        expect(start).toContain('<section class="card dark" id="heute">');
+        expect(start).toContain('<span class="e">Heim</span>');
+        expect(start).toContain('Sporthalle Heimerzheim');
+        // Letztes Wochenende: nur, wenn ein Ergebnis in Fr–So der Vorwoche liegt — hier per Direkteintrag.
+        const jetzt = new Date();
+        const wt = jetzt.getUTCDay();
+        const samstagVorWoche = new Date(Date.UTC(jetzt.getUTCFullYear(), jetzt.getUTCMonth(), jetzt.getUTCDate() + (wt === 0 ? -1 : 6 - wt) - 7, 12)).toISOString();
+        db.insert(schema.handball_team_match).values(heuteSpiel('lw1', samstagVorWoche, 'finished', 27, 21) as never).run();
+        const mitLetztem = (await get('/')).body;
+        expect(mitLetztem).toContain('id="letztes-wochenende"');
+        expect(mitLetztem).toContain('1 Sieg');
+        expect(mitLetztem).toContain('href="./96254/spiel/lw1"');
+        expect(mitLetztem).toContain('27:21');
+      } finally {
+        db.delete(schema.handball_team_match).where(sql`${schema.handball_team_match.match_id} IN ('t1','t2','lw1')`).run();
+      }
+    });
+
+    it('rendert das Wochenende als Bild, nur bei freigegebener Seite', async () => {
+      const res = await get('/bild/wochenende.png');
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      expect(res.rawPayload.subarray(1, 4).toString()).toBe('PNG');
+      expect((await get('/')).body).toContain('data-bild="./bild/wochenende.png"');
+    });
+
+    it('bringt Tab-Titel, Start-Ticker und Platzhalter für Bilder im Skript', async () => {
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain('titelSetzen');
+      expect(js).toContain('Spiele live');
+      expect(js).toContain("#naechstes [data-stand], #live [data-stand]");
+      expect(js).toContain("classList.add('fertig')");
+      const css = (await get(`/${TEAM}/site.css`)).body;
+      expect(css).toContain('@keyframes skel');
+      expect(css).toContain('.card img.bild:not(.fertig)');
+    });
   });
 
   describe('Web-Push ohne Konto', () => {

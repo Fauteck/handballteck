@@ -27,7 +27,7 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import {
   siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
+  siteImagePng, wochenendePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
@@ -125,6 +125,16 @@ export async function siteRoutes(fastify: FastifyInstance) {
       .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
       .header('X-Robots-Tag', 'noindex, nofollow')
       .send(html);
+  });
+
+  // Das Wochenende als Bild zum Weiterschicken — ein Cache-Eintrag je Wochenende, wie die Bilder der Mannschaften.
+  fastify.get('/bild/wochenende.png', limit(30), async (_request, reply) => {
+    const sicht = handballOverview();
+    const erste = sicht.configured ? sicht.teams[0] : undefined;
+    if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
+    const png = await wochenendePng(sicht.teams, sicht.updated_at);
+    if (!png) return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });
+    return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=300').send(png);
   });
 
   // Manifest und Service Worker der Startseite — die Wurzel ist der Scope, die Mannschaften liegen darin.

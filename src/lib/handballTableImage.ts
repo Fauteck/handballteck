@@ -467,6 +467,63 @@ export function renderStandingsSvg(input: StandingsImageInput): string {
 }
 
 // ---------------------------------------------------------------------------
+// Wochenende als Bild (hell): alle Heimspiele des Vereins, nach Tag
+// ---------------------------------------------------------------------------
+
+export interface WeekendImageInput {
+  title: string;
+  /** z. B. „Freitag 16.10. bis Sonntag 18.10.“ */
+  subtitle?: string | null;
+  logo?: string | null;
+  days: Array<{ label: string; games: Array<{ time: string; team: string; opponent: string; venue: string | null }> }>;
+  /** Text, wenn kein Spiel angesetzt ist. */
+  empty?: string;
+  brand?: ImageBrand | null;
+  palette?: Partial<HandballPalette> | null;
+}
+
+const WE_DAY_H = 32;
+const WE_ROW_H = 54;
+
+/**
+ * Das Wochenende zum Weiterschicken: je Tag eine Leiste, darunter die
+ * Heimspiele mit Uhrzeit, Mannschaft, Gegner und Halle. Die Höhe folgt der
+ * Zahl der Spiele; ohne Spiel steht ein Satz statt der Liste.
+ */
+export function renderWeekendSvg(input: WeekendImageInput): string {
+  const th = themeFor(input.palette);
+  const top = PAD + TITLE_SIZE + (input.subtitle ? SUB_SIZE + 10 : 0) + 18;
+  const tage = input.days.filter(d => d.games.length > 0);
+  const inhaltH = tage.length === 0 ? 60 : tage.reduce((a, d) => a + WE_DAY_H + d.games.length * WE_ROW_H + 10, 0);
+  const height = top + inhaltH + (input.brand ? FUSS_H : 0) + PAD;
+  const parts = rahmenHell(th, height);
+  kopfHell(th, parts, input.title, input.subtitle, input.logo);
+  let y = top;
+  if (tage.length === 0) {
+    parts.push(text(PAD, y + 30, 20, input.empty ?? 'Kein Heimspiel angesetzt.', { fill: th.L.muted }));
+  }
+  for (const d of tage) {
+    parts.push(`<rect x="${PAD}" y="${y}" width="${WIDTH - 2 * PAD}" height="${WE_DAY_H}" rx="6" fill="url(#kopf)"/>`);
+    parts.push(text(PAD + 14, y + WE_DAY_H / 2 + HEAD_SIZE / 2 - 1, HEAD_SIZE + 2, d.label.toUpperCase(), { cond: true, weight: 700, fill: th.L.headerText, ls: 1 }));
+    y += WE_DAY_H;
+    d.games.forEach((g, i) => {
+      if (i % 2 === 1) parts.push(`<rect x="${PAD}" y="${y}" width="${WIDTH - 2 * PAD}" height="${WE_ROW_H}" fill="${th.L.zebra}"/>`);
+      parts.push(`<line x1="${PAD}" y1="${y + WE_ROW_H}" x2="${WIDTH - PAD}" y2="${y + WE_ROW_H}" stroke="${th.L.line}" stroke-width="1"/>`);
+      parts.push(text(PAD + 14, y + 33, 24, g.time, { cond: true, weight: 700, fill: th.L.accent }));
+      const links = PAD + 92;
+      parts.push(text(links, y + 23, 19, kuerzen(g.team, 19, 330, true), { bold: true, fill: th.L.text }));
+      parts.push(text(links, y + 42, 15, kuerzen(`gegen ${g.opponent}`, 15, 330), { fill: th.L.muted }));
+      if (g.venue) parts.push(text(WIDTH - PAD - 12, y + 33, 15, kuerzen(g.venue, 15, 300), { fill: th.L.text, anchor: 'end' }));
+      y += WE_ROW_H;
+    });
+    y += 10;
+  }
+  if (input.brand) fuss(th, parts, height, input.brand, false);
+  parts.push('</svg>');
+  return parts.join('');
+}
+
+// ---------------------------------------------------------------------------
 // Kader als Mannschaftsbogen (dunkel)
 // ---------------------------------------------------------------------------
 

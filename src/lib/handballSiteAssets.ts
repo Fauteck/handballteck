@@ -39,6 +39,9 @@ const DUNKEL: Array<[string, string]> = [
   ['.plan li.next', 'background:color-mix(in srgb,var(--a) 14%,#12262c)'],
   ['.plan .e.w', 'background:color-mix(in srgb,var(--win) 24%,#12262c)'],
   ['.plan .e.l', 'background:color-mix(in srgb,var(--loss) 22%,#12262c)'],
+  ['.kal .chip', 'background:#0c1a1f;color:#e6f0f2'],
+  ['.kal .chip.w', 'background:color-mix(in srgb,var(--win) 24%,#12262c)'],
+  ['.kal .chip.l', 'background:color-mix(in srgb,var(--loss) 22%,#12262c)'],
 ];
 
 function dunkel(): string {
@@ -95,6 +98,11 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .card.dark a{color:#fff}
 .card h2{margin-bottom:10px}
 .card img.bild{display:block;width:100%;height:auto;border-radius:12px;background:#0b2a33}
+@keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
+.card img.bild:not(.fertig){min-height:140px;color:transparent;background:linear-gradient(100deg,#0b2a33 30%,#16424e 50%,#0b2a33 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
+.card img.bild.fehler{animation:none;background:#0b2a33}
+.portraets img:not(.fertig){color:transparent;background:linear-gradient(100deg,var(--line) 30%,color-mix(in srgb,var(--line) 50%,transparent) 50%,var(--line) 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
+.portraets img.fehler{animation:none;background:var(--line)}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:var(--a);color:var(--g);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
 .badge.live{background:var(--loss);color:#fff;animation:puls 1.6s ease-in-out infinite}
 @keyframes puls{50%{opacity:.6}}
@@ -238,6 +246,40 @@ table.heim tr.neu td{border-top:0}
 .filter button{font:inherit;font-size:.95rem;min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
 .filter button[aria-pressed=true]{background:var(--p);border-color:var(--p);color:#fff}
 .filter button.jump{margin-left:auto;border-style:dashed}
+.filter .ansicht{display:inline-flex;gap:6px;margin-right:8px}
+#spielplan[data-ansicht=kalender] .plan,#spielplan[data-ansicht=kalender] .liste-nur{display:none}
+#spielplan:not([data-ansicht=kalender]) .kal{display:none}
+.kal .monatskopf{display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px}
+.kal .monatskopf b{font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;text-transform:uppercase;letter-spacing:.02em}
+.kal .monatskopf button{font:inherit;font-size:1.4rem;min-width:44px;min-height:44px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.kal .raster{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.kal .wt{text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kal .tag{min-height:64px;padding:3px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kal .tag.leer{border:0}
+.kal .tag .n{font-size:.75rem;color:var(--muted);line-height:1}
+.kal .tag.heute{border-color:var(--p);box-shadow:inset 0 0 0 1px var(--p)}
+.kal .chip{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;padding:1px 3px;border-radius:6px;background:var(--bg);color:var(--text);text-decoration:none;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.kal .chip.aus{border:1px dashed var(--muted)}
+.kal .chip.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
+.kal .chip.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
+.kenn{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.kenn>div{border:1px solid var(--line);border-radius:10px;padding:6px 12px;min-width:0}
+.kenn dt{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kenn dd{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.4rem;line-height:1.1}
+.kenn dd small{font-size:.9rem;font-weight:600;color:var(--muted);margin-left:5px}
+tr[data-sb]{cursor:pointer}
+tr[data-sb]:hover td{background:color-mix(in srgb,var(--p) 6%,transparent)}
+tr[data-sb]:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+dialog.steckbrief .gegner{margin-top:0}
+.mini{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(6px + env(safe-area-inset-top)) 16px 6px;background:var(--g);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);transform:translateY(-110%);transition:transform .2s}
+.mini.sichtbar{transform:none}
+.mini .mlogo{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:rgba(255,255,255,.14);text-decoration:none}
+.mini .mlogo img{width:26px;height:26px;object-fit:contain}
+.mini .ini{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--a);font-size:.85rem}
+.mini b{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;text-transform:uppercase;white-space:nowrap}
+.mini .minfo{min-width:0;flex:1;font-size:.9rem;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .nachoben{font:inherit;font-size:1.2rem;min-width:44px;min-height:44px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer}
+html.kompakt .mini{display:none}
 h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;color:var(--hd);margin:12px 0 4px}
 .legende{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.9rem}
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
@@ -294,7 +336,7 @@ main.wrap.schmal{max-width:820px;grid-template-columns:minmax(0,1fr)}
 footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid;gap:6px}
 footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none !important;transition:none !important}}
-@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
+@media (max-width:600px){.kal .raster{gap:3px}.kal .tag{padding:2px;min-height:58px}.kal .chip{font-size:.72rem;padding:1px 0;letter-spacing:-.2px}.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
 @media (min-width:960px){
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
@@ -615,8 +657,30 @@ export const SITE_APP_JS = `(function () {
   window.addEventListener('offline', netz);
   netz();
 
-  // Spielplan filtern und zum nächsten Spiel springen.
+  // Spielplan: Liste oder Monatskalender, filtern und zum nächsten Spiel springen.
   var filterWahl = 'alle';
+  var ansicht = 'liste';
+  try { if (localStorage.getItem('handball-site-ansicht') === 'kalender') ansicht = 'kalender'; } catch (e) {}
+  var monatWahl = null;
+  function monateZeigen() {
+    var monate = Array.prototype.slice.call(document.querySelectorAll('#spielplan [data-monat]'));
+    if (!monate.length) return;
+    var vorhanden = monate.some(function (m) { return m.getAttribute('data-monat') === monatWahl; });
+    if (!vorhanden) {
+      var start = document.querySelector('#spielplan [data-monat][data-aktuell]') || monate[monate.length - 1];
+      monatWahl = start.getAttribute('data-monat');
+    }
+    var idx = 0;
+    monate.forEach(function (m, i) {
+      var an = m.getAttribute('data-monat') === monatWahl;
+      m.hidden = !an;
+      if (an) {
+        idx = i;
+        m.querySelector('[data-monat-zurueck]').disabled = i === 0;
+        m.querySelector('[data-monat-weiter]').disabled = i === monate.length - 1;
+      }
+    });
+  }
   function planAnwenden() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-filter-bar]'), function (leiste) { leiste.hidden = false; });
     Array.prototype.forEach.call(document.querySelectorAll('#spielplan .plan li'), function (li) {
@@ -625,10 +689,31 @@ export const SITE_APP_JS = `(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (b) {
       b.setAttribute('aria-pressed', b.getAttribute('data-filter') === filterWahl ? 'true' : 'false');
     });
+    var plan = document.getElementById('spielplan');
+    if (plan) plan.setAttribute('data-ansicht', document.querySelector('#spielplan [data-kalender]') ? ansicht : 'liste');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ansicht]'), function (b) {
+      if (b.tagName !== 'BUTTON') return;
+      b.hidden = !document.querySelector('#spielplan [data-kalender]');
+      b.setAttribute('aria-pressed', b.getAttribute('data-ansicht') === ansicht ? 'true' : 'false');
+    });
+    monateZeigen();
   }
   document.addEventListener('click', function (ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest('[data-filter],[data-jump]') : null;
+    var t = ev.target && ev.target.closest ? ev.target.closest('[data-filter],[data-jump],button[data-ansicht],[data-monat-zurueck],[data-monat-weiter]') : null;
     if (!t) return;
+    if (t.hasAttribute('data-ansicht')) {
+      ansicht = t.getAttribute('data-ansicht') === 'kalender' ? 'kalender' : 'liste';
+      try { localStorage.setItem('handball-site-ansicht', ansicht); } catch (e) {}
+      planAnwenden();
+      return;
+    }
+    if (t.hasAttribute('data-monat-zurueck') || t.hasAttribute('data-monat-weiter')) {
+      var monate = Array.prototype.slice.call(document.querySelectorAll('#spielplan [data-monat]'));
+      var i = monate.findIndex(function (m) { return m.getAttribute('data-monat') === monatWahl; });
+      var ziel = monate[i + (t.hasAttribute('data-monat-weiter') ? 1 : -1)];
+      if (ziel) { monatWahl = ziel.getAttribute('data-monat'); monateZeigen(); }
+      return;
+    }
     if (t.hasAttribute('data-filter')) { filterWahl = t.getAttribute('data-filter'); planAnwenden(); return; }
     var next = document.querySelector('#spielplan .plan li.next');
     if (!next) return;
@@ -636,6 +721,47 @@ export const SITE_APP_JS = `(function () {
     next.scrollIntoView({ block: 'center' });
   });
   planAnwenden();
+
+  // Gegner-Steckbrief: Ein Tipp auf eine Tabellenzeile öffnet ihn als Fenster (Enter und Leertaste auch).
+  function steckbriefOeffnen(zeile) {
+    var d = zeile && document.getElementById(zeile.getAttribute('data-sb'));
+    if (!d) return;
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  }
+  document.addEventListener('click', function (ev) {
+    var z = ev.target && ev.target.closest ? ev.target.closest('tr[data-sb]') : null;
+    if (z) steckbriefOeffnen(z);
+    var d = ev.target;
+    if (d && d.tagName === 'DIALOG' && d.classList.contains('steckbrief') && typeof d.close === 'function') d.close();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var z = ev.target && ev.target.closest ? ev.target.closest('tr[data-sb]') : null;
+    if (!z) return;
+    ev.preventDefault();
+    steckbriefOeffnen(z);
+  });
+
+  // Kleiner Kopf, der mitläuft, sobald der große aus dem Bild ist: Mannschaft, Platz, nächstes Spiel, Weg nach oben.
+  (function () {
+    var mini = document.querySelector('[data-mini]');
+    var hero = document.querySelector('.hero');
+    if (!mini || !hero || !('IntersectionObserver' in window)) return;
+    mini.hidden = false;
+    var zeige = function (an) { mini.classList.toggle('sichtbar', an); if (an) mini.removeAttribute('inert'); else mini.setAttribute('inert', ''); };
+    new IntersectionObserver(function (eintraege) { zeige(!eintraege[0].isIntersecting); }, { threshold: 0 }).observe(hero);
+    var hoch = mini.querySelector('[data-nach-oben]');
+    if (hoch) hoch.addEventListener('click', function () { window.scrollTo({ top: 0 }); });
+  })();
+
+  // Bilder laden mit einem ruhigen Platzhalter statt mit Alt-Text: Die Fläche pulsiert, bis das Bild da ist; geht es schief, bleibt sie still und leer.
+  Array.prototype.forEach.call(document.querySelectorAll('.card img.bild, .portraets img'), function (img) {
+    var fertig = function () { img.classList.add('fertig'); };
+    var fehler = function () { img.classList.add('fehler'); };
+    if (img.complete) { if (img.naturalWidth > 0) fertig(); else fehler(); return; }
+    img.addEventListener('load', fertig);
+    img.addEventListener('error', fehler);
+  });
 
   // Live-Modus: Läuft ein Spiel, holt die Seite alle 30 Sekunden ihren eigenen
   // Stand und tauscht Spielstand, Kopfzeile, Tabelle und Spielplan aus. Ist das
@@ -650,20 +776,39 @@ export const SITE_APP_JS = `(function () {
     hinweis.hidden = true;
     document.body.appendChild(hinweis);
     var hinweisTimer = null;
-    var standAus = function (wurzel) {
-      var el = wurzel.querySelector('#naechstes [data-stand]');
-      var m = el ? /^(\\d+):(\\d+)$/.exec(el.getAttribute('data-stand') || '') : null;
-      return m ? { eigene: +m[1], gegner: +m[2], text: m[0] } : null;
+    // Alle laufenden Stände einer Seite: auf der Mannschaftsseite der eine, auf der Startseite einer je Mannschaft.
+    var staende = function (wurzel) {
+      var out = {};
+      Array.prototype.forEach.call(wurzel.querySelectorAll('#naechstes [data-stand], #live [data-stand]'), function (el, i) {
+        var m = /^(\\d+):(\\d+)$/.exec(el.getAttribute('data-stand') || '');
+        if (m) out[el.getAttribute('data-key') || String(i)] = { label: el.getAttribute('data-label') || '', eigene: +m[1], gegner: +m[2], text: m[0] };
+      });
+      return out;
     };
     var torHinweis = function (alt, neu) {
-      if (!alt || !neu || (alt.eigene === neu.eigene && alt.gegner === neu.gegner)) return;
-      var eigenes = neu.eigene > alt.eigene;
-      hinweis.textContent = (eigenes ? 'Tor! ' : neu.gegner > alt.gegner ? 'Gegentor ' : 'Neuer Stand ') + neu.text;
+      var zeilen = [];
+      var eigenes = false;
+      Object.keys(neu).forEach(function (k) {
+        var a = alt[k], n = neu[k];
+        if (!a || (a.eigene === n.eigene && a.gegner === n.gegner)) return;
+        var tor = n.eigene > a.eigene;
+        if (tor) eigenes = true;
+        zeilen.push((tor ? 'Tor! ' : n.gegner > a.gegner ? 'Gegentor ' : 'Neuer Stand ') + (n.label ? n.label + ' ' : '') + n.text);
+      });
+      if (!zeilen.length) return;
+      hinweis.textContent = zeilen.join(' · ');
       hinweis.hidden = false;
       clearTimeout(hinweisTimer);
       hinweisTimer = setTimeout(function () { hinweis.hidden = true; }, 6000);
       try { if (navigator.vibrate) navigator.vibrate(eigenes ? [120, 80, 120] : [220]); } catch (e) {}
     };
+    // Der Stand im Tab-Titel: Wer in einem anderen Tab ist, sieht ihn in der Tab-Leiste.
+    var titelOriginal = document.title;
+    var titelSetzen = function () {
+      var s = staende(document), k = Object.keys(s);
+      document.title = k.length === 0 ? titelOriginal : k.length === 1 ? '● ' + s[k[0]].text + ' · ' + titelOriginal : '● ' + k.length + ' Spiele live · ' + titelOriginal;
+    };
+    titelSetzen();
     var liveTakt = setInterval(function () {
       if (document.hidden) return;
       fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'omit' })
@@ -671,10 +816,10 @@ export const SITE_APP_JS = `(function () {
         .then(function (html) {
           if (!html) return;
           var doc = new DOMParser().parseFromString(html, 'text/html');
-          torHinweis(standAus(document), standAus(doc));
+          torHinweis(staende(document), staende(doc));
           var tickerOffen = !!document.querySelector('#naechstes details.ticker[open]');
           // Mannschaftsseite: Spiel, Letztes, Tabelle; Startseite: Läuft gerade, Heim- und Auswärtsspiele, Stand.
-          ['naechstes', 'letztes', 'tabelle', 'live', 'heimspiele', 'auswaertsspiele', 'stand'].forEach(function (id) {
+          ['naechstes', 'letztes', 'tabelle', 'live', 'heute', 'heimspiele', 'auswaertsspiele', 'letztes-wochenende', 'stand'].forEach(function (id) {
             var neu = doc.getElementById(id);
             var alt = document.getElementById(id);
             if (neu && alt) alt.replaceWith(neu);
@@ -690,7 +835,8 @@ export const SITE_APP_JS = `(function () {
           var planAlt = document.getElementById('spielplan');
           if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); }
           countdown();
-          if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); }
+          titelSetzen();
+          if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); titelSetzen(); }
         })
         .catch(function () {});
     }, 30000);
