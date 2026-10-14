@@ -96,6 +96,5 @@ describe('Tippflächen der Microsite', () => {
     expect(regel('.vicon')).toMatch(/width:44px;height:44px/);
     expect(regel('.kasten .liste a')).toContain('min-height:44px');
     expect(regel('.kasten summary')).toContain('min-height:84px');
-    expect(css).toMatch(/@media \(pointer:coarse\)\{[^}]*\.teamwahl a[^}]*min-height:44px/);
   });
 });

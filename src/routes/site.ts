@@ -26,14 +26,14 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import fs from 'node:fs';
 import { z } from 'zod';
 import {
-  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderUebersichtHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
+  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
+  siteImagePng, wochenendePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
 } from '../lib/handballSite';
 import { fotoJpeg } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
 import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
-  sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode,
+  sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode, bereinigeThemen, CLUB, type SiteSubscriber,
 } from '../lib/handballSitePush';
 import { readPalette, handballOverview } from '../lib/handballTeam';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
@@ -63,6 +63,7 @@ const subscribeSchema = z.object({
   }),
   lead: z.string().optional(),
   mode: z.string().optional(),
+  topics: z.array(z.string().max(20)).max(12).optional(),
 });
 
 const unsubscribeSchema = z.object({ endpoint: z.string().url().max(1000) });
@@ -117,13 +118,23 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const sicht = handballOverview();
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    const html = renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/`, stand: sicht.updated_at });
+    const html = renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/`, stand: sicht.updated_at, pushEnabled: sitePushConfig().enabled });
     const live = sicht.teams.some(t => t.next_match?.is_live === true);
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
       .header('X-Robots-Tag', 'noindex, nofollow')
       .send(html);
+  });
+
+  // Das Wochenende als Bild zum Weiterschicken — ein Cache-Eintrag je Wochenende, wie die Bilder der Mannschaften.
+  fastify.get('/bild/wochenende.png', limit(30), async (_request, reply) => {
+    const sicht = handballOverview();
+    const erste = sicht.configured ? sicht.teams[0] : undefined;
+    if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
+    const png = await wochenendePng(sicht.teams, sicht.updated_at);
+    if (!png) return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });
+    return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=300').send(png);
   });
 
   // Manifest und Service Worker der Startseite — die Wurzel ist der Scope, die Mannschaften liegen darin.
@@ -139,31 +150,6 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
     return reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'no-cache').send(SITE_SW_JS);
-  });
-
-  /**
-   * Die Übersicht aller Mannschaften des Vereins (`/uebersicht/`): was läuft,
-   * was in den nächsten Tagen ansteht, was zuletzt gespielt wurde. Steht vor
-   * `/:teamId`, die Team-ID besteht nur aus Ziffern — es gibt keine Verwechslung.
-   */
-  fastify.get('/uebersicht', limit(120), async (_request, reply) => {
-    const sicht = handballOverview();
-    const erste = sicht.configured ? sicht.teams[0] : undefined;
-    if (!erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    return reply.redirect('uebersicht/', 301);
-  });
-
-  fastify.get('/uebersicht/', limit(60), async (_request, reply) => {
-    const sicht = handballOverview();
-    const erste = sicht.configured ? sicht.teams[0] : undefined;
-    if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    const html = renderUebersichtHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/uebersicht/`, stand: sicht.updated_at });
-    const live = sicht.teams.some(t => t.next_match?.is_live === true);
-    return reply
-      .header('Content-Type', 'text/html; charset=utf-8')
-      .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
-      .header('X-Robots-Tag', 'noindex, nofollow')
-      .send(html);
   });
 
   // Ohne Schrägstrich: umleiten, damit `./bild/…` und der Service-Worker-Scope stimmen.
@@ -296,44 +282,73 @@ export async function siteRoutes(fastify: FastifyInstance) {
 
   // --- Web-Push ---
 
-  fastify.get<{ Params: { teamId: string } }>('/:teamId/push', limit(60), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
-    return reply.header('Cache-Control', 'no-store').send(sitePushConfig());
-  });
-
   /**
-   * Die Glocke: Subscription samt Vorlauf und Modus eintragen (oder
-   * erneuern — der Endpoint ist der Schlüssel) und eine Bestätigung
-   * schicken, damit man sieht, dass es ankommt.
+   * Anmelden — für eine Mannschaft oder, mit `club`, für den ganzen Verein
+   * (nur Heimspiele, plus Wochenvorschau). Subscription samt Vorlauf und
+   * Themen eintragen (oder erneuern — der Endpoint ist der Schlüssel, ein
+   * Gerät hat also eine Anmeldung) und eine Bestätigung schicken, die die
+   * gewählten Themen nennt, damit man sieht, was ankommt.
    */
-  fastify.post<{ Params: { teamId: string } }>('/:teamId/push', limit(20), async (request, reply) => {
-    const t = freigegeben(request.params.teamId);
-    if (!t) return nichtDa(reply);
+  async function anmelden(request: { body: unknown; headers: Record<string, unknown> }, reply: FastifyReply, scope: string, team: ReturnType<typeof freigegeben> | null) {
     if (!sitePushConfig().enabled) return reply.code(503).send({ error: 'push_disabled', message: 'Benachrichtigungen sind auf diesem Server nicht eingerichtet.' });
     const parsed = subscribeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', message: 'Die Anmeldung ist unvollständig.' });
-    const { subscription, lead, mode } = parsed.data;
+    const { subscription, lead, mode, topics } = parsed.data;
     // Eine neue Anmeldung nur, solange Platz ist; wer schon drin ist, darf seine Wahl ändern.
     if (!siteSubscriptionExists(subscription.endpoint) && countSiteSubscribers() >= sitePushMax()) {
       return reply.code(503).header('Retry-After', '3600').send({ error: 'push_full', message: 'Es sind gerade keine weiteren Benachrichtigungen möglich.' });
     }
-    const abo = saveSiteSubscription(t.team.team_id, {
+    const abo: SiteSubscriber = saveSiteSubscription(scope, {
       endpoint: subscription.endpoint, p256dh: subscription.keys.p256dh, auth: subscription.keys.auth,
       lead: istLead(lead) ? lead : '1h', mode: istMode(mode) ? mode : 'all',
+      topics: bereinigeThemen(topics, scope === CLUB),
       userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
     });
     // Nach bestem Bemühen — die Anmeldung steht, auch wenn die Bestätigung nicht ankommt.
-    sendSiteWelcome(abo, t.team).catch(err => {
+    sendSiteWelcome(abo, team?.team ?? null).catch(err => {
       serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[site] Bestätigung nicht zustellbar');
     });
-    return reply.header('Cache-Control', 'no-store').send({ ok: true, lead: abo.lead, mode: abo.mode });
-  });
+    return reply.header('Cache-Control', 'no-store').send({ ok: true, lead: abo.lead, mode: abo.mode, topics: abo.topics });
+  }
 
-  fastify.delete<{ Params: { teamId: string } }>('/:teamId/push', limit(20), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+  function abmelden(request: { body: unknown }, reply: FastifyReply) {
     const parsed = unsubscribeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', message: 'Kein Endpoint angegeben.' });
     const removed = deleteSiteSubscription(parsed.data.endpoint);
     return reply.header('Cache-Control', 'no-store').send({ ok: true, removed });
+  }
+
+  /** Die Vereinsanmeldung gibt es, solange die Startseite da ist. */
+  function vereinDa(): boolean {
+    const sicht = handballOverview();
+    const erste = sicht.configured ? sicht.teams[0] : undefined;
+    return !!erste && siteConfig(erste.team_id).enabled;
+  }
+
+  fastify.get('/push', limit(60), async (_request, reply) => {
+    if (!vereinDa()) return nichtDa(reply);
+    return reply.header('Cache-Control', 'no-store').send(sitePushConfig());
+  });
+  fastify.post('/push', limit(20), async (request, reply) => {
+    if (!vereinDa()) return nichtDa(reply);
+    return anmelden(request, reply, CLUB, null);
+  });
+  fastify.delete('/push', limit(20), async (request, reply) => {
+    if (!vereinDa()) return nichtDa(reply);
+    return abmelden(request, reply);
+  });
+
+  fastify.get<{ Params: { teamId: string } }>('/:teamId/push', limit(60), async (request, reply) => {
+    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    return reply.header('Cache-Control', 'no-store').send(sitePushConfig());
+  });
+  fastify.post<{ Params: { teamId: string } }>('/:teamId/push', limit(20), async (request, reply) => {
+    const t = freigegeben(request.params.teamId);
+    if (!t) return nichtDa(reply);
+    return anmelden(request, reply, t.team.team_id, t);
+  });
+  fastify.delete<{ Params: { teamId: string } }>('/:teamId/push', limit(20), async (request, reply) => {
+    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    return abmelden(request, reply);
   });
 }

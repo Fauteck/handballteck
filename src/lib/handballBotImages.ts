@@ -21,7 +21,7 @@ import { DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballB
  * die eigene Domain aus SITE_URL, sonst PUBLIC_URL. Bis Oktober 2026 stand
  * hier der Bot; die Bilder gehen aber auch über Seite, Push und Weiterleiten.
  */
-function bildMarke(now = new Date()): ImageBrand {
+export function bildMarke(now = new Date()): ImageBrand {
   return { adresse: seitenAdresse(), stand: `${DATUM.format(now)} ${ZEIT.format(now)}` };
 }
 

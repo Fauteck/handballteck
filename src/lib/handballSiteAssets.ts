@@ -39,6 +39,9 @@ const DUNKEL: Array<[string, string]> = [
   ['.plan li.next', 'background:color-mix(in srgb,var(--a) 14%,#12262c)'],
   ['.plan .e.w', 'background:color-mix(in srgb,var(--win) 24%,#12262c)'],
   ['.plan .e.l', 'background:color-mix(in srgb,var(--loss) 22%,#12262c)'],
+  ['.kal .chip', 'background:#0c1a1f;color:#e6f0f2'],
+  ['.kal .chip.w', 'background:color-mix(in srgb,var(--win) 24%,#12262c)'],
+  ['.kal .chip.l', 'background:color-mix(in srgb,var(--loss) 22%,#12262c)'],
 ];
 
 function dunkel(): string {
@@ -71,16 +74,12 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .hero .wrap{position:relative;padding-top:28px;padding-bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 20px;align-items:center}
 .hero img.logo{width:96px;height:96px;padding:10px;border-radius:50%;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);object-fit:contain;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
 .hero .initialen{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.12);display:grid;place-items:center;font-family:'Barlow Condensed',sans-serif;font-size:2.4rem;font-weight:700;color:var(--a)}
-.hero .kicker{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
+.hero a.heim{color:inherit;text-decoration:none;display:block}
+.hero a.heim.titel:hover h1{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.hero .kicker{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a)}
 .hero h1{font-size:clamp(1.8rem,5.5vw,3.2rem);font-weight:700;line-height:1.05;text-transform:uppercase;overflow-wrap:anywhere}
 .hero h1 .nb{white-space:nowrap}
 .hero .sub{margin-top:6px;color:rgba(255,255,255,.82);font-size:1rem}
-.teamwahl{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
-.teamwahl a{padding:5px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff;text-decoration:none;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
-.teamwahl a:hover{background:rgba(255,255,255,.16)}
-.teamwahl.gruppen a{font-size:1.05rem;padding:6px 16px}
-.teamwahl:not(.gruppen) a{font-size:.85rem;padding:3px 10px}
-.teamwahl a[aria-current]{background:var(--a);border-color:var(--a);color:var(--g)}
 .hero .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:4px}
 .stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;min-width:0}
 .stat b{display:block;font-family:'Barlow Condensed',sans-serif;font-size:1.75rem;font-weight:700;line-height:1;color:#fff;white-space:nowrap}
@@ -99,6 +98,11 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .card.dark a{color:#fff}
 .card h2{margin-bottom:10px}
 .card img.bild{display:block;width:100%;height:auto;border-radius:12px;background:#0b2a33}
+@keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
+.card img.bild:not(.fertig){min-height:140px;color:transparent;background:linear-gradient(100deg,#0b2a33 30%,#16424e 50%,#0b2a33 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
+.card img.bild.fehler{animation:none;background:#0b2a33}
+.portraets img:not(.fertig){color:transparent;background:linear-gradient(100deg,var(--line) 30%,color-mix(in srgb,var(--line) 50%,transparent) 50%,var(--line) 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
+.portraets img.fehler{animation:none;background:var(--line)}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:var(--a);color:var(--g);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
 .badge.live{background:var(--loss);color:#fff;animation:puls 1.6s ease-in-out infinite}
 @keyframes puls{50%{opacity:.6}}
@@ -169,6 +173,12 @@ dialog.popup::backdrop{background:rgba(0,0,0,.55)}
 dialog.popup h2{color:#fff}
 dialog.popup fieldset{border:0;margin:0 0 10px;padding:0}
 dialog.popup legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.85rem;color:var(--a);padding:0}
+.thema{display:flex;gap:10px;align-items:flex-start;padding:10px 0;cursor:pointer;min-height:44px}
+.thema input{margin-top:4px;width:20px;height:20px;accent-color:var(--a);flex:none}
+.thema b{display:block;font-weight:600}
+.thema small{display:block;color:rgba(255,255,255,.72);font-size:.85rem;line-height:1.35}
+.einzug{margin:0 0 6px 30px}
+.einzug[hidden]{display:none}
 .teilen{gap:8px}.teilen svg{width:18px;height:18px;fill:currentColor}
 .teilen.klein{min-height:44px;padding:6px 12px;font-size:.9rem;margin-left:auto;text-transform:none;font-family:'Barlow',sans-serif}
 .card:not(.dark) .btn.teilen{color:var(--p)}
@@ -176,9 +186,18 @@ dialog.popup .teilziele{display:grid;grid-template-columns:repeat(auto-fit,minma
 dialog.popup .teilziele .btn{justify-content:center}
 dialog.popup .schliessen{margin:14px 0 0}
 .lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
-.kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin-top:4px}
+.kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin:0 0 6px}
+.verpassen+.kaesten{margin-top:-4px}
+.hero .theme+.kaesten{margin-top:44px}
+html.kompakt .hero .theme+.kaesten{margin-top:0}
 .kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
 .kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
+.kasten.aktiv{border-color:var(--a)}
+.kaesten.flach .kasten summary,.kaesten.flach .kasten.leer{min-height:56px;padding:8px 14px}
+.kaesten.flach .kasten .kopf b{font-size:1.15rem}
+.kaesten.flach .kasten .kopf small{display:none}
+.kaesten.flach{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.kasten .liste a[aria-current]{background:var(--a);color:var(--g)}
 .kasten summary{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:84px;padding:14px 16px;cursor:pointer;list-style:none}
 .kasten summary::-webkit-details-marker{display:none}
 .kasten summary::after{content:"▾";font-size:1.2rem;color:var(--a);transition:transform .15s}
@@ -227,6 +246,40 @@ table.heim tr.neu td{border-top:0}
 .filter button{font:inherit;font-size:.95rem;min-height:44px;padding:8px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
 .filter button[aria-pressed=true]{background:var(--p);border-color:var(--p);color:#fff}
 .filter button.jump{margin-left:auto;border-style:dashed}
+.filter .ansicht{display:inline-flex;gap:6px;margin-right:8px}
+#spielplan[data-ansicht=kalender] .plan,#spielplan[data-ansicht=kalender] .liste-nur{display:none}
+#spielplan:not([data-ansicht=kalender]) .kal{display:none}
+.kal .monatskopf{display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px}
+.kal .monatskopf b{font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;text-transform:uppercase;letter-spacing:.02em}
+.kal .monatskopf button{font:inherit;font-size:1.4rem;min-width:44px;min-height:44px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.kal .raster{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.kal .wt{text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kal .tag{min-height:64px;padding:3px;border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kal .tag.leer{border:0}
+.kal .tag .n{font-size:.75rem;color:var(--muted);line-height:1}
+.kal .tag.heute{border-color:var(--p);box-shadow:inset 0 0 0 1px var(--p)}
+.kal .chip{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;padding:1px 3px;border-radius:6px;background:var(--bg);color:var(--text);text-decoration:none;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.kal .chip.aus{border:1px dashed var(--muted)}
+.kal .chip.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
+.kal .chip.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
+.kenn{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.kenn>div{border:1px solid var(--line);border-radius:10px;padding:6px 12px;min-width:0}
+.kenn dt{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kenn dd{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.4rem;line-height:1.1}
+.kenn dd small{font-size:.9rem;font-weight:600;color:var(--muted);margin-left:5px}
+tr[data-sb]{cursor:pointer}
+tr[data-sb]:hover td{background:color-mix(in srgb,var(--p) 6%,transparent)}
+tr[data-sb]:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+dialog.steckbrief .gegner{margin-top:0}
+.mini{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(6px + env(safe-area-inset-top)) 16px 6px;background:var(--g);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);transform:translateY(-110%);transition:transform .2s}
+.mini.sichtbar{transform:none}
+.mini .mlogo{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:rgba(255,255,255,.14);text-decoration:none}
+.mini .mlogo img{width:26px;height:26px;object-fit:contain}
+.mini .ini{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--a);font-size:.85rem}
+.mini b{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;text-transform:uppercase;white-space:nowrap}
+.mini .minfo{min-width:0;flex:1;font-size:.9rem;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .nachoben{font:inherit;font-size:1.2rem;min-width:44px;min-height:44px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer}
+html.kompakt .mini{display:none}
 h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;color:var(--hd);margin:12px 0 4px}
 .legende{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.9rem}
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
@@ -283,12 +336,13 @@ main.wrap.schmal{max-width:820px;grid-template-columns:minmax(0,1fr)}
 footer.wrap{color:var(--muted);font-size:.85rem;padding-bottom:32px;display:grid;gap:6px}
 footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none !important;transition:none !important}}
-@media (pointer:coarse){.teamwahl a,.teamwahl:not(.gruppen) a{display:inline-flex;align-items:center;min-height:44px;padding-top:0;padding-bottom:0}}
-@media (max-width:600px){.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
+@media (max-width:600px){.kal .raster{gap:3px}.kal .tag{padding:2px;min-height:58px}.kal .chip{font-size:.72rem;padding:1px 0;letter-spacing:-.2px}.spielstand .seite{font-size:1.05rem}.spielstand .tore-gross{font-size:2.8rem}.hide-sm{display:none}.hero img.logo,.hero .initialen{width:72px;height:72px;padding:6px}.hero .initialen{font-size:1.5rem}.hero .kicker,.hero h1{padding-right:52px}html.kompakt .hero h1{padding-right:0}.plan li{grid-template-columns:78px 1fr auto}}
 @media (min-width:960px){
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
-.hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto minmax(0,1fr) auto;gap:16px 28px}
+.hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto max-content minmax(0,1fr);gap:16px 28px}
+.hero .wrap>div:not(.stats){max-width:440px}
+.hero h1{white-space:nowrap;overflow-wrap:normal}
 .hero img.logo,.hero .initialen{width:120px;height:120px}
 .hero .stats{grid-column:auto;grid-template-columns:repeat(3,minmax(110px,1fr));margin-top:0}
 .season .body{grid-template-columns:minmax(0,3fr) minmax(0,2fr);align-items:start}
@@ -603,8 +657,30 @@ export const SITE_APP_JS = `(function () {
   window.addEventListener('offline', netz);
   netz();
 
-  // Spielplan filtern und zum nächsten Spiel springen.
+  // Spielplan: Liste oder Monatskalender, filtern und zum nächsten Spiel springen.
   var filterWahl = 'alle';
+  var ansicht = 'liste';
+  try { if (localStorage.getItem('handball-site-ansicht') === 'kalender') ansicht = 'kalender'; } catch (e) {}
+  var monatWahl = null;
+  function monateZeigen() {
+    var monate = Array.prototype.slice.call(document.querySelectorAll('#spielplan [data-monat]'));
+    if (!monate.length) return;
+    var vorhanden = monate.some(function (m) { return m.getAttribute('data-monat') === monatWahl; });
+    if (!vorhanden) {
+      var start = document.querySelector('#spielplan [data-monat][data-aktuell]') || monate[monate.length - 1];
+      monatWahl = start.getAttribute('data-monat');
+    }
+    var idx = 0;
+    monate.forEach(function (m, i) {
+      var an = m.getAttribute('data-monat') === monatWahl;
+      m.hidden = !an;
+      if (an) {
+        idx = i;
+        m.querySelector('[data-monat-zurueck]').disabled = i === 0;
+        m.querySelector('[data-monat-weiter]').disabled = i === monate.length - 1;
+      }
+    });
+  }
   function planAnwenden() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-filter-bar]'), function (leiste) { leiste.hidden = false; });
     Array.prototype.forEach.call(document.querySelectorAll('#spielplan .plan li'), function (li) {
@@ -613,10 +689,31 @@ export const SITE_APP_JS = `(function () {
     Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (b) {
       b.setAttribute('aria-pressed', b.getAttribute('data-filter') === filterWahl ? 'true' : 'false');
     });
+    var plan = document.getElementById('spielplan');
+    if (plan) plan.setAttribute('data-ansicht', document.querySelector('#spielplan [data-kalender]') ? ansicht : 'liste');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-ansicht]'), function (b) {
+      if (b.tagName !== 'BUTTON') return;
+      b.hidden = !document.querySelector('#spielplan [data-kalender]');
+      b.setAttribute('aria-pressed', b.getAttribute('data-ansicht') === ansicht ? 'true' : 'false');
+    });
+    monateZeigen();
   }
   document.addEventListener('click', function (ev) {
-    var t = ev.target && ev.target.closest ? ev.target.closest('[data-filter],[data-jump]') : null;
+    var t = ev.target && ev.target.closest ? ev.target.closest('[data-filter],[data-jump],button[data-ansicht],[data-monat-zurueck],[data-monat-weiter]') : null;
     if (!t) return;
+    if (t.hasAttribute('data-ansicht')) {
+      ansicht = t.getAttribute('data-ansicht') === 'kalender' ? 'kalender' : 'liste';
+      try { localStorage.setItem('handball-site-ansicht', ansicht); } catch (e) {}
+      planAnwenden();
+      return;
+    }
+    if (t.hasAttribute('data-monat-zurueck') || t.hasAttribute('data-monat-weiter')) {
+      var monate = Array.prototype.slice.call(document.querySelectorAll('#spielplan [data-monat]'));
+      var i = monate.findIndex(function (m) { return m.getAttribute('data-monat') === monatWahl; });
+      var ziel = monate[i + (t.hasAttribute('data-monat-weiter') ? 1 : -1)];
+      if (ziel) { monatWahl = ziel.getAttribute('data-monat'); monateZeigen(); }
+      return;
+    }
     if (t.hasAttribute('data-filter')) { filterWahl = t.getAttribute('data-filter'); planAnwenden(); return; }
     var next = document.querySelector('#spielplan .plan li.next');
     if (!next) return;
@@ -624,6 +721,47 @@ export const SITE_APP_JS = `(function () {
     next.scrollIntoView({ block: 'center' });
   });
   planAnwenden();
+
+  // Gegner-Steckbrief: Ein Tipp auf eine Tabellenzeile öffnet ihn als Fenster (Enter und Leertaste auch).
+  function steckbriefOeffnen(zeile) {
+    var d = zeile && document.getElementById(zeile.getAttribute('data-sb'));
+    if (!d) return;
+    if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  }
+  document.addEventListener('click', function (ev) {
+    var z = ev.target && ev.target.closest ? ev.target.closest('tr[data-sb]') : null;
+    if (z) steckbriefOeffnen(z);
+    var d = ev.target;
+    if (d && d.tagName === 'DIALOG' && d.classList.contains('steckbrief') && typeof d.close === 'function') d.close();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var z = ev.target && ev.target.closest ? ev.target.closest('tr[data-sb]') : null;
+    if (!z) return;
+    ev.preventDefault();
+    steckbriefOeffnen(z);
+  });
+
+  // Kleiner Kopf, der mitläuft, sobald der große aus dem Bild ist: Mannschaft, Platz, nächstes Spiel, Weg nach oben.
+  (function () {
+    var mini = document.querySelector('[data-mini]');
+    var hero = document.querySelector('.hero');
+    if (!mini || !hero || !('IntersectionObserver' in window)) return;
+    mini.hidden = false;
+    var zeige = function (an) { mini.classList.toggle('sichtbar', an); if (an) mini.removeAttribute('inert'); else mini.setAttribute('inert', ''); };
+    new IntersectionObserver(function (eintraege) { zeige(!eintraege[0].isIntersecting); }, { threshold: 0 }).observe(hero);
+    var hoch = mini.querySelector('[data-nach-oben]');
+    if (hoch) hoch.addEventListener('click', function () { window.scrollTo({ top: 0 }); });
+  })();
+
+  // Bilder laden mit einem ruhigen Platzhalter statt mit Alt-Text: Die Fläche pulsiert, bis das Bild da ist; geht es schief, bleibt sie still und leer.
+  Array.prototype.forEach.call(document.querySelectorAll('.card img.bild, .portraets img'), function (img) {
+    var fertig = function () { img.classList.add('fertig'); };
+    var fehler = function () { img.classList.add('fehler'); };
+    if (img.complete) { if (img.naturalWidth > 0) fertig(); else fehler(); return; }
+    img.addEventListener('load', fertig);
+    img.addEventListener('error', fehler);
+  });
 
   // Live-Modus: Läuft ein Spiel, holt die Seite alle 30 Sekunden ihren eigenen
   // Stand und tauscht Spielstand, Kopfzeile, Tabelle und Spielplan aus. Ist das
@@ -638,20 +776,39 @@ export const SITE_APP_JS = `(function () {
     hinweis.hidden = true;
     document.body.appendChild(hinweis);
     var hinweisTimer = null;
-    var standAus = function (wurzel) {
-      var el = wurzel.querySelector('#naechstes [data-stand]');
-      var m = el ? /^(\\d+):(\\d+)$/.exec(el.getAttribute('data-stand') || '') : null;
-      return m ? { eigene: +m[1], gegner: +m[2], text: m[0] } : null;
+    // Alle laufenden Stände einer Seite: auf der Mannschaftsseite der eine, auf der Startseite einer je Mannschaft.
+    var staende = function (wurzel) {
+      var out = {};
+      Array.prototype.forEach.call(wurzel.querySelectorAll('#naechstes [data-stand], #live [data-stand]'), function (el, i) {
+        var m = /^(\\d+):(\\d+)$/.exec(el.getAttribute('data-stand') || '');
+        if (m) out[el.getAttribute('data-key') || String(i)] = { label: el.getAttribute('data-label') || '', eigene: +m[1], gegner: +m[2], text: m[0] };
+      });
+      return out;
     };
     var torHinweis = function (alt, neu) {
-      if (!alt || !neu || (alt.eigene === neu.eigene && alt.gegner === neu.gegner)) return;
-      var eigenes = neu.eigene > alt.eigene;
-      hinweis.textContent = (eigenes ? 'Tor! ' : neu.gegner > alt.gegner ? 'Gegentor ' : 'Neuer Stand ') + neu.text;
+      var zeilen = [];
+      var eigenes = false;
+      Object.keys(neu).forEach(function (k) {
+        var a = alt[k], n = neu[k];
+        if (!a || (a.eigene === n.eigene && a.gegner === n.gegner)) return;
+        var tor = n.eigene > a.eigene;
+        if (tor) eigenes = true;
+        zeilen.push((tor ? 'Tor! ' : n.gegner > a.gegner ? 'Gegentor ' : 'Neuer Stand ') + (n.label ? n.label + ' ' : '') + n.text);
+      });
+      if (!zeilen.length) return;
+      hinweis.textContent = zeilen.join(' · ');
       hinweis.hidden = false;
       clearTimeout(hinweisTimer);
       hinweisTimer = setTimeout(function () { hinweis.hidden = true; }, 6000);
       try { if (navigator.vibrate) navigator.vibrate(eigenes ? [120, 80, 120] : [220]); } catch (e) {}
     };
+    // Der Stand im Tab-Titel: Wer in einem anderen Tab ist, sieht ihn in der Tab-Leiste.
+    var titelOriginal = document.title;
+    var titelSetzen = function () {
+      var s = staende(document), k = Object.keys(s);
+      document.title = k.length === 0 ? titelOriginal : k.length === 1 ? '● ' + s[k[0]].text + ' · ' + titelOriginal : '● ' + k.length + ' Spiele live · ' + titelOriginal;
+    };
+    titelSetzen();
     var liveTakt = setInterval(function () {
       if (document.hidden) return;
       fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'omit' })
@@ -659,10 +816,10 @@ export const SITE_APP_JS = `(function () {
         .then(function (html) {
           if (!html) return;
           var doc = new DOMParser().parseFromString(html, 'text/html');
-          torHinweis(standAus(document), standAus(doc));
+          torHinweis(staende(document), staende(doc));
           var tickerOffen = !!document.querySelector('#naechstes details.ticker[open]');
           // Mannschaftsseite: Spiel, Letztes, Tabelle; Startseite: Läuft gerade, Heim- und Auswärtsspiele, Stand.
-          ['naechstes', 'letztes', 'tabelle', 'live', 'heimspiele', 'auswaertsspiele', 'stand'].forEach(function (id) {
+          ['naechstes', 'letztes', 'tabelle', 'live', 'heute', 'heimspiele', 'auswaertsspiele', 'letztes-wochenende', 'stand'].forEach(function (id) {
             var neu = doc.getElementById(id);
             var alt = document.getElementById(id);
             if (neu && alt) alt.replaceWith(neu);
@@ -678,7 +835,8 @@ export const SITE_APP_JS = `(function () {
           var planAlt = document.getElementById('spielplan');
           if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); }
           countdown();
-          if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); }
+          titelSetzen();
+          if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); titelSetzen(); }
         })
         .catch(function () {});
     }, 30000);
@@ -713,20 +871,44 @@ export const SITE_APP_JS = `(function () {
     return;
   }
 
-  var KEY = 'handball-site-push';
+  var club = root.getAttribute('data-scope') === 'club';
+  var KEY = club ? 'handball-site-push-club' : 'handball-site-push';
+  var leadBlock = form.querySelector('[data-lead]');
+  var zusammen = form.querySelector('[data-zusammen]');
   function gemerkt() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
   function merken(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+  function boxen() { return Array.prototype.slice.call(form.querySelectorAll('input[name=thema]')); }
   function wahl() {
     var lead = form.querySelector('input[name=lead]:checked');
-    var mode = form.querySelector('input[name=mode]:checked');
-    return { lead: lead ? lead.value : '1h', mode: mode ? mode.value : 'all' };
+    var topics = boxen().filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    return { lead: lead ? lead.value : '1h', topics: topics };
   }
+  // Was man ankreuzt, in einem Satz — dasselbe, was die Bestätigung auf dem Gerät nennt.
+  function satz(w) {
+    var t = w.topics, n = [];
+    if (t.indexOf('upcoming') >= 0) n.push(w.lead === 'abend' ? 'Ankündigung am Vorabend' : 'Ankündigung ' + (w.lead === '3h' ? '3 Stunden' : '1 Stunde') + ' vorher');
+    if (t.indexOf('halftime') >= 0) n.push('Halbzeitstand');
+    if (t.indexOf('result') >= 0) n.push('Endstand');
+    if (t.indexOf('change') >= 0) n.push('Verlegungen und Absagen');
+    if (t.indexOf('preview') >= 0) n.push('Wochenvorschau am Donnerstag');
+    if (!n.length) return '';
+    return n.length === 1 ? n[0] : n.slice(0, -1).join(', ') + ' und ' + n[n.length - 1];
+  }
+  function auffrischen() {
+    var w = wahl();
+    if (leadBlock) leadBlock.hidden = w.topics.indexOf('upcoming') < 0;
+    zusammen.textContent = w.topics.length ? 'Du bekommst: ' + satz(w) + '.' : 'Nichts angekreuzt — so kommt nichts an.';
+    btnOn.disabled = w.topics.length === 0;
+  }
+  form.addEventListener('change', auffrischen);
   function setzeWahl(v) {
-    if (!v) return;
+    if (!v) { auffrischen(); return; }
     var l = form.querySelector('input[name=lead][value="' + v.lead + '"]');
-    var m = form.querySelector('input[name=mode][value="' + v.mode + '"]');
     if (l) l.checked = true;
-    if (m) m.checked = true;
+    // Ältere Fassungen merkten nur den Modus.
+    var topics = v.topics || (v.mode === 'results' ? ['result', 'change'] : ['upcoming', 'halftime', 'result', 'change']);
+    boxen().forEach(function (b) { b.checked = topics.indexOf(b.value) >= 0; });
+    auffrischen();
   }
   function bytes(base64) {
     var padding = '='.repeat((4 - (base64.length % 4)) % 4);
@@ -741,8 +923,7 @@ export const SITE_APP_JS = `(function () {
     if (sub) {
       btnOn.textContent = 'Auswahl speichern';
       btnOff.hidden = false;
-      var w = wahl();
-      say(w.lead === 'aus' && w.mode === 'results' ? 'Eingeschaltet: nur Endstände und Verlegungen.' : 'Eingeschaltet auf diesem Gerät.');
+      say('Eingeschaltet auf diesem Gerät: ' + (satz(wahl()) || 'nichts') + '.');
     } else {
       btnOn.textContent = 'Benachrichtigungen einschalten';
       btnOff.hidden = true;
@@ -766,6 +947,7 @@ export const SITE_APP_JS = `(function () {
       if (!config || !config.enabled) return;
       setzeWahl(gemerkt());
       zeige(sub);
+      auffrischen();
     })
     .catch(function () { say('Benachrichtigungen lassen sich gerade nicht einrichten.'); });
 
@@ -785,7 +967,7 @@ export const SITE_APP_JS = `(function () {
         var w = wahl();
         return fetch('./push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
-          body: JSON.stringify({ subscription: sub.toJSON(), lead: w.lead, mode: w.mode })
+          body: JSON.stringify({ subscription: sub.toJSON(), lead: w.topics.indexOf('upcoming') >= 0 ? w.lead : 'aus', topics: w.topics })
         }).then(function (res) { if (!res.ok) throw new Error('server'); merken(w); zeige(sub); });
       })
       .catch(function (err) { if (err && err.message !== 'abgelehnt') say('Das hat nicht geklappt — bitte noch einmal versuchen.'); })
