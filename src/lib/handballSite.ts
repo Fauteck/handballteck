@@ -499,10 +499,11 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   return `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen}
-  ${gruppenKaesten(mannschaften, team.team_id, anhang, true)}
   <a class="heim" href="${h(startUrl + anhang)}" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}</a>
-  <div>
-    <a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span><h1>${h(team.label)}</h1></a>
+  <div class="verein"><a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span></a></div>
+  ${gruppenKaesten(mannschaften, team.team_id, anhang, true)}
+  <div class="teaminfo">
+    <h1>${h(team.label)}</h1>
     <div class="sub">${h(wettbewerb)}${saison ? ` · Saison ${h(saison)}` : ''}</div>
   </div>
   ${kacheln.length > 0 ? `<div class="stats">${kacheln.join('')}</div>` : ''}
@@ -796,6 +797,10 @@ function tabelleHtml(team: HandballTeamView, now: Date): string {
 function spielplanHtml(team: HandballTeamView, now: Date): string {
   if (team.matches.length === 0) return '';
   const naechstesId = team.next_match?.match_id ?? null;
+  // Eingeklappt bleiben drei Spiele sichtbar: das nächste und die zwei danach — am Saisonende die letzten drei.
+  const ab = naechstesId ? team.matches.findIndex(m => m.match_id === naechstesId) : -1;
+  const start3 = ab >= 0 ? Math.max(0, Math.min(ab, team.matches.length - 3)) : Math.max(0, team.matches.length - 3);
+  const kurz = new Set(team.matches.slice(start3, start3 + 3).map(m => m.match_id));
   const items = team.matches.map(m => {
     const start = new Date(m.starts_at);
     const status = statusWort(m);
@@ -810,7 +815,7 @@ function spielplanHtml(team: HandballTeamView, now: Date): string {
       ergebnis = `<span class="e o">${h(ZEIT.format(start))} Uhr</span>`;
     }
     const gespieltEintrag = mitStand && !m.is_live;
-    return `<li${m.match_id === naechstesId ? ' class="next"' : ''} data-ha="${m.is_home ? 'heim' : 'aus'}" data-st="${gespieltEintrag ? 'gespielt' : 'kommend'}">
+    return `<li${m.match_id === naechstesId ? ' class="next"' : ''}${kurz.has(m.match_id) ? ' data-kurz' : ''} data-ha="${m.is_home ? 'heim' : 'aus'}" data-st="${gespieltEintrag ? 'gespielt' : 'kommend'}">
       <span class="d">${h(datumKurz(start, now))}<small>${m.round ? `${m.round}. Spieltag` : h(ZEIT.format(start))}</small></span>
       <span class="g"><a class="titel" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">${h(gegnerVon(m))}</a><div class="ha">${m.is_home ? 'Heim' : 'Auswärts'}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}${status && mitStand ? ` · ${h(status)}` : ''}${gespieltEintrag ? ` · <a class="spielseite" href="${h(`./spiel/${encodeURIComponent(m.match_id)}`)}">Spielseite →</a>` : ''}</div></span>
       ${ergebnis}
@@ -818,7 +823,8 @@ function spielplanHtml(team: HandballTeamView, now: Date): string {
     </li>`;
   }).join('');
   const bilanz = gespielt(team);
-  return `<section class="card s-plan" id="spielplan"><h2>Spielplan${bilanz.length > 0 ? ` <span class="muted small" style="font-family:'Barlow',sans-serif;text-transform:none;font-weight:500">${bilanz.length} von ${team.matches.length} gespielt</span>` : ''}</h2>
+  const kPlan = klappe('spielplan', `${team.matches.length > 3 ? `${kurz.size} von ${team.matches.length} Spielen` : ''}`);
+  return `<section class="card s-plan" id="spielplan"${team.matches.length > 3 ? kPlan.attr : ''}><h2>Spielplan${bilanz.length > 0 ? ` <span class="muted small" style="font-family:'Barlow',sans-serif;text-transform:none;font-weight:500">${bilanz.length} von ${team.matches.length} gespielt</span>` : ''}</h2>
   <div class="filter" data-filter-bar role="group" aria-label="Spielplan filtern" hidden>
     <span class="ansicht" role="group" aria-label="Ansicht">${[['liste', 'Liste'], ['kalender', 'Kalender']].map(([k, l]) => `<button type="button" data-ansicht="${k}" aria-pressed="${k === 'liste'}">${l}</button>`).join('')}</span>
     ${[['alle', 'Alle'], ['heim', 'Heim'], ['aus', 'Auswärts'], ['kommend', 'Kommend'], ['gespielt', 'Gespielt']].map(([k, l]) => `<button type="button" class="liste-nur" data-filter="${k}" aria-pressed="${k === 'alle'}">${l}</button>`).join('')}
@@ -883,8 +889,10 @@ function saisonHtml(team: HandballTeamView, players: boolean): string {
   const zeilen = alsKlartext(textSaison(team)).slice(1);
   const hatVerlauf = bildVerlauf(team) !== null;
   if (zeilen.length === 0 && !hatVerlauf) return '';
-  return `<section class="card season s-season" id="saison">
+  const k = klappe('saison', zeilen[0] ?? 'Tabellenplatz je Spieltag');
+  return `<section class="card season s-season" id="saison"${k.attr}>
   <h2>Saison</h2>
+  ${k.zeile}
   <div class="body">
   ${hatVerlauf ? `<img class="bild" src="./bild/verlauf.png" alt="Tabellenplatz je Spieltag" loading="lazy" width="800">` : ''}
   ${zeilen.length > 0 ? `<ul class="lines">${zeilen.map(z => `<li>${h(z)}</li>`).join('')}</ul>` : ''}
@@ -952,8 +960,10 @@ function teamFotosHtml(team: HandballTeamView, players: boolean, anhang: string,
   if (!gruppe && personen.length === 0) return '';
   const abschnitte = new Map<string, typeof personen>();
   for (const p of personen) abschnitte.set(p.section, [...(abschnitte.get(p.section) ?? []), p]);
-  return `<section class="card s-fotos" id="team">
+  const k = klappe('fotos', [gruppe ? 'Mannschaftsfoto' : '', personen.length > 0 ? `${personen.length} Porträt${personen.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' und '));
+  return `<section class="card s-fotos" id="team"${k.attr}>
   <h2>Das Team${vorschau ? ' <span class="badge">Vorschau</span>' : ''}</h2>
+  ${k.zeile}
   ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${team.name}`)}" loading="lazy" width="1600">` : ''}
   ${[...abschnitte].map(([titel, leute]) => `<h3 class="unter">${h(titel)}</h3>
   <ul class="portraets">${leute.map(p => `<li><img src="./foto/${h(p.contactId)}.jpg${h(anhang)}" alt="" loading="lazy" width="400" height="500"><b>${h(p.name)}</b>${p.position ? `<span>${h(p.position)}</span>` : ''}</li>`).join('')}</ul>`).join('')}
@@ -967,8 +977,11 @@ function spielerHtml(team: HandballTeamView): string {
   const kader = bildKader(team) !== null;
   const verlauf = torverlaufHtml(team);
   if (!torjaeger && !kader) return '';
-  return `<section class="card s-team" id="mannschaft">
+  const bester = stats.filter(p => p.goals > 0).sort((a, b) => b.goals - a.goals)[0];
+  const k = klappe('kader', bester ? `${stats.length} Spieler · Torjäger ${bester.name} mit ${bester.goals} Toren` : `${stats.length} Spieler`);
+  return `<section class="card s-team" id="mannschaft"${k.attr}>
   <h2>Mannschaft</h2>
+  ${k.zeile}
   ${verlauf ? `<h3 class="unter">Tore im Saisonverlauf</h3>${verlauf}` : ''}
   ${torjaeger ? `<img class="bild" src="./bild/torjaeger.png" alt="Torschützen der Saison" loading="lazy" width="800">` : ''}
   ${kader ? `<img class="bild" src="./bild/kader.png" alt="Kader" loading="lazy" width="800" height="450" style="margin-top:14px">` : ''}
@@ -1062,6 +1075,15 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   const botName = getHandballBotUsername();
   const telegram = botLink && botName ? { link: botLink, handle: `@${botName}` } : null;
   const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled, telegram, false, { id: team.team_id, label: team.label });
+  const abschnitte = {
+    naechstes: naechstesSpielHtml(team, now, opts.baseUrl),
+    letztes: letztesSpielHtml(team, opts.baseUrl),
+    tabelle: tabelleHtml(team, now),
+    saison: saisonHtml(team, opts.players),
+    fotos: teamFotosHtml(team, opts.players, anhang, !!opts.vorschau),
+    kader: opts.players ? spielerHtml(team) : '',
+    spielplan: spielplanHtml(team, now),
+  };
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -1092,17 +1114,26 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über deinen Vorschau-Link erreichbar. Fotos von der Vereinsseite, Rechte noch nicht geklärt.</div>' : ''}
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
 ${heroHtml(team, logo, now, opts.teams ?? [], anhang, '../', verpassen.leiste)}
+${sprungleisteHtml([
+  ['naechstes', naechstes?.is_live ? 'Live' : 'Spiel', abschnitte.naechstes],
+  ['letztes', 'Letztes', abschnitte.letztes],
+  ['tabelle', 'Tabelle', abschnitte.tabelle],
+  ['spielplan', 'Spielplan', abschnitte.spielplan],
+  ['saison', 'Saison', abschnitte.saison],
+  ['team', 'Fotos', abschnitte.fotos],
+  ['mannschaft', 'Kader', abschnitte.kader],
+])}
 <main class="wrap" id="inhalt">
 <div class="col main">
-${naechstesSpielHtml(team, now, opts.baseUrl)}
-${letztesSpielHtml(team, opts.baseUrl)}
-${tabelleHtml(team, now)}
-${saisonHtml(team, opts.players)}
-${teamFotosHtml(team, opts.players, anhang, !!opts.vorschau)}
-${opts.players ? spielerHtml(team) : ''}
+${abschnitte.naechstes}
+${abschnitte.letztes}
+${abschnitte.tabelle}
+${abschnitte.saison}
+${abschnitte.fotos}
+${abschnitte.kader}
 </div>
 <div class="col side">
-${spielplanHtml(team, now)}
+${abschnitte.spielplan}
 </div>
 </main>
 <footer class="wrap">
@@ -1168,6 +1199,26 @@ ${o.dialog ?? ''}
 </body>
 </html>
 `;
+}
+
+/**
+ * Die Sprungleiste unter dem Kopf: je vorhandenem Abschnitt ein Chip mit
+ * Anker. Ohne Skript sind es gewöhnliche Sprungmarken; mit Skript klebt sie
+ * oben und markiert den Abschnitt, in dem man gerade liest.
+ */
+function sprungleisteHtml(ziele: Array<[string, string, string]>): string {
+  const da = ziele.filter(([, , html]) => html.trim() !== '');
+  if (da.length < 2) return '';
+  return `<nav class="sprung" aria-label="Abschnitte" data-sprung><div class="wrap"><ul>${da.map(([id, label]) => `<li><a href="#${id}">${h(label)}</a></li>`).join('')}</ul></div></nav>`;
+}
+
+/**
+ * Ein Abschnitt, der mit Skript zunächst eingeklappt steht: das Attribut für
+ * die Section und die eine Zeile, die im eingeklappten Zustand bleibt. Ohne
+ * Skript ist alles offen und die Zeile versteckt.
+ */
+function klappe(schluessel: string, vorschau: string): { attr: string; zeile: string } {
+  return { attr: ` data-klappe="${h(schluessel)}"`, zeile: `<p class="vorschau" hidden>${h(vorschau)}</p>` };
 }
 
 function initialenVon(name: string): string {
@@ -1362,8 +1413,12 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
     </tr>`;
     });
     const sortierung = [['datum', 'Datum'], ['ort', 'Spielort'], ['gruppe', 'Herren · Damen · Jugend']] as const;
-    return `<section class="card" id="${id}">
+    const k = id === 'auswaertsspiele'
+      ? klappe('auswaerts', spiele.length > 0 ? `${spiele.length} Auswärtsspiel${spiele.length === 1 ? '' : 'e'} von Freitag bis Sonntag` : 'Kein Auswärtsspiel von Freitag bis Sonntag')
+      : { attr: '', zeile: '' };
+    return `<section class="card" id="${id}"${k.attr}>
   <h2>${ueberschrift} <span class="muted small">${tagMonat(we.fr)}–${tagMonat(we.so)}</span>${id === 'heimspiele' ? teilenHtml({ url: opts.baseUrl, titel: 'Wölfe im Revier', text: beschreibung, bild: './bild/wochenende.png' }).replace('class="btn teilen"', 'class="btn teilen klein"') : ''}</h2>
+  ${k.zeile}
   ${spiele.length > 0 ? `<div class="sortieren" data-sortbar hidden role="group" aria-label="${ueberschrift} sortieren">
     <span class="muted small">Sortieren nach</span>
     ${sortierung.map(([k, t], i) => `<button type="button" data-sort="${k}" aria-pressed="${i === 0 ? 'true' : 'false'}">${t}</button>`).join('')}
@@ -1403,8 +1458,10 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const niederlagen = letzte.filter(x => x.m.won === false).length;
   const remis = letzte.length - siege - niederlagen;
   const bilanz = [siege ? `${siege} Sieg${siege === 1 ? '' : 'e'}` : '', remis ? `${remis} Unentschieden` : '', niederlagen ? `${niederlagen} Niederlage${niederlagen === 1 ? '' : 'n'}` : ''].filter(Boolean).join(' · ');
-  const letzteHtml = letzte.length > 0 ? `<section class="card" id="letztes-wochenende">
+  const kLetzte = klappe('ergebnisse', `${letzte.length} Spiel${letzte.length === 1 ? '' : 'e'}: ${bilanz}`);
+  const letzteHtml = letzte.length > 0 ? `<section class="card" id="letztes-wochenende"${kLetzte.attr}>
   <h2>Ergebnisse · letztes Wochenende <span class="muted small">${tagMonat(letzteTage[0]!)}–${tagMonat(letzteTage[2]!)}</span></h2>
+  ${kLetzte.zeile}
   <p class="muted small bilanz">${h(bilanz)}</p>
   <ul class="plan">${letzte.map(({ t, m }) => `<li>
       <span class="d">${h(DATUM_KURZ.format(new Date(m.starts_at)))}</span>
@@ -1431,8 +1488,10 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       <td data-label="Zuletzt">${zuletzt}</td>
     </tr>`;
   };
-  const standHtml = `<section class="card" id="stand">
+  const kStand = klappe('stand', teams.length === 1 ? 'Platz, Punkte und letztes Ergebnis der Mannschaft' : `Platz, Punkte und letztes Ergebnis aller ${teams.length} Mannschaften`);
+  const standHtml = `<section class="card" id="stand"${kStand.attr}>
   <h2>So stehen wir</h2>
+  ${kStand.zeile}
   <div class="tabelle-rahmen"><table class="heim stand">
     <thead><tr><th scope="col">Mannschaft</th><th scope="col">Platz</th><th scope="col">Punkte</th><th scope="col">Zuletzt</th></tr></thead>
     ${[...HANDBALL_GROUPS.map(g => ({ label: g.label, teams: teams.filter(t => t.group === g.id) })), { label: 'Weitere', teams: teams.filter(t => t.group === null) }]
@@ -1446,11 +1505,11 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();
   const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled === true, botLink && botName ? { link: botLink, handle: `@${botName}` } : null, true);
-  const kopf = `<header class="hero"><div class="wrap">
+  const kopf = `<header class="hero start"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen.leiste}
   <a class="heim" href="./" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
-  <div>
+  <div class="verein">
     <a class="heim titel" href="./"><span class="kicker">${h(clubName())}</span><h1>${h(titel)}</h1></a>
     <div class="sub">Heimspiele, Spielorte und Ergebnisse aller Mannschaften</div>
   </div>
@@ -1460,7 +1519,14 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   return unterseiteHtml({
     titel, beschreibung, url: opts.baseUrl, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
     dateien: `./${encodeURIComponent(erste.team_id)}/`,
-    kopf, inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
+    kopf: kopf + sprungleisteHtml([
+      ['live', 'Live', liveHtml || liveLeerHtml],
+      ['heute', 'Heute', heuteHtml],
+      ['heimspiele', 'Heimspiele', weHtml],
+      ['auswaertsspiele', 'Auswärts', ausHtml],
+      ['letztes-wochenende', 'Ergebnisse', letzteHtml],
+      ['stand', 'Tabellenplätze', standHtml],
+    ]), inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
     app: { titel: titel, manifest: './manifest.webmanifest' }, live: live.length > 0 || teams.some(t => istLiveFenster(t.next_match, now)),
   });
 }

@@ -266,7 +266,11 @@ describe('Handball-Microsite', () => {
       expect((await get('/sw.js')).headers['content-type']).toContain('javascript');
       // Kopf der Mannschaftsseite: Vereinsname klein darüber, die Mannschaft als Titel.
       const team = (await get(`/${TEAM}/`)).body;
-      expect(team).toContain('<span class="kicker">HSG Wölfe Voreifel</span><h1>B-Jugend</h1>');
+      // Logo und Vereinsname oben (führen zur Startseite), das Team als Text unter der Navigation.
+      expect(team).toContain('<div class="verein"><a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a></div>');
+      expect(team).toContain('<div class="teaminfo">\n    <h1>B-Jugend</h1>');
+      expect(team.indexOf('class="kaesten')).toBeLessThan(team.indexOf('<h1>B-Jugend</h1>'));
+      expect(team.indexOf('class="verein"')).toBeLessThan(team.indexOf('class="kaesten'));
       // Fünf große Bereichskästen; die Mannschaften klappen darunter auf.
       expect(wurzel.body.match(/class="kasten[ "]/g)?.length).toBe(5);
       expect(wurzel.body).toContain('<details class="kasten" name="bereich" data-bereich="jungen">');
@@ -300,7 +304,7 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<li><a href="../96300/">1. Damen</a></li>');
       expect(html).toContain('<div class="kasten leer" aria-disabled="true"><span class="kopf"><b>Kinder</b>');
       // Titel und Vereinsname führen zur Startseite; auf der Spielseite eine Ebene höher.
-      expect(html).toContain('<a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span><h1>B-Jugend</h1></a>');
+      expect(html).toContain('<a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a>');
       expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a class="heim titel" href="../../">');
       expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<li><a href="../../96300/">1. Damen</a></li>');
       // Die Vorschau trägt ihren Schlüssel in jeden Verweis.
@@ -879,6 +883,44 @@ describe('Handball-Microsite', () => {
       } finally {
         db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString() }).where(eq(schema.handball_team_match.id, id)).run();
       }
+    });
+
+    it('setzt eine Sprungleiste mit Ankern zu den vorhandenen Abschnitten', async () => {
+      const team = (await get(`/${TEAM}/`)).body;
+      expect(team).toContain('<nav class="sprung" aria-label="Abschnitte" data-sprung>');
+      for (const [id, label] of [['naechstes', 'Spiel'], ['letztes', 'Letztes'], ['tabelle', 'Tabelle'], ['spielplan', 'Spielplan']]) {
+        expect(team).toContain(`<li><a href="#${id}">${label}</a></li>`);
+        expect(team).toContain(`id="${id}"`);
+      }
+      // Ohne Spielernamen kein Kader, also auch kein Chip dafür.
+      expect(team).not.toContain('href="#mannschaft"');
+      expect(team.indexOf('data-sprung')).toBeLessThan(team.indexOf('id="inhalt"'));
+      const start = (await get('/')).body;
+      expect(start).toContain('<li><a href="#live">Live</a></li>');
+      expect(start).toContain('<li><a href="#stand">Tabellenplätze</a></li>');
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("document.querySelector('[data-sprung]')");
+      expect((await get(`/${TEAM}/site.css`)).body).toContain('.sprung{position:sticky;top:var(--oben,0px)');
+    });
+
+    it('klappt Nebenabschnitte mit Skript zunächst ein, mit einer Zeile Vorschau', async () => {
+      const start = (await get('/')).body;
+      expect(start).toContain('<section class="card" id="auswaertsspiele" data-klappe="auswaerts">');
+      expect(start).toContain('<p class="vorschau" hidden>Kein Auswärtsspiel von Freitag bis Sonntag</p>');
+      expect(start).toContain('id="stand" data-klappe="stand"');
+      // Heimspiele und Live bleiben immer offen.
+      expect(start).not.toMatch(/id="heimspiele"[^>]*data-klappe/);
+      expect(start).not.toMatch(/id="live"[^>]*data-klappe/);
+      const team = (await get(`/${TEAM}/`)).body;
+      // Mit drei Spielen gibt es nichts zu kürzen; das nächste Spiel und die Tabelle bleiben offen.
+      expect(team).not.toContain('id="spielplan" data-klappe');
+      expect(team).toMatch(/<li class="next" data-kurz/);
+      expect(team).not.toMatch(/id="naechstes"[^>]*data-klappe/);
+      expect(team).not.toMatch(/id="tabelle"[^>]*data-klappe/);
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("'handball-site-klappe:'");
+      expect(js).toContain('function ankerOeffnen(hash)');
+      expect((await get(`/${TEAM}/site.css`)).body).toContain('#spielplan.zu .plan li:not([data-kurz]){display:none}');
     });
 
     it('rendert das Wochenende als Bild, nur bei freigegebener Seite', async () => {

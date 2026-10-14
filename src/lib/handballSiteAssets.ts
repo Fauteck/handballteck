@@ -187,6 +187,20 @@ dialog.popup .teilziele .btn{justify-content:center}
 dialog.popup .schliessen{margin:14px 0 0}
 .lead{margin:6px 0 12px;color:rgba(255,255,255,.8)}
 .kaesten{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:start;margin:0 0 6px}
+/* Logo und Vereinsname ganz oben, die Wege daneben (links vom Farbschalter) statt in einer eigenen Zeile; das Team steht als Text unter der Navigation */
+.hero .wrap{padding-top:16px}
+.hero .verpassen{position:absolute;top:10px;right:68px;margin:0;z-index:2}
+.hero .teaminfo{grid-column:1/-1;min-width:0}
+.hero .verein{min-width:0}
+.hero .verein .kicker{font-size:1.15rem}
+html.kompakt .hero .verein{display:none}
+html.kompakt .hero .verpassen{position:static;grid-column:1/-1;justify-self:end}
+@media (max-width:700px){
+.hero .verein{grid-column:2;grid-row:1}
+.hero .verein .kicker{font-size:1.05rem;letter-spacing:.06em}
+.hero .wrap>a.heim{grid-row:1/3}
+.hero .verpassen{position:static;grid-column:2;grid-row:2;justify-self:start;justify-items:start;align-self:start}
+}
 .verpassen+.kaesten{margin-top:-4px}
 .hero .theme+.kaesten{margin-top:44px}
 html.kompakt .hero .theme+.kaesten{margin-top:0}
@@ -277,6 +291,22 @@ tr[data-sb]{cursor:pointer}
 tr[data-sb]:hover td{background:color-mix(in srgb,var(--p) 6%,transparent)}
 tr[data-sb]:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
 dialog.steckbrief .gegner{margin-top:0}
+.klappe{margin-left:auto;font:inherit;font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:500;text-transform:none;letter-spacing:0;min-height:44px;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.card.dark .klappe{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.24);color:#fff}
+.vorschau{margin:0;color:var(--muted);cursor:pointer}
+[data-klappe].zu:not(#spielplan)>:not(h2):not(.vorschau){display:none}
+#spielplan.zu .filter,#spielplan.zu .kal{display:none}
+#spielplan.zu .plan li:not([data-kurz]){display:none}
+#spielplan.zu[data-ansicht=kalender] .plan{display:grid}
+.sprung{position:sticky;top:var(--oben,0px);z-index:25;background:var(--bg);border-bottom:1px solid var(--line);transition:top .2s}
+.sprung .wrap{padding-top:8px;padding-bottom:8px}
+.sprung ul{list-style:none;margin:0;padding:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.sprung ul::-webkit-scrollbar{display:none}
+.sprung a{display:inline-flex;align-items:center;min-height:44px;padding:6px 16px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--text);text-decoration:none;white-space:nowrap;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:1.05rem;letter-spacing:.02em}
+.sprung a:hover{border-color:var(--p)}
+.sprung a[aria-current=true]{background:var(--p);border-color:var(--p);color:#fff}
+section[id]{scroll-margin-top:72px}
+html.mit-mini section[id]{scroll-margin-top:124px}
 .mini{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(6px + env(safe-area-inset-top)) 16px 6px;background:var(--g);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);transform:translateY(-110%);transition:transform .2s}
 .mini.sichtbar{transform:none}
 .mini .mlogo{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:rgba(255,255,255,.14);text-decoration:none}
@@ -347,7 +377,9 @@ footer .betreiber{padding-top:10px;border-top:1px solid var(--line)}
 main.wrap{grid-template-columns:minmax(0,1fr) 400px;align-items:start;gap:22px;padding-top:22px}
 .col{display:grid;gap:22px;min-width:0}
 .hero .wrap{padding-top:36px;padding-bottom:32px;grid-template-columns:auto max-content minmax(0,1fr);gap:16px 28px}
-.hero .wrap>div:not(.stats){max-width:440px}
+.hero .wrap>div:not(.stats):not(.verein):not(.teaminfo){max-width:440px}
+.hero .verein{grid-column:2/-1}
+.hero .teaminfo{grid-column:1/3}
 .hero h1{white-space:nowrap;overflow-wrap:normal}
 .hero img.logo,.hero .initialen{width:120px;height:120px}
 .hero .stats{grid-column:auto;grid-template-columns:repeat(3,minmax(110px,1fr));margin-top:0}
@@ -760,6 +792,95 @@ export const SITE_APP_JS = `(function () {
     if (hoch) hoch.addEventListener('click', function () { window.scrollTo({ top: 0 }); });
   })();
 
+  // Nebenabschnitte zunächst eingeklappt: eine Zeile Vorschau, ein Knopf zum Aufklappen. Der Zustand
+  // bleibt je Abschnitt im Browser; ein Anker auf einen eingeklappten Abschnitt klappt ihn auf.
+  function klappeSchluessel(sec) { return 'handball-site-klappe:' + sec.getAttribute('data-klappe'); }
+  function klappeSetzen(sec, zu, merken) {
+    sec.classList.toggle('zu', zu);
+    var v = sec.querySelector(':scope > .vorschau');
+    if (v) v.hidden = !zu;
+    var knopf = sec.querySelector(':scope > h2 > .klappe');
+    if (knopf) {
+      knopf.setAttribute('aria-expanded', zu ? 'false' : 'true');
+      knopf.textContent = sec.id === 'spielplan' ? (zu ? 'Ganzer Spielplan' : 'Kürzer') : (zu ? 'Aufklappen' : 'Zuklappen');
+    }
+    if (merken) { try { localStorage.setItem(klappeSchluessel(sec), zu ? 'zu' : 'auf'); } catch (e) {} }
+  }
+  function klappenAnwenden() {
+    Array.prototype.forEach.call(document.querySelectorAll('[data-klappe]'), function (sec) {
+      var h2 = sec.querySelector(':scope > h2');
+      if (h2 && !h2.querySelector('.klappe')) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'klappe';
+        if (sec.id) b.setAttribute('aria-controls', sec.id);
+        h2.appendChild(b);
+      }
+      var gemerkt = null;
+      try { gemerkt = localStorage.getItem(klappeSchluessel(sec)); } catch (e) {}
+      klappeSetzen(sec, gemerkt !== 'auf', false);
+    });
+    ankerOeffnen(location.hash);
+  }
+  function ankerOeffnen(hash) {
+    if (!hash || hash.length < 2) return;
+    var el = null;
+    try { el = document.getElementById(decodeURIComponent(hash.slice(1))); } catch (e) {}
+    var sec = el && el.closest ? el.closest('[data-klappe]') : null;
+    if (sec && sec.classList.contains('zu')) klappeSetzen(sec, false, false);
+  }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest('.klappe, [data-klappe] > .vorschau, a[href^="#"]') : null;
+    if (!t) return;
+    if (t.tagName === 'A') { ankerOeffnen(t.getAttribute('href')); return; }
+    var sec = t.closest('[data-klappe]');
+    klappeSetzen(sec, !sec.classList.contains('zu'), true);
+    if (sec.id === 'spielplan' && typeof planAnwenden === 'function') planAnwenden();
+  });
+  window.addEventListener('hashchange', function () { ankerOeffnen(location.hash); });
+  klappenAnwenden();
+
+  // Sprungleiste: klebt oben (unter dem Mini-Kopf, wenn der zu sehen ist) und markiert den Abschnitt, in dem man gerade liest.
+  (function () {
+    var leiste = document.querySelector('[data-sprung]');
+    if (!leiste) return;
+    var liste = leiste.querySelector('ul');
+    var links = Array.prototype.slice.call(leiste.querySelectorAll('a[href^="#"]'));
+    var mini = document.querySelector('[data-mini]');
+    if (mini && 'IntersectionObserver' in window) document.documentElement.classList.add('mit-mini');
+    var aktiv = null;
+    var setzen = function (a) {
+      if (a === aktiv) return;
+      if (aktiv) aktiv.removeAttribute('aria-current');
+      aktiv = a;
+      if (!a) return;
+      a.setAttribute('aria-current', 'true');
+      var li = a.parentNode;
+      if (li.offsetLeft < liste.scrollLeft || li.offsetLeft + li.offsetWidth > liste.scrollLeft + liste.clientWidth) liste.scrollLeft = li.offsetLeft - 16;
+    };
+    var markieren = function () {
+      var oben = mini && mini.classList.contains('sichtbar') ? mini.offsetHeight : 0;
+      document.documentElement.style.setProperty('--oben', oben + 'px');
+      var grenze = oben + leiste.offsetHeight + 32;
+      var treffer = null, bester = -Infinity;
+      links.forEach(function (a) {
+        var el = document.getElementById(a.getAttribute('href').slice(1));
+        if (!el) return;
+        var top = el.getBoundingClientRect().top;
+        if (top <= grenze && top > bester) { bester = top; treffer = a; }
+      });
+      // Ganz unten zählt der letzte Abschnitt, auch wenn er nicht bis nach oben reicht.
+      if (window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) treffer = links[links.length - 1];
+      setzen(treffer);
+    };
+    var geplant = false;
+    var spaeter = function () { if (geplant) return; geplant = true; requestAnimationFrame(function () { geplant = false; markieren(); }); };
+    window.addEventListener('scroll', spaeter, { passive: true });
+    window.addEventListener('resize', spaeter);
+    links.forEach(function (a) { a.addEventListener('click', function () { setzen(a); }); });
+    markieren();
+  })();
+
   // Bilder laden mit einem ruhigen Platzhalter statt mit Alt-Text: Die Fläche pulsiert, bis das Bild da ist; geht es schief, bleibt sie still und leer.
   Array.prototype.forEach.call(document.querySelectorAll('.card img.bild, .portraets img'), function (img) {
     var fertig = function () { img.classList.add('fertig'); };
@@ -832,6 +953,7 @@ export const SITE_APP_JS = `(function () {
             else if (alt && !neu && id === 'live') alt.remove();
           });
           if (document.querySelector('[data-sorttable]')) sortierungEinrichten();
+          klappenAnwenden();
           var ticker = document.querySelector('#naechstes details.ticker');
           if (ticker && tickerOffen) ticker.open = true;
           var kopfNeu = doc.querySelector('.hero .stats');
@@ -839,7 +961,7 @@ export const SITE_APP_JS = `(function () {
           if (kopfNeu && kopfAlt) kopfAlt.replaceWith(kopfNeu);
           var planNeu = doc.getElementById('spielplan');
           var planAlt = document.getElementById('spielplan');
-          if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); }
+          if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); klappenAnwenden(); }
           countdown();
           titelSetzen();
           if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); titelSetzen(); }
