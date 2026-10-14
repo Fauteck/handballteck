@@ -841,6 +841,12 @@ describe('Handball-Microsite', () => {
       }
     });
 
+    it('setzt auf der Startseite Logo und Titel über die Navigation', async () => {
+      const html = (await get('/')).body;
+      expect(html.indexOf('<h1>Wölfe im Revier</h1>')).toBeGreaterThan(-1);
+      expect(html.indexOf('<h1>Wölfe im Revier</h1>')).toBeLessThan(html.indexOf('class="kaesten'));
+    });
+
     it('rendert das Wochenende als Bild, nur bei freigegebener Seite', async () => {
       const res = await get('/bild/wochenende.png');
       expect(res.statusCode).toBe(200);
