@@ -165,6 +165,12 @@ dialog.popup::backdrop{background:rgba(0,0,0,.55)}
 dialog.popup h2{color:#fff}
 dialog.popup fieldset{border:0;margin:0 0 10px;padding:0}
 dialog.popup legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.06em;font-size:.85rem;color:var(--a);padding:0}
+.thema{display:flex;gap:10px;align-items:flex-start;padding:10px 0;cursor:pointer;min-height:44px}
+.thema input{margin-top:4px;width:20px;height:20px;accent-color:var(--a);flex:none}
+.thema b{display:block;font-weight:600}
+.thema small{display:block;color:rgba(255,255,255,.72);font-size:.85rem;line-height:1.35}
+.einzug{margin:0 0 6px 30px}
+.einzug[hidden]{display:none}
 .teilen{gap:8px}.teilen svg{width:18px;height:18px;fill:currentColor}
 .teilen.klein{min-height:44px;padding:6px 12px;font-size:.9rem;margin-left:auto;text-transform:none;font-family:'Barlow',sans-serif}
 .card:not(.dark) .btn.teilen{color:var(--p)}
@@ -719,20 +725,44 @@ export const SITE_APP_JS = `(function () {
     return;
   }
 
-  var KEY = 'handball-site-push';
+  var club = root.getAttribute('data-scope') === 'club';
+  var KEY = club ? 'handball-site-push-club' : 'handball-site-push';
+  var leadBlock = form.querySelector('[data-lead]');
+  var zusammen = form.querySelector('[data-zusammen]');
   function gemerkt() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
   function merken(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+  function boxen() { return Array.prototype.slice.call(form.querySelectorAll('input[name=thema]')); }
   function wahl() {
     var lead = form.querySelector('input[name=lead]:checked');
-    var mode = form.querySelector('input[name=mode]:checked');
-    return { lead: lead ? lead.value : '1h', mode: mode ? mode.value : 'all' };
+    var topics = boxen().filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    return { lead: lead ? lead.value : '1h', topics: topics };
   }
+  // Was man ankreuzt, in einem Satz — dasselbe, was die Bestätigung auf dem Gerät nennt.
+  function satz(w) {
+    var t = w.topics, n = [];
+    if (t.indexOf('upcoming') >= 0) n.push(w.lead === 'abend' ? 'Ankündigung am Vorabend' : 'Ankündigung ' + (w.lead === '3h' ? '3 Stunden' : '1 Stunde') + ' vorher');
+    if (t.indexOf('halftime') >= 0) n.push('Halbzeitstand');
+    if (t.indexOf('result') >= 0) n.push('Endstand');
+    if (t.indexOf('change') >= 0) n.push('Verlegungen und Absagen');
+    if (t.indexOf('preview') >= 0) n.push('Wochenvorschau am Donnerstag');
+    if (!n.length) return '';
+    return n.length === 1 ? n[0] : n.slice(0, -1).join(', ') + ' und ' + n[n.length - 1];
+  }
+  function auffrischen() {
+    var w = wahl();
+    if (leadBlock) leadBlock.hidden = w.topics.indexOf('upcoming') < 0;
+    zusammen.textContent = w.topics.length ? 'Du bekommst: ' + satz(w) + '.' : 'Nichts angekreuzt — so kommt nichts an.';
+    btnOn.disabled = w.topics.length === 0;
+  }
+  form.addEventListener('change', auffrischen);
   function setzeWahl(v) {
-    if (!v) return;
+    if (!v) { auffrischen(); return; }
     var l = form.querySelector('input[name=lead][value="' + v.lead + '"]');
-    var m = form.querySelector('input[name=mode][value="' + v.mode + '"]');
     if (l) l.checked = true;
-    if (m) m.checked = true;
+    // Ältere Fassungen merkten nur den Modus.
+    var topics = v.topics || (v.mode === 'results' ? ['result', 'change'] : ['upcoming', 'halftime', 'result', 'change']);
+    boxen().forEach(function (b) { b.checked = topics.indexOf(b.value) >= 0; });
+    auffrischen();
   }
   function bytes(base64) {
     var padding = '='.repeat((4 - (base64.length % 4)) % 4);
@@ -747,8 +777,7 @@ export const SITE_APP_JS = `(function () {
     if (sub) {
       btnOn.textContent = 'Auswahl speichern';
       btnOff.hidden = false;
-      var w = wahl();
-      say(w.lead === 'aus' && w.mode === 'results' ? 'Eingeschaltet: nur Endstände und Verlegungen.' : 'Eingeschaltet auf diesem Gerät.');
+      say('Eingeschaltet auf diesem Gerät: ' + (satz(wahl()) || 'nichts') + '.');
     } else {
       btnOn.textContent = 'Benachrichtigungen einschalten';
       btnOff.hidden = true;
@@ -772,6 +801,7 @@ export const SITE_APP_JS = `(function () {
       if (!config || !config.enabled) return;
       setzeWahl(gemerkt());
       zeige(sub);
+      auffrischen();
     })
     .catch(function () { say('Benachrichtigungen lassen sich gerade nicht einrichten.'); });
 
@@ -791,7 +821,7 @@ export const SITE_APP_JS = `(function () {
         var w = wahl();
         return fetch('./push', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
-          body: JSON.stringify({ subscription: sub.toJSON(), lead: w.lead, mode: w.mode })
+          body: JSON.stringify({ subscription: sub.toJSON(), lead: w.topics.indexOf('upcoming') >= 0 ? w.lead : 'aus', topics: w.topics })
         }).then(function (res) { if (!res.ok) throw new Error('server'); merken(w); zeige(sub); });
       })
       .catch(function (err) { if (err && err.message !== 'abgelehnt') say('Das hat nicht geklappt — bitte noch einmal versuchen.'); })

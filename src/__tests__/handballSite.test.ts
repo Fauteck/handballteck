@@ -39,6 +39,7 @@ describe('Handball-Microsite', () => {
   let db: typeof import('../db/index')['db'];
   let schema: typeof import('../db/schema');
   let eq: typeof import('drizzle-orm')['eq'];
+  let sql: typeof import('drizzle-orm')['sql'];
   let sitePush: typeof import('../lib/handballSitePush');
 
   /** Die Schalter der Microsite kommen aus der Umgebung; die alten Feldnamen bleiben als Lesehilfe. */
@@ -53,7 +54,7 @@ describe('Handball-Microsite', () => {
   beforeAll(async () => {
     ({ db } = await import('../db/index'));
     schema = await import('../db/schema');
-    ({ eq } = await import('drizzle-orm'));
+    ({ eq, sql } = await import('drizzle-orm'));
     const { runMigrations } = await import('../db/migrate');
     const { siteRoutes } = await import('../routes/site');
     sitePush = await import('../lib/handballSitePush');
@@ -784,14 +785,14 @@ describe('Handball-Microsite', () => {
     it('trägt eine Subscription ein, bestätigt per Push und erneuert statt zu verdoppeln', async () => {
       const res = await post({ subscription: sub, lead: '3h', mode: 'all' });
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ ok: true, lead: '3h', mode: 'all' });
+      expect(res.json()).toEqual({ ok: true, lead: '3h', mode: 'all', topics: ['upcoming', 'halftime', 'result', 'change'] });
       await new Promise(r => setTimeout(r, 10));
       expect(sendPush).toHaveBeenCalledTimes(1);
       expect(sendPush.mock.calls[0][0]).toMatchObject({ endpoint: sub.endpoint });
       expect(sendPush.mock.calls[0][1].title).toContain('Benachrichtigungen an');
 
       const zwei = await post({ subscription: sub, lead: 'aus', mode: 'results' });
-      expect(zwei.json()).toEqual({ ok: true, lead: 'aus', mode: 'results' });
+      expect(zwei.json()).toEqual({ ok: true, lead: 'aus', mode: 'results', topics: ['result', 'change'] });
       const zeilen = sitePush.listSiteSubscribers(TEAM);
       expect(zeilen).toHaveLength(1);
       expect(zeilen[0]).toMatchObject({ lead: 'aus', mode: 'results' });
@@ -813,7 +814,7 @@ describe('Handball-Microsite', () => {
       }
       // Unbekannter Vorlauf fällt auf den Standard zurück statt abzulehnen.
       const res = await post({ subscription: { ...sub, endpoint: 'https://fcm.googleapis.com/fcm/send/def' }, lead: 'sofort', mode: 'egal' });
-      expect(res.json()).toEqual({ ok: true, lead: '1h', mode: 'all' });
+      expect(res.json()).toMatchObject({ ok: true, lead: '1h', mode: 'all' });
     });
 
     it('nimmt über der Obergrenze keine neue Anmeldung mehr an — wer drin ist, darf ändern', async () => {
@@ -861,6 +862,107 @@ describe('Handball-Microsite', () => {
       const nochmal = await sitePush.pushHandballSite(new Date(), deps);
       expect(nochmal.messages).toBe(0);
       expect(sendPush).not.toHaveBeenCalled();
+    });
+
+    it('nimmt die gewählten Themen, wirft Unbekanntes und für eine Mannschaft die Wochenvorschau heraus', async () => {
+      const res = await post({ subscription: sub, lead: '3h', topics: ['result', 'bogus', 'preview', 'result'] });
+      expect(res.json()).toMatchObject({ ok: true, lead: '3h', topics: ['result'] });
+      expect(sitePush.listSiteSubscribers(TEAM)[0]).toMatchObject({ topics: ['result'] });
+      // Die Bestätigung nennt, was ankommt.
+      await new Promise(r => setTimeout(r, 10));
+      expect(sendPush.mock.calls.at(-1)![1].body).toContain('Endstand');
+      expect(sendPush.mock.calls.at(-1)![1].body).not.toContain('Halbzeit');
+      expect(sitePush.themenText({ topics: ['upcoming', 'halftime', 'change'], lead: 'abend' })).toBe('Ankündigung am Vorabend, Halbzeitstand und Verlegungen und Absagen');
+      expect(sitePush.themenText({ topics: ['upcoming'], lead: 'aus' })).toBe('nichts');
+    });
+
+    it('schickt einem Abonnenten nur die Themen, die er gewählt hat', async () => {
+      sitePush.resetSiteSent();
+      sitePush.saveSiteSubscription(TEAM, { endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, lead: '1h', mode: 'all', topics: ['change'] });
+      sendPush.mockClear();
+      sendPush.mockImplementation(async () => ({ status: 'sent' }));
+      const r = await sitePush.pushHandballSite(new Date(), deps);
+      expect(r.recipients).toBe(0);
+      expect(sendPush).not.toHaveBeenCalled();
+    });
+
+    it('meldet den Verein an der Wurzel an: nur Heimspiele, Ziel und Bild vom Worker der Wurzel aus', async () => {
+      const verein = { endpoint: 'https://fcm.googleapis.com/fcm/send/verein', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
+      expect((await get('/push')).json()).toEqual({ enabled: true, public_key: 'BTestVapidKey' });
+      const res = await fastify.inject({ method: 'POST', url: '/push', payload: { subscription: verein, lead: '1h', topics: ['upcoming', 'result', 'preview', 'halftime'] } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().topics).toEqual(['upcoming', 'result', 'preview', 'halftime']);
+      expect(sitePush.listClubSubscribers()).toHaveLength(1);
+      await new Promise(r => setTimeout(r, 10));
+      expect(sendPush.mock.calls.at(-1)![1].title).toContain('Wölfe im Revier');
+      expect(sendPush.mock.calls.at(-1)![1].body).toContain('zu allen Heimspielen');
+
+      sitePush.resetSiteSent();
+      sendPush.mockClear();
+      sendPush.mockImplementation(async () => ({ status: 'sent' }));
+      // m2 (Endstand) war ein Auswärtsspiel — für den Verein kein Push. m3 (Heimspiel) wird in 30 Minuten angekündigt.
+      const kurzVorAnwurf = new Date(Date.now() + 7 * 24 * 3600 * 1000 - 30 * 60 * 1000);
+      await sitePush.pushHandballSite(kurzVorAnwurf, deps);
+      const payloads = sendPush.mock.calls.filter(c => c[0].endpoint === verein.endpoint).map(c => c[1] as { title: string; url?: string; image?: string });
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0].title).not.toContain('verliert');
+      expect(payloads[0].url).toBe('96254/');
+      expect(payloads[0].image).toBe('96254/bild/spiel.png');
+
+      expect((await fastify.inject({ method: 'DELETE', url: '/push', payload: { endpoint: verein.endpoint } })).json()).toEqual({ ok: true, removed: 1 });
+    });
+
+    it('schickt am Donnerstagabend „Dieses Wochenende: N Heimspiele“ — ohne Halle, einmal, nur an den Verein', async () => {
+      // Donnerstag, 15.10.2026, 18 Uhr Ortszeit: Wochenende 16.–18.10.
+      const donnerstag = new Date('2026-10-15T16:00:00Z');
+      const heim = (id: string, start: string, heimspiel = true) => ({
+        id: `${TEAM}:${id}`, team_id: TEAM, match_id: id, season_id: 2627, starts_at: start,
+        status: 'scheduled', status_name: 'scheduled', round: 4, phase_id: 12800, competition_name: 'Kreisoberliga mB', championship_name: 'B-Jugend',
+        home_id: heimspiel ? TEAM : '96300', home_name: heimspiel ? 'HSG Wölfe Voreifel' : 'HV Erftstadt', away_id: heimspiel ? '96300' : TEAM, away_name: heimspiel ? 'HV Erftstadt' : 'HSG Wölfe Voreifel',
+        score_home: null, score_away: null, venue_name: 'Sporthalle Heimerzheim', venue_address: 'Schulstraße 1', notified_upcoming: false, notified_result: false, updated_at: new Date().toISOString(),
+      });
+      db.insert(schema.handball_team_match).values([
+        heim('w1', '2026-10-17T09:00:00Z'), heim('w2', '2026-10-17T11:00:00Z'), heim('w3', '2026-10-18T10:00:00Z'), heim('w4', '2026-10-17T13:00:00Z', false),
+      ] as never).run();
+      const verein = { endpoint: 'https://fcm.googleapis.com/fcm/send/vorschau', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
+      sitePush.saveSiteSubscription(sitePush.CLUB, { endpoint: verein.endpoint, p256dh: verein.keys.p256dh, auth: verein.keys.auth, lead: 'aus', mode: 'all', topics: ['preview'] });
+      try {
+        sitePush.resetSiteSent();
+        sendPush.mockClear();
+        sendPush.mockImplementation(async () => ({ status: 'sent' }));
+        // Mittwoch: noch zu früh. Donnerstag 16 Uhr: auch.
+        await sitePush.pushHandballSite(new Date('2026-10-14T16:00:00Z'), deps);
+        await sitePush.pushHandballSite(new Date('2026-10-15T14:00:00Z'), deps);
+        expect(sendPush).not.toHaveBeenCalled();
+
+        const r = await sitePush.pushHandballSite(donnerstag, deps);
+        expect(r.messages).toBe(1);
+        const p = sendPush.mock.calls[0]![1] as { title: string; body: string };
+        expect(p.title).toBe('Dieses Wochenende: 3 Heimspiele');
+        expect(p.body).toBe('Samstag 2 · Sonntag 1');
+        expect(p.body + p.title).not.toContain('Sporthalle');
+
+        sendPush.mockClear();
+        await sitePush.pushHandballSite(new Date('2026-10-15T17:00:00Z'), deps);
+        expect(sendPush).not.toHaveBeenCalled();
+      } finally {
+        sitePush.deleteSiteSubscription(verein.endpoint);
+        db.delete(schema.handball_team_match).where(sql`${schema.handball_team_match.match_id} IN ('w1','w2','w3','w4')`).run();
+      }
+    });
+
+    it('zeigt im Dialog die Themen mit Beispieltext — auf der Startseite die Vereinsanmeldung', async () => {
+      const team = (await get(`/${TEAM}/`)).body;
+      expect(team).toContain('name="thema" value="halftime"');
+      expect(team).toContain('„Halbzeit: 14:12“');
+      expect(team).not.toContain('value="preview"');
+      expect(team).not.toContain('name="mode"');
+      const start = (await get('/')).body;
+      expect(start).toContain('data-scope="club"');
+      expect(start).toContain('value="preview"');
+      expect(start).toContain('Dieses Wochenende: 4 Heimspiele');
+      // Kalender und Feed gibt es nur je Mannschaft.
+      expect(start).not.toContain('kalender.ics');
     });
 
     it('schweigt bei abgeschalteter Microsite', async () => {

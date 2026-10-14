@@ -867,38 +867,42 @@ function spielerHtml(team: HandballTeamView): string {
  * Feed (Adresse kopieren). Das Fenster steht für sich am Ende der Seite
  * (`<dialog>` liegt in der obersten Ebene und wird vom Kopf nicht beschnitten).
  */
-function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null): { leiste: string; dialog: string } {
+function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null, club = false): { leiste: string; dialog: string } {
   const webcal = baseUrl.replace(/^https?:\/\//, 'webcal://') + 'kalender.ics';
   const leiste = `<div class="verpassen" role="group" aria-labelledby="verpassen-titel">
     <span class="titel" id="verpassen-titel">Nichts verpassen</span>
     <span class="icons">
       <button type="button" class="vicon" data-dialog-open="push" title="Benachrichtigungen im Browser" aria-label="Benachrichtigungen im Browser" hidden>${ICON.bell}<span class="punkt" data-aktiv hidden></span></button>
       ${telegram ? `<a class="vicon tg" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer" title="Telegram-Bot ${h(telegram.handle)}" aria-label="Telegram-Bot ${h(telegram.handle)}">${ICON.send}</a>` : ''}
-      <a class="vicon" href="${h(webcal)}" title="Kalender abonnieren" aria-label="Kalender abonnieren">${ICON.calendar}</a>
-      <button type="button" class="vicon rss" data-copy="${h(baseUrl + 'feed.xml')}" title="RSS-Feed-Adresse kopieren" aria-label="RSS-Feed-Adresse kopieren">${ICON.rss}</button>
+      ${club ? '' : `<a class="vicon" href="${h(webcal)}" title="Kalender abonnieren" aria-label="Kalender abonnieren">${ICON.calendar}</a>
+      <button type="button" class="vicon rss" data-copy="${h(baseUrl + 'feed.xml')}" title="RSS-Feed-Adresse kopieren" aria-label="RSS-Feed-Adresse kopieren">${ICON.rss}</button>`}
     </span>
   </div>`;
-  const dialog = `<dialog class="popup" id="push" data-push="${pushEnabled ? '1' : '0'}" aria-labelledby="push-titel">
-  <h2 id="push-titel">Benachrichtigungen im Browser</h2>
-  <p class="lead">Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.</p>
+  const dialog = `<dialog class="popup" id="push" data-push="${pushEnabled ? '1' : '0'}" data-scope="${club ? 'club' : 'team'}" aria-labelledby="push-titel">
+  <h2 id="push-titel">${club ? 'Alle Heimspiele im Browser' : 'Benachrichtigungen im Browser'}</h2>
+  <p class="lead">${club ? 'Eine Anmeldung für alle Heimspiele des Vereins, ohne eine Mannschaft zu wählen.' : 'Dieses Gerät sagt Bescheid, wenn ein Spiel ansteht und wie es ausgegangen ist.'} Wähle, was ankommen soll.</p>
   <p class="status" data-status role="status" aria-live="polite">${pushEnabled ? 'Einen Moment …' : 'Benachrichtigungen sind auf diesem Server nicht eingerichtet — Kalender und Feed gehen trotzdem.'}</p>
   <form data-form hidden>
-    <fieldset>
-      <legend>Ankündigung</legend>
-      <div class="opts">
+    <fieldset class="themen">
+      <legend>Was soll ankommen?</legend>
+      <label class="thema"><input type="checkbox" name="thema" value="upcoming" checked>
+        <span><b>Ankündigung</b><small>„Heute 18:00 Uhr: ${club ? 'Wölfe' : 'Spiel'} gegen …“ mit Halle und Gegner</small></span></label>
+      <div class="opts einzug" data-lead>
         <label><input type="radio" name="lead" value="1h" checked> 1 Stunde vorher</label>
         <label><input type="radio" name="lead" value="3h"> 3 Stunden vorher</label>
-        <label><input type="radio" name="lead" value="abend"> Am Vorabend</label>
-        <label><input type="radio" name="lead" value="aus"> Keine</label>
+        <label><input type="radio" name="lead" value="abend"> Am Vorabend, 19 Uhr</label>
       </div>
+      <label class="thema"><input type="checkbox" name="thema" value="halftime" checked>
+        <span><b>Halbzeitstand</b><small>„Halbzeit: 14:12“, sobald er vorliegt</small></span></label>
+      <label class="thema"><input type="checkbox" name="thema" value="result" checked>
+        <span><b>Endstand</b><small>„Endstand 28:24 — Sieg!“ mit Ergebniskarte und neuem Tabellenplatz</small></span></label>
+      <label class="thema"><input type="checkbox" name="thema" value="change" checked>
+        <span><b>Verlegungen und Absagen</b><small>„Spiel verlegt auf Sa 16:00 Uhr“</small></span></label>
+      ${club ? `<label class="thema"><input type="checkbox" name="thema" value="preview" checked>
+        <span><b>Wochenvorschau</b><small>Donnerstagabend: „Dieses Wochenende: 4 Heimspiele“ (ohne Halle, die steht auf der Startseite)</small></span></label>` : ''}
     </fieldset>
-    <fieldset>
-      <legend>Was</legend>
-      <div class="opts">
-        <label><input type="radio" name="mode" value="all" checked> Alles: Ankündigung, Halbzeit, Endstand, Verlegungen</label>
-        <label><input type="radio" name="mode" value="results"> Nur Endstände und Verlegungen</label>
-      </div>
-    </fieldset>
+    <p class="muted small" data-zusammen aria-live="polite"></p>
+    <p class="muted small">Nicht dabei: Aufstellungen, Spielernamen und Spielberichte. ${club ? 'Es gilt immer nur eine Anmeldung je Gerät; sie ersetzt eine frühere für eine einzelne Mannschaft.' : 'Es gilt immer nur eine Anmeldung je Gerät; sie ersetzt eine frühere.'}</p>
     <div class="row">
       <button class="btn primary" type="submit" data-subscribe>Benachrichtigungen einschalten</button>
       <button class="btn ghost" type="button" data-unsubscribe hidden>Ausschalten</button>
@@ -1005,7 +1009,7 @@ ${verpassen.dialog}
  * unter der Mannschaft). Kein Manifest und kein eigener Service Worker — der
  * gehört der Mannschaftsseite.
  */
-function unterseiteHtml(o: { breit?: boolean; ogLogo?: boolean; app?: { titel: string; manifest: string }; live?: boolean; titel: string; beschreibung: string; url: string; ogBild: string | null; dateien: string; kopf: string; inhalt: string; fuss: string }): string {
+function unterseiteHtml(o: { dialog?: string; breit?: boolean; ogLogo?: boolean; app?: { titel: string; manifest: string }; live?: boolean; titel: string; beschreibung: string; url: string; ogBild: string | null; dateien: string; kopf: string; inhalt: string; fuss: string }): string {
   const palette = vervollstaendigePalette(readPalette());
   return `<!doctype html>
 <html lang="de">
@@ -1040,6 +1044,7 @@ ${o.inhalt}
   ${o.fuss}
   ${betreiberZeile()}
 </footer>
+${o.dialog ?? ''}
 <script src="${o.dateien}app.js?v=${inhaltsHash(SITE_APP_JS)}" defer></script>
 </body>
 </html>
@@ -1154,7 +1159,7 @@ const GRUPPEN_KURZ: Record<string, string> = { herren: 'Herren', frauen: 'Damen'
  * wird; darunter jede Mannschaft mit Tabellenplatz, nächstem und letztem
  * Spiel. Liest nur, was die Übersicht schon hat.
  */
-export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTeamLink[]; baseUrl: string; stand: string | null; now?: Date }): string {
+export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTeamLink[]; baseUrl: string; stand: string | null; now?: Date; pushEnabled?: boolean }): string {
   const now = opts.now ?? new Date();
   const erste = teams[0];
   const link = (t: HandballTeamView, anker = '') => `./${encodeURIComponent(t.team_id)}/${anker}`;
@@ -1252,8 +1257,12 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 
   const titel = 'Wölfe im Revier';
   const logo = logoDataUri(erste.team_id);
+  const botLink = handballBotLink();
+  const botName = getHandballBotUsername();
+  const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled === true, botLink && botName ? { link: botLink, handle: `@${botName}` } : null, true);
   const kopf = `<header class="hero"><div class="wrap">
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
+  ${verpassen.leiste}
   ${gruppenKaesten(teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: link(t) })), null)}
   <a class="heim" href="./" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
   <div>
@@ -1265,7 +1274,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   return unterseiteHtml({
     titel, beschreibung, url: opts.baseUrl, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
     dateien: `./${encodeURIComponent(erste.team_id)}/`,
-    kopf, inhalt: `${liveHtml}\n${weHtml}\n${ausHtml}\n${standHtml}`, fuss, breit: true,
+    kopf, inhalt: `${liveHtml}\n${weHtml}\n${ausHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
     app: { titel: titel, manifest: './manifest.webmanifest' }, live: live.length > 0,
   });
 }

@@ -306,6 +306,8 @@ export const handball_site_subscription = sqliteTable('handball_site_subscriptio
   lead: text('lead').notNull().default('1h'),
   /** all · results */
   mode: text('mode').notNull().default('all'),
+  /** Komma-Liste der gewählten Themen (Migration 0005); NULL = aus `mode` abgeleitet. */
+  topics: text('topics'),
   user_agent: text('user_agent'),
   failures: integer('failures').notNull().default(0),
   created_at: text('created_at').notNull(),
