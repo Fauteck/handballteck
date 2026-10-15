@@ -1401,7 +1401,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
     .sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
 
   /** Eine Wochenend-Tabelle: Heim- oder Auswärtsspiele, sortierbar nach Datum, Spielort und Bereich. */
-  const wochenendTabelle = (id: string, ueberschrift: string, spiele: typeof heimspiele, leer: string) => {
+  const wochenendTabelle = (id: string, ueberschrift: string, zusatz: string, spiele: typeof heimspiele, leer: string) => {
     const zeilen = spiele.map(({ t, m }) => {
       const start = new Date(m.starts_at);
       const fertig = (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null;
@@ -1423,7 +1423,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       ? klappe('auswaerts', spiele.length > 0 ? `${spiele.length} Auswärtsspiel${spiele.length === 1 ? '' : 'e'} von Freitag bis Sonntag` : 'Kein Auswärtsspiel von Freitag bis Sonntag')
       : { attr: '', zeile: '' };
     return `<section class="card" id="${id}"${k.attr}>
-  <h2>${ueberschrift} <span class="muted small">${tagMonat(we.fr)}–${tagMonat(we.so)}</span>${id === 'heimspiele' ? teilenHtml({ url: opts.baseUrl, titel: 'Wölfe im Revier', text: beschreibung, bild: './bild/wochenende.png' }).replace('class="btn teilen"', 'class="btn teilen klein"') : ''}</h2>
+  <h2>${ueberschrift} <span class="muted small">${zusatz} · ${tagMonat(we.fr)}–${tagMonat(we.so)}</span>${id === 'heimspiele' ? teilenHtml({ url: opts.baseUrl, titel: 'Wölfe im Revier', text: beschreibung, bild: './bild/wochenende.png' }).replace('class="btn teilen"', 'class="btn teilen klein"') : ''}</h2>
   ${k.zeile}
   ${spiele.length > 0 ? `<div class="sortieren" data-sortbar hidden role="group" aria-label="${ueberschrift} sortieren">
     <span class="muted small">Sortieren nach</span>
@@ -1466,7 +1466,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const bilanz = [siege ? `${siege} Sieg${siege === 1 ? '' : 'e'}` : '', remis ? `${remis} Unentschieden` : '', niederlagen ? `${niederlagen} Niederlage${niederlagen === 1 ? '' : 'n'}` : ''].filter(Boolean).join(' · ');
   const kLetzte = klappe('ergebnisse', `${letzte.length} Spiel${letzte.length === 1 ? '' : 'e'}: ${bilanz}`);
   const letzteHtml = letzte.length > 0 ? `<section class="card" id="letztes-wochenende"${kLetzte.attr}>
-  <h2>Ergebnisse · letztes Wochenende <span class="muted small">${tagMonat(letzteTage[0]!)}–${tagMonat(letzteTage[2]!)}</span></h2>
+  <h2>Ergebnisse <span class="muted small">letztes Wochenende · ${tagMonat(letzteTage[0]!)}–${tagMonat(letzteTage[2]!)}</span></h2>
   ${kLetzte.zeile}
   <p class="muted small bilanz">${h(bilanz)}</p>
   <ul class="plan">${letzte.map(({ t, m }) => `<li>
@@ -1477,8 +1477,8 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 </section>` : '';
 
   const wann = laeuft ? 'dieses' : 'nächstes';
-  const weHtml = wochenendTabelle('heimspiele', `Heimspiele · ${wann} Wochenende`, heimspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Heimspiel angesetzt.`);
-  const ausHtml = wochenendTabelle('auswaertsspiele', `Auswärtsspiele · ${wann} Wochenende`, auswaertsspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Auswärtsspiel angesetzt.`);
+  const weHtml = wochenendTabelle('heimspiele', 'Heimspiele', `${wann} Wochenende`, heimspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Heimspiel angesetzt.`);
+  const ausHtml = wochenendTabelle('auswaertsspiele', 'Auswärtsspiele', `${wann} Wochenende`, auswaertsspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Auswärtsspiel angesetzt.`);
 
   // Der Stand: je Mannschaft Platz, Punkte und das letzte Ergebnis — eine Zeile, kein Spielplan; nach Bereich gruppiert wie die Kästen im Kopf.
   const standZeile = (t: HandballTeamView) => {
@@ -1496,7 +1496,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   };
   const kStand = klappe('stand', teams.length === 1 ? 'Platz, Punkte und letztes Ergebnis der Mannschaft' : `Platz, Punkte und letztes Ergebnis aller ${teams.length} Mannschaften`);
   const standHtml = `<section class="card" id="stand"${kStand.attr}>
-  <h2>So stehen wir</h2>
+  <h2>Tabellenplätze</h2>
   ${kStand.zeile}
   <div class="tabelle-rahmen"><table class="heim stand">
     <thead><tr><th scope="col">Mannschaft</th><th scope="col">Platz</th><th scope="col">Punkte</th><th scope="col">Zuletzt</th></tr></thead>
@@ -1526,10 +1526,10 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
     titel, beschreibung, url: opts.baseUrl, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
     dateien: `./${encodeURIComponent(erste.team_id)}/`,
     kopf: kopf + sprungleisteHtml([
-      ['live', 'Live', liveHtml || liveLeerHtml],
+      ['live', liveHtml ? 'Läuft gerade' : 'Live', liveHtml || liveLeerHtml],
       ['heute', 'Heute', heuteHtml],
       ['heimspiele', 'Heimspiele', weHtml],
-      ['auswaertsspiele', 'Auswärts', ausHtml],
+      ['auswaertsspiele', 'Auswärtsspiele', ausHtml],
       ['letztes-wochenende', 'Ergebnisse', letzteHtml],
       ['stand', 'Tabellenplätze', standHtml],
     ]), inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
@@ -1591,7 +1591,7 @@ export function renderStartManifest(erste: HandballTeamView): Record<string, unk
     ],
     shortcuts: [
       { name: 'Heimspiele', url: './#heimspiele' },
-      { name: 'So stehen wir', url: './#stand' },
+      { name: 'Tabellenplätze', url: './#stand' },
     ],
   };
 }

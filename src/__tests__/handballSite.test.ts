@@ -703,7 +703,7 @@ describe('Handball-Microsite', () => {
     expect(heim.match(/<tr data-ts=/g)?.length).toBe(3);
     expect(heim).not.toContain('Fremde Halle');
     expect(html.slice(html.indexOf('id="auswaertsspiele"'))).toContain('Fremde Halle');
-    expect(html).toContain('<h2>So stehen wir</h2>');
+    expect(html).toContain('<h2>Tabellenplätze</h2>');
     // Nach Bereich gruppiert wie die Kästen im Kopf.
     expect(html).toContain('<tr class="bereich"><th scope="rowgroup" colspan="4">Jugend männlich</th></tr>');
     expect(html).not.toContain('Alle Mannschaften</h2>');
@@ -921,6 +921,16 @@ describe('Handball-Microsite', () => {
       const start = (await get('/')).body;
       expect(start).toContain('<li><a href="#live">Live</a></li>');
       expect(start).toContain('<li><a href="#stand">Tabellenplätze</a></li>');
+      // Jeder Chip heißt wie die Überschrift seines Abschnitts — auf beiden Seiten.
+      for (const seite of [team, start]) {
+        const chips = [...seite.matchAll(/<li><a href="#([^"]+)">([^<]+)<\/a><\/li>/g)];
+        expect(chips.length).toBeGreaterThan(1);
+        for (const [, id, label] of chips) {
+          const abschnitt = seite.slice(seite.indexOf(`id="${id}"`));
+          const titel = abschnitt.slice(abschnitt.indexOf('<h2>') + 4).split(/ <|<\/h2>/)[0];
+          expect(titel, id).toBe(label);
+        }
+      }
       const js = (await get(`/${TEAM}/app.js`)).body;
       expect(js).toContain("document.querySelector('[data-sprung]')");
       expect((await get(`/${TEAM}/site.css`)).body).toContain('.sprung{position:sticky;top:var(--oben,0px)');
