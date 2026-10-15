@@ -90,8 +90,10 @@ describe('Einstellungsseite', () => {
     delete process.env.CLUB_NAME;
   });
 
+  // Jede Anmeldung von einer eigenen Adresse: die Anmeldung ist auf 5 je Minute und Adresse gedrosselt.
+  let adresse = 0;
   async function anmelden(): Promise<{ cookie: string; csrf: string }> {
-    const res = await fastify.inject({ method: 'POST', url: '/settings/api/login', payload: { user: 'chef', password: PW }, remoteAddress: '203.0.113.9' });
+    const res = await fastify.inject({ method: 'POST', url: '/settings/api/login', payload: { user: 'chef', password: PW }, remoteAddress: `198.51.100.${++adresse}` });
     expect(res.statusCode).toBe(200);
     const cookie = String(res.headers['set-cookie']).split(';')[0];
     return { cookie, csrf: res.json().csrf };
@@ -217,6 +219,84 @@ describe('Einstellungsseite', () => {
     const { cookie, csrf } = await anmelden();
     expect((await fastify.inject({ method: 'POST', url: '/settings/api/logout', headers: { cookie, 'x-csrf-token': csrf }, payload: {} })).statusCode).toBe(200);
     expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } })).statusCode).toBe(401);
+  });
+
+  it('prüft live, ohne zu speichern', async () => {
+    const { cookie, csrf } = await anmelden();
+    const res = await fastify.inject({ method: 'POST', url: '/settings/api/check', headers: { cookie, 'x-csrf-token': csrf }, payload: { aenderungen: [{ key: 'PRIMARY_COLOR', wert: 'rot' }, { key: 'CLUB_NAME', wert: 'Nur geprüft' }] } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(false);
+    expect(Object.keys(res.json().fehler)).toEqual(['PRIMARY_COLOR']);
+    expect(konfig.clubName()).toBe('HSG Wölfe Voreifel');
+    expect((await fastify.inject({ method: 'POST', url: '/settings/api/check', headers: { cookie }, payload: { aenderungen: [{ key: 'CLUB_NAME', wert: 'x' }] } })).statusCode).toBe(403);
+  });
+
+  it('liefert Grenzen der Zahlen und die Herkunft der Geheimnisse', async () => {
+    const { cookie } = await anmelden();
+    const state = (await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } })).json();
+    const takt = state.felder.find((f: { key: string }) => f.key === 'SYNC_INTERVAL_MS');
+    expect([takt.min, takt.max, takt.nullErlaubt]).toEqual([300_000, 86_400_000, false]);
+    expect(state.felder.find((f: { key: string }) => f.key === 'SYNC_LIVE_INTERVAL_MS').nullErlaubt).toBe(true);
+    const bot = state.geheimnisse.find((g: { key: string }) => g.key === 'TELEGRAM_BOT_TOKEN');
+    expect(bot).toMatchObject({ gesetzt: false, herkunft: null });
+    // Früher stand hier immer „gesetzt“ — jetzt nur mit Schlüssel und mit seiner Herkunft.
+    const vapid = state.geheimnisse.find((g: { key: string }) => g.key === 'VAPID_PRIVATE_KEY');
+    expect(typeof vapid.gesetzt).toBe('boolean');
+    if (vapid.gesetzt) expect(vapid.herkunft).toMatch(/Umgebung|Datenbank/);
+    expect(state.sitzung.leerlaufMin).toBe(60);
+    expect(state.teams).toEqual(['96254']);
+  });
+
+  it('blättert und filtert das Protokoll', async () => {
+    const { cookie } = await anmelden();
+    for (let i = 0; i < 3; i++) store.speichere([{ key: 'CLUB_NAME', wert: `Name ${i}` }], 'chef');
+    const alle = (await fastify.inject({ method: 'GET', url: '/settings/api/protokoll', headers: { cookie } })).json();
+    expect(alle.anzahl).toBeGreaterThanOrEqual(3);
+    const nurName = (await fastify.inject({ method: 'GET', url: '/settings/api/protokoll?key=CLUB_NAME&offset=1', headers: { cookie } })).json();
+    expect(nurName.offset).toBe(1);
+    expect(nurName.zeilen.every((z: { key: string }) => z.key === 'CLUB_NAME')).toBe(true);
+    expect(nurName.zeilen[0].new_value).toBe('Name 1');
+    // Unbekannter Schlüssel: kein Filter statt eines Fehlers.
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/protokoll?key=PORT', headers: { cookie } })).json().anzahl).toBe(alle.anzahl);
+  });
+
+  it('beendet eine Sitzung nach einer Stunde ohne Zutun; Hintergrund-Abrufe verlängern nicht', async () => {
+    const { cookie } = await anmelden();
+    sessions.__alterSitzungenForTests(30 * 60_000);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie, 'x-hintergrund': '1' } })).statusCode).toBe(200);
+    sessions.__alterSitzungenForTests(31 * 60_000);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } })).statusCode).toBe(401);
+    const zweite = await anmelden();
+    sessions.__alterSitzungenForTests(50 * 60_000);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie: zweite.cookie } })).statusCode).toBe(200);
+    sessions.__alterSitzungenForTests(50 * 60_000);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie: zweite.cookie } })).statusCode).toBe(200);
+  });
+
+  it('meldet überall ab', async () => {
+    const a = await anmelden();
+    const b = await anmelden();
+    expect(sessions.__anzahlSitzungenForTests()).toBe(2);
+    const res = await fastify.inject({ method: 'POST', url: '/settings/api/logout-all', headers: { cookie: a.cookie, 'x-csrf-token': a.csrf }, payload: {} });
+    expect(res.json().anzahl).toBe(2);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie: b.cookie } })).statusCode).toBe(401);
+  });
+
+  it('prüft Team-ID, Test-Push und Testnachricht vor jedem Abruf nach außen', async () => {
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/team/96254' })).statusCode).toBe(401);
+    const { cookie, csrf } = await anmelden();
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/team/abc', headers: { cookie } })).statusCode).toBe(400);
+    const push = await fastify.inject({ method: 'POST', url: '/settings/api/test/push', headers: { cookie, 'x-csrf-token': csrf }, payload: { endpoint: 'x'.repeat(2000), keys: { p256dh: 'a', auth: 'b' } } });
+    expect(push.statusCode).toBe(400);
+    // Kein bekannter Push-Dienst: wird nicht angefragt.
+    const fremd = await fastify.inject({ method: 'POST', url: '/settings/api/test/push', headers: { cookie, 'x-csrf-token': csrf }, payload: { endpoint: 'https://boese.example/push', keys: { p256dh: 'a', auth: 'b' } } });
+    expect(fremd.statusCode).toBe(502);
+    const tg = await fastify.inject({ method: 'POST', url: '/settings/api/test/telegram', headers: { cookie, 'x-csrf-token': csrf }, payload: {} });
+    expect(tg.statusCode).toBe(409);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/qr.svg', headers: { cookie } })).statusCode).toBe(404);
+    const sw = await fastify.inject({ method: 'GET', url: '/settings/sw.js' });
+    expect(sw.statusCode).toBe(200);
+    expect(sw.body).toContain('showNotification');
   });
 
   it('gibt es ohne ADMIN_PASSWORD nicht', async () => {

@@ -58,6 +58,7 @@ In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; ther
 npm ci
 npm run typecheck
 npm test          # sequential: test files share module state
+npm run test:e2e  # the settings page in Chromium (after npx playwright-core install chromium)
 ```
 
 Run the test file that covers a change; run the whole suite when behaviour is removed

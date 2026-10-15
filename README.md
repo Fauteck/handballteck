@@ -119,10 +119,20 @@ Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies 
   `LOG_LEVEL`, `IMPORT_TODOTECK_DB`, `TELEGRAM_BOT_TOKEN`, `API_TOKEN`, `VAPID_*` and the `ADMIN_*` account.
   The page only shows whether the secrets are set. The bot token already runs through the same lookup, so
   moving it onto the page later is a registry entry, not a rewrite.
+- **Editing:** changes collect until "Speichern …" (bottom bar, Ctrl/Cmd+S), which first lists every change
+  (old → new) for confirmation; they survive tab switches, "Verwerfen" drops them, leaving the page asks first.
+  Fields are checked live with the server's own validators (`/settings/api/check`, nothing saved). A team id is
+  looked up on handball.net (name and league, cached an hour); team rows sort by drag or ↑/↓, removing one can be
+  undone, and each saved team has its own preview link. The colours show a preview and a WCAG contrast check.
+  Telegram shows the invite link with a QR code, a test message to the admin chats and a picker for admin chats
+  from the subscribers; the microsite tab sends a test push to the current browser (service worker
+  `/settings/sw.js`, the subscription is not stored). The status tab refreshes every 30 s, waits for the result
+  of "Jetzt abrufen", and the change log can be filtered, paged and restore an old value as a pending change.
 - **Applying:** most values act immediately. Teams, club name and ClubDesk start a fetch; the intervals apply
   from the next tick. Every change is logged in `settings_audit` (secrets masked). "Als .env exportieren"
   gives the effective values without secrets, to copy into `docker-configs`.
-- **Security:** one session in memory (8 h, lost on restart), cookie `HttpOnly; SameSite=Strict; Path=/settings`
+- **Security:** sessions in memory (8 h, ended after 60 minutes without activity — background refreshes with
+  `X-Hintergrund: 1` do not count —, lost on restart, "Überall abmelden" ends all), cookie `HttpOnly; SameSite=Strict; Path=/settings`
   (`Secure` on https), JSON-only writes with `X-CSRF-Token` and an Origin check, login limited to 5 per minute and
   per address, constant-time comparison, `no-store`, `noindex`, no inline JavaScript. A forgotten password or
   a wrong value is repaired in the environment: remove `ADMIN_PASSWORD`/change it and redeploy; saved values
@@ -165,7 +175,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `/settings`, `/settings/settings.js`, `/settings/vorschau`, `/settings/api/*` | admin session | Settings page (login, state, save, sync, `.env` export, redirect to the secret preview). 404 without `ADMIN_PASSWORD`. |
+| `/settings`, `/settings/settings.js`, `/settings/sw.js`, `/settings/vorschau`, `/settings/api/*` | admin session (except the page and its two scripts) | Settings page (login, state, save, live check, change log, team lookup, invite QR code, test message and test push, sync, `.env` export, log out everywhere, redirect to the secret preview). 404 without `ADMIN_PASSWORD`. |
 | `GET /healthz` | none | Liveness, version, fetch state (`sync`: last success, failures, counters — no error text). |
 | `GET /`, `GET /:teamId/…` | none | Microsite (start page `/` with home and away games of the coming weekend, HTML, match pages `spiel/:matchId`, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`; at the root `/push` for the club subscription and `/bild/wochenende.png`, the weekend's home games as a shareable image; the start page also shows today's games and last weekend's results). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |
@@ -237,6 +247,7 @@ assets/fonts/         Barlow, Barlow Condensed (OFL)
 npm run dev          # watch mode
 npm run typecheck
 npm test             # vitest, sequential (shared SQLite per file)
+npm run test:e2e     # settings page in Chromium (playwright-core; once: npx playwright-core install chromium)
 npm run build        # dist/
 ```
 
