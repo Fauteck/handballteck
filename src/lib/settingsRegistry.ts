@@ -138,7 +138,7 @@ const mailadresse = leerOk(t => (t.length <= 120 && /^[^\s@<>"]+@[^\s@<>"]+\.[^\
 export const EINSTELLUNGEN: readonly Einstellung[] = [
   {
     key: 'TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften', lang: true, zeilen: 'mannschaften', standard: '', wirkung: 'abruf',
-    hinweis: 'Je Mannschaft eine Zeile: die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen, nur bei Senioren; bei der Jugend werden nie Porträts geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge ist die der Mannschaftswahl.',
+    hinweis: 'Je Mannschaft eine Zeile: die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen; bei der Jugend werden sie nur mit diesem Häkchen überhaupt geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge ist die der Mannschaftswahl.',
     pruefe: teams,
   },
   {
@@ -170,7 +170,7 @@ export const EINSTELLUNGEN: readonly Einstellung[] = [
   { key: 'SITE_OPERATOR', gruppe: 'microsite', art: 'text', label: 'Betreiber (Footer)', standard: '', wirkung: 'sofort', hinweis: 'Wer die Seite betreibt; steht im Footer.', pruefe: kurztext(120) },
   { key: 'SITE_FEEDBACK_MAIL', gruppe: 'microsite', art: 'text', label: 'Rückmelde-Adresse (Footer)', standard: '', wirkung: 'sofort', hinweis: 'E-Mail-Adresse für Rückmeldungen; steht im Footer.', pruefe: mailadresse },
   { key: 'SITE_PREVIEW_TOKEN', gruppe: 'microsite', art: 'geheim', label: 'Vorschau-Schlüssel', standard: '', wirkung: 'sofort', hinweis: 'Mit /<Team-ID>/?vorab=<Schlüssel> zeigt die Seite, was noch nicht öffentlich ist. Mindestens 32 Zeichen. Wird nie angezeigt, nur ersetzt.', pruefe: vorschauSchluessel },
-  { key: 'CLUBDESK_URL', gruppe: 'microsite', art: 'text', label: 'Vereinsseite bei ClubDesk', standard: '', wirkung: 'abruf', hinweis: 'Wurzel der Vereinsseite (https, ohne Pfad). Geholt wird einmal am Tag das Gruppenbild und bei Senioren die Porträts; welche Mannschaft welche Fotos öffentlich zeigt, steht bei den Mannschaften.', pruefe: httpsWurzel(false) },
+  { key: 'CLUBDESK_URL', gruppe: 'microsite', art: 'text', label: 'Vereinsseite bei ClubDesk', standard: '', wirkung: 'abruf', hinweis: 'Wurzel der Vereinsseite (https, ohne Pfad). Geholt wird einmal am Tag (und gleich nach einer geänderten Freigabe) das Gruppenbild und die Porträts; welche Mannschaft welche Fotos öffentlich zeigt, steht bei den Mannschaften.', pruefe: httpsWurzel(false) },
   { key: 'CLUBDESK_TEAMS', gruppe: 'mannschaften', art: 'liste', label: 'ClubDesk-Teamseiten', lang: true, versteckt: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID die Teamseite unter /spielbetrieb/teams-und-tabellen/, z. B. 75796=woelfe_1. Gepflegt in der Mannschaftszeile.', pruefe: clubdeskTeams },
   { key: 'SITE_PHOTOS', gruppe: 'mannschaften', art: 'liste', label: 'Fotos öffentlich', lang: true, versteckt: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID, welche Fotos der Vereinsseite öffentlich stehen: 96254=mannschaft oder 75796=mannschaft+spieler. Gepflegt in der Mannschaftszeile.', pruefe: fotoFreigaben },
 ];

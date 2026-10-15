@@ -751,7 +751,7 @@ function tendenz(row: HandballStandingRow, referenz: HandballStandingRow[] | nul
     : `<i class="down" title="${h(`von Platz ${davor.position} auf ${row.position} gerutscht`)}">▼</i>`;
 }
 
-function tabelleHtml(team: HandballTeamView, now: Date): string {
+function tabelleHtml(team: HandballTeamView, now: Date, saison = ''): string {
   const s = team.standings[0];
   if (!s || s.rows.length === 0) return '';
   const spitze = Math.max(...s.rows.map(r => r.played));
@@ -790,6 +790,7 @@ function tabelleHtml(team: HandballTeamView, now: Date): string {
     <tbody>${zeilen}</tbody>
   </table></div>
   ${hinweise.length > 0 || steckbriefe.size > 0 ? `<p class="legend">${[...hinweise.map(x => h(x!)), ...(steckbriefe.size > 0 ? ['Zeile antippen: Steckbrief der Mannschaft'] : [])].join(' · ')}</p>` : ''}
+  ${saison}
   ${overlays}
 </section>`;
 }
@@ -885,6 +886,25 @@ function kalenderHtml(team: HandballTeamView, now: Date): string {
   return `<div class="kal" data-kalender>${html}</div>`;
 }
 
+/**
+ * Die Saison unter der Tabelle: Tabellenplatz je Spieltag, Bilanz in Zeilen
+ * und (mit Spielernamen) die Saisonkarte — zugeklappt als „Saisonverlauf".
+ */
+function saisonTeilHtml(team: HandballTeamView, players: boolean): string {
+  const zeilen = alsKlartext(textSaison(team)).slice(1);
+  const hatVerlauf = bildVerlauf(team) !== null;
+  const karte = players && bildSaison(team) !== null;
+  if (zeilen.length === 0 && !hatVerlauf && !karte) return '';
+  return `<details class="more season" id="saison"><summary>Saisonverlauf</summary>
+  <div class="body">
+  ${hatVerlauf ? `<img class="bild" src="./bild/verlauf.png" alt="Tabellenplatz je Spieltag" loading="lazy" width="800">` : ''}
+  ${zeilen.length > 0 ? `<ul class="lines">${zeilen.map(z => `<li>${h(z)}</li>`).join('')}</ul>` : ''}
+  </div>
+  ${karte ? `<img class="bild" src="./bild/saison.png" alt="Saisonkarte" loading="lazy" width="800" height="450" style="margin-top:14px">` : ''}
+</details>`;
+}
+
+/** Die Saison als eigener Abschnitt — nur, wenn es (noch) keine Tabelle gibt, unter die sie gehört. */
 function saisonHtml(team: HandballTeamView, players: boolean): string {
   const zeilen = alsKlartext(textSaison(team)).slice(1);
   const hatVerlauf = bildVerlauf(team) !== null;
@@ -933,21 +953,16 @@ export function torverlaufHtml(team: HandballTeamView): string | null {
 }
 
 /**
- * Die Fotos der Vereinsseite — bisher nur in der Vorschau. Das Gruppenbild bei
- * Senioren immer, bei der Jugend nur mit Spielernamen; die Porträts nur bei
- * Senioren und nur mit Spielernamen (sie tragen Namen). Leer ohne Fotos.
- */
-/**
  * Ob ein Foto der Vereinsseite gezeigt werden darf — `gruppe` oder die
- * Kontakt-ID eines Porträts. In der Vorschau: Jugend-Gruppenbild nur mit
- * Spielernamen, Porträts nur bei Senioren mit Spielernamen. Öffentlich: nur,
- * was die Einstellungsseite je Mannschaft freigegeben hat (`SITE_PHOTOS`);
- * Porträts auch dann nie bei der Jugend.
+ * Kontakt-ID eines Porträts. In der Vorschau: Jugend-Gruppenbild und
+ * Porträts nur mit Spielernamen (Jugend-Porträts holt der Abruf ohnehin nur
+ * mit Freigabe). Öffentlich: nur, was die Einstellungsseite je Mannschaft
+ * freigegeben hat (`SITE_PHOTOS`) — auch bei der Jugend.
  */
 export function fotoFreigegeben(team: HandballTeamView, wer: string, players: boolean, vorschau: boolean): boolean {
   const jugend = istJugend(team.label, team.championship_name);
   const portraet = wer !== 'gruppe';
-  if (portraet && (jugend || !portraits(team.team_id).some(p => p.contactId === wer))) return false;
+  if (portraet && !portraits(team.team_id).some(p => p.contactId === wer)) return false;
   if (vorschau) return portraet ? players : (!jugend || players);
   const frei = sitePhotos().get(team.team_id);
   return !!frei && (portraet ? frei.spieler : frei.gruppe);
@@ -1055,7 +1070,7 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
 /**
  * Die ganze Seite als HTML. Liest nur, was `handballOverview()` schon
  * geliefert hat; kein Aufruf nach draußen. Ab 960 px zwei Spalten: links
- * das Spiel (nächstes, letztes, Tabelle, Saison, Team, Statistiken), rechts der
+ * das Spiel (nächstes, letztes, Tabelle mit Saisonverlauf, Team, Statistiken), rechts der
  * Spielplan; die Wege, nichts zu verpassen, sitzen als Icons im Kopf; am Telefon eine Spalte in
  * der Reihenfolge, in der man die Seite liest (`order` je Abschnitt).
  */
@@ -1084,12 +1099,14 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   const abschnitte = {
     naechstes: naechstesSpielHtml(team, now, opts.baseUrl),
     letztes: letztesSpielHtml(team, opts.baseUrl),
-    tabelle: tabelleHtml(team, now),
-    saison: saisonHtml(team, opts.players),
+    tabelle: tabelleHtml(team, now, saisonTeilHtml(team, opts.players)),
+    saison: '',
     team: teamHtml(team, opts.players, anhang, !!opts.vorschau),
     statistiken: opts.players ? statistikenHtml(team) : '',
     spielplan: spielplanHtml(team, now),
   };
+  // Die Saison steht unter der Tabelle; nur ohne Tabelle (Saisonbeginn, Freundschaftsspiele) für sich.
+  if (!abschnitte.tabelle) abschnitte.saison = saisonHtml(team, opts.players);
   return `<!doctype html>
 <html lang="de">
 <head>

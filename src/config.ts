@@ -287,8 +287,8 @@ export interface TeamPhotoRelease { gruppe: boolean; spieler: boolean }
 /**
  * Welche Fotos der Vereinsseite je Mannschaft öffentlich stehen (`SITE_PHOTOS`):
  * `96254=mannschaft,75796=mannschaft+spieler`. `mannschaft` ist das
- * Gruppenbild, `spieler` sind die Porträts samt Namen (nur Senioren — bei der
- * Jugend werden Porträts nie geholt). Ohne Eintrag bleibt alles in der Vorschau.
+ * Gruppenbild, `spieler` sind die Porträts samt Namen (bei der Jugend werden
+ * Porträts nur damit überhaupt geholt). Ohne Eintrag bleibt alles in der Vorschau.
  */
 export function sitePhotos(): Map<string, TeamPhotoRelease> {
   const out = new Map<string, TeamPhotoRelease>();

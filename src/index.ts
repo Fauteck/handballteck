@@ -11,7 +11,7 @@ import { port, teamIds, publicUrl, importTodoteckDb, apiToken, adminPort, adminP
 import { beiAenderung, setzeSyncAktion } from './lib/settingsStore';
 import { importTodoteck } from './import/todoteck';
 import { syncHandballTeams, naechsterAbstandMs, handballOverview } from './lib/handballTeam';
-import { clubdeskHolen } from './lib/clubdesk';
+import { clubdeskHolen, clubdeskFaelligMachen } from './lib/clubdesk';
 import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
 import { pushHandballSite } from './lib/handballSitePush';
 import { serviceLog } from './lib/serviceLogger';
@@ -78,7 +78,10 @@ async function main(): Promise<void> {
   // Einstellungsseite: ein Lauf auf Knopfdruck, und nach Änderungen an Mannschaften oder Quellen sofort.
   setzeSyncAktion(einTakt);
   beiAenderung(keys => {
-    if (keys.some(k => ['TEAM_IDS', 'CLUB_TEAM_IDS', 'CLUB_NAME', 'CLUBDESK_URL', 'CLUBDESK_TEAMS'].includes(k))) void einTakt();
+    // Eine geänderte Foto-Freigabe soll nicht bis zum nächsten Tagesabruf der Vereinsseite warten.
+    const fotos = keys.some(k => ['CLUBDESK_URL', 'CLUBDESK_TEAMS', 'SITE_PHOTOS', 'SITE_PLAYERS'].includes(k));
+    if (fotos) clubdeskFaelligMachen();
+    if (fotos || keys.some(k => ['TEAM_IDS', 'CLUB_TEAM_IDS', 'CLUB_NAME'].includes(k))) void einTakt();
   });
   if (!adminPassword()) {
     if (process.env.ADMIN_PASSWORD) fastify.log.warn(`ADMIN_PASSWORD hat weniger als ${ADMIN_PASSWORD_MIN} Zeichen — die Einstellungsseite bleibt aus.`);

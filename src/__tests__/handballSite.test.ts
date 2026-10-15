@@ -541,15 +541,16 @@ describe('Handball-Microsite', () => {
       expect((await get(`/${SENIOR}/foto/8001.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
     });
 
-    it('zeigt bei der Jugend das Gruppenbild nur mit Spielernamen und nie Porträts', async () => {
+    it('zeigt bei der Jugend Gruppenbild und Porträts in der Vorschau nur mit Spielernamen', async () => {
       let html = (await get(`/${TEAM}/?vorab=${TOKEN}`)).body;
       expect(html).not.toContain('id="team"');
       expect((await get(`/${TEAM}/foto/gruppe.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
       setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_players: 'true' });
       html = (await get(`/${TEAM}/?vorab=${TOKEN}`)).body;
       expect(html).toContain('./foto/gruppe.jpg');
-      expect(html).not.toContain('./foto/7001.jpg');
-      expect((await get(`/${TEAM}/foto/7001.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
+      // Porträts der Jugend liegen nur vor, wenn sie freigegeben sind (der Abruf holt sie sonst nicht).
+      expect(html).toContain(`./foto/7001.jpg?vorab=${TOKEN}`);
+      expect((await get(`/${TEAM}/foto/7001.jpg?vorab=${TOKEN}`)).statusCode).toBe(200);
     });
 
     it('zeigt öffentlich nur, was je Mannschaft freigegeben ist (SITE_PHOTOS) — ohne Vorschau-Band, zwischenspeicherbar', async () => {
@@ -566,13 +567,17 @@ describe('Handball-Microsite', () => {
       expect(bild.statusCode).toBe(200);
       expect(bild.headers['cache-control']).toBe('public, max-age=3600');
       expect((await get(`/${SENIOR}/foto/8001.jpg`)).statusCode).toBe(200);
-      // Jugend: das Gruppenbild ja, Porträts nie — auch nicht mit Spielernamen.
+      // Jugend mit nur dem Mannschaftsbild: keine Porträts.
+      expect((await get(`/${TEAM}/`)).body).not.toContain('./foto/7001.jpg');
+      expect((await get(`/${TEAM}/foto/7001.jpg`)).statusCode).toBe(404);
+      // Jugend mit freigegebenen Spielerbildern: Gruppenbild und Porträts.
       setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_photos: `${SENIOR}=mannschaft+spieler,${TEAM}=mannschaft+spieler`, site_players: 'true' });
       const jugend = (await get(`/${TEAM}/`)).body;
       expect(jugend).toContain('./foto/gruppe.jpg');
-      expect(jugend).not.toContain('./foto/7001.jpg');
+      expect(jugend).toContain('<img src="./foto/7001.jpg"');
+      expect(jugend).toContain('<b>Jugendlicher</b>');
       expect((await get(`/${TEAM}/foto/gruppe.jpg`)).statusCode).toBe(200);
-      expect((await get(`/${TEAM}/foto/7001.jpg`)).statusCode).toBe(404);
+      expect((await get(`/${TEAM}/foto/7001.jpg`)).statusCode).toBe(200);
       // Nur das Gruppenbild freigegeben: Porträts bleiben weg.
       setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_photos: `${SENIOR}=mannschaft` });
       expect((await get(`/${SENIOR}/`)).body).not.toContain('./foto/8001.jpg');
@@ -917,6 +922,10 @@ describe('Handball-Microsite', () => {
       }
       // Ohne Spielernamen keine Statistiken, also auch kein Chip dafür.
       expect(team).not.toContain('href="#statistiken"');
+      // Die Saison steht zugeklappt unter der Tabelle, ohne eigenen Abschnitt und Chip.
+      expect(team).not.toContain('href="#saison"');
+      const tabelle = team.slice(team.indexOf('id="tabelle"'));
+      expect(tabelle.slice(0, tabelle.indexOf('</section>'))).toContain('<details class="more season" id="saison"><summary>Saisonverlauf</summary>');
       expect(team.indexOf('data-sprung')).toBeLessThan(team.indexOf('id="inhalt"'));
       const start = (await get('/')).body;
       expect(start).toContain('<li><a href="#live">Live</a></li>');
