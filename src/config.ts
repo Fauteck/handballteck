@@ -163,7 +163,7 @@ export function syncLiveIntervalMs(): number {
   return Math.max(n, 20 * 1000);
 }
 
-/** Der Vereinsname, unter dem `CLUB_TEAM_IDS` dargestellt werden. */
+/** Der Vereinsname, unter dem die eigenen Mannschaften (`TEAM_IDS`) und `CLUB_TEAM_IDS` überall erscheinen. */
 export function clubName(): string {
   return env('CLUB_NAME') || 'HSG Wölfe Voreifel';
 }

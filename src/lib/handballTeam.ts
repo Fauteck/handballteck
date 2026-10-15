@@ -89,14 +89,16 @@ export function liveFensterOffen(now = Date.now()): boolean {
 }
 
 /**
- * Wie die Mannschaft mit dieser ID angezeigt wird: Steht sie in
- * `CLUB_TEAM_IDS`, heißt sie `CLUB_NAME` — auch wenn handball.net sie noch
- * unter dem Namen ihres Stammvereins führt. Eine römische Ziffer am Ende des
+ * Wie die Mannschaft mit dieser ID angezeigt wird: Ist sie eine eigene
+ * (`TEAM_IDS`) oder steht sie in `CLUB_TEAM_IDS`, heißt sie `CLUB_NAME` —
+ * auch wenn handball.net sie anders schreibt („HSG …") oder noch unter dem
+ * Namen ihres Stammvereins führt. Eine römische Ziffer am Ende des
  * Quellnamens („… II") bleibt erhalten, sie unterscheidet die Mannschaften
  * eines Vereins. Alle anderen Namen bleiben, wie die Quelle sie schreibt.
  */
 export function anzeigeName(teamId: string | number, quellname: string): string {
-  if (!clubTeamIds().has(String(teamId))) return quellname;
+  const id = String(teamId);
+  if (!clubTeamIds().has(id) && !configTeamIds().includes(id)) return quellname;
   return vereinsName(quellname);
 }
 
