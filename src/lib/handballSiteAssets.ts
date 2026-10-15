@@ -207,7 +207,10 @@ html.kompakt .hero .theme+.kaesten{margin-top:0}
 .kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
 .kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
 .kasten.aktiv{border-color:var(--a)}
-.kaesten.flach .kasten summary,.kaesten.flach .kasten.leer{min-height:56px;padding:8px 14px}
+.kasten.alle{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:84px;padding:14px 16px;text-decoration:none}
+.kasten.alle::after{content:"→";font-size:1.2rem;color:var(--a)}
+.kasten.alle:hover{background:rgba(255,255,255,.16)}
+.kaesten.flach .kasten summary,.kaesten.flach .kasten.leer,.kaesten.flach .kasten.alle{min-height:56px;padding:8px 14px}
 .kaesten.flach .kasten .kopf b{font-size:1.15rem}
 .kaesten.flach .kasten .kopf small{display:none}
 .kaesten.flach{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
