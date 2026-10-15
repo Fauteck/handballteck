@@ -97,6 +97,11 @@ export function liveFensterOffen(now = Date.now()): boolean {
  */
 export function anzeigeName(teamId: string | number, quellname: string): string {
   if (!clubTeamIds().has(String(teamId))) return quellname;
+  return vereinsName(quellname);
+}
+
+/** Der eingestellte Vereinsname (`CLUB_NAME`), mit der Mannschaftsnummer der Quelle („… II"). */
+export function vereinsName(quellname: string): string {
   const zusatz = /\s(II|III|IV|V|VI|VII|VIII|IX|X)$/.exec(quellname.trim())?.[1];
   return zusatz ? `${clubName()} ${zusatz}` : clubName();
 }

@@ -42,7 +42,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { siteEnabled, sitePlayers, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
 import {
-  handballOverview, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
+  handballOverview, vereinsName, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, renderWeekendSvg, type FullPalette } from './handballTableImage';
@@ -994,7 +994,7 @@ function teamHtml(team: HandballTeamView, players: boolean, anhang: string, vors
   return `<section class="card s-team" id="team"${k.attr}>
   <h2>Team${vorschau && fotos ? ' <span class="badge">Vorschau</span>' : ''}</h2>
   ${k.zeile}
-  ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${team.name}`)}" loading="lazy" width="1600">` : ''}
+  ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${vereinsName(team.name)} ${team.label}`)}" loading="lazy" width="1600">` : ''}
   ${kader ? `<img class="bild" src="./bild/kader.png" alt="Kader" loading="lazy" width="800" height="450"${gruppe ? ' style="margin-top:14px"' : ''}>` : ''}
   ${[...abschnitte].map(([titel, leute]) => `<h3 class="unter">${h(titel)}</h3>
   <ul class="portraets">${leute.map(p => `<li><img src="./foto/${h(p.contactId)}.jpg${h(anhang)}" alt="" loading="lazy" width="400" height="500"><b>${h(p.name)}</b>${p.position ? `<span>${h(p.position)}</span>` : ''}</li>`).join('')}</ul>`).join('')}
@@ -1099,7 +1099,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
     ? `${opts.baseUrl}bild/spiel.png`
     : letztes && letztes.score_home !== null ? `${opts.baseUrl}bild/endstand.png?match=${encodeURIComponent(letztes.match_id)}` : null;
   const wettbewerb = team.standings[0]?.competition_name ?? team.matches[0]?.competition_name ?? '';
-  const titel = `${team.name}${team.championship_name ? ` · ${team.championship_name}` : ''}`;
+  const titel = `${vereinsName(team.name)}${team.championship_name ? ` · ${team.championship_name}` : ''}`;
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();
   const telegram = botLink && botName ? { link: botLink, handle: `@${botName}` } : null;
@@ -1126,7 +1126,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
 <meta name="theme-color" content="${palette.primary}">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="${h(team.name)}">
+<meta name="apple-mobile-web-app-title" content="${h(vereinsName(team.name))}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${h(titel)}">
@@ -1136,7 +1136,7 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./logo.png" type="image/png">
 <link rel="apple-touch-icon" href="./logo.png">
-<link rel="alternate" type="application/rss+xml" title="${h(team.name)} — Ergebnisse" href="./feed.xml">
+<link rel="alternate" type="application/rss+xml" title="${h(vereinsName(team.name))} — Ergebnisse" href="./feed.xml">
 <script src="./theme.js?v=${inhaltsHash(SITE_THEME_JS)}"></script>
 <link rel="stylesheet" href="./site.css?v=${siteCssText().hash}">
 </head>
@@ -1283,7 +1283,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   const hz = fertig && m.halftime_home !== null && m.halftime_away !== null ? `Halbzeit ${m.halftime_home}:${m.halftime_away}` : null;
   const paarung = `${m.home_name} gegen ${m.away_name}`;
   const stand = fertig ? `${m.score_home}:${m.score_away}` : null;
-  const titel = `${stand ? `${m.home_name} ${stand} ${m.away_name}` : paarung} · ${team.name}`;
+  const titel = `${stand ? `${m.home_name} ${stand} ${m.away_name}` : paarung} · ${vereinsName(team.name)}`;
   const beschreibung = `${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr · ${wettbewerb}${ausgang ? ` · ${ausgang}` : ''}`;
   const logo = logoDataUri(team.team_id);
   const verlauf = fertig ? spielverlaufSvg(m) : null;
@@ -1569,9 +1569,10 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 
 export function renderManifest(team: HandballTeamView): Record<string, unknown> {
   const palette = vervollstaendigePalette(readPalette());
+  const name = vereinsName(team.name);
   return {
-    name: team.name,
-    short_name: team.name.length > 12 ? team.name.split(/\s+/).filter(w => w.length > 2).slice(-1)[0] ?? team.name : team.name,
+    name,
+    short_name: name.length > 12 ? name.split(/\s+/).filter(w => w.length > 2).slice(-1)[0] ?? name : name,
     description: team.championship_name ? `${team.championship_name} · Spielplan, Ergebnisse, Tabelle` : 'Spielplan, Ergebnisse, Tabelle',
     start_url: './',
     scope: './',
@@ -1638,6 +1639,7 @@ function xml(text: string): string {
  */
 export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new Date()): string {
   const items: Array<{ guid: string; title: string; desc: string; at: Date; link: string }> = [];
+  const name = vereinsName(team.name);
   for (const m of gespielt(team)) {
     const start = new Date(m.starts_at);
     const eigene = eigeneTore(m)!; const gegner = gegnerTore(m)!;
@@ -1646,7 +1648,7 @@ export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new
       ? ` · Halbzeit ${m.is_home ? m.halftime_home : m.halftime_away}:${m.is_home ? m.halftime_away : m.halftime_home}` : '';
     items.push({
       guid: `result:${m.match_id}`,
-      title: `${team.name} ${ausgang} ${eigene}:${gegner}${m.rated ? ' (gewertet)' : ''} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`,
+      title: `${name} ${ausgang} ${eigene}:${gegner}${m.rated ? ' (gewertet)' : ''} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`,
       desc: `${DATUM_LANG.format(start)}${hz} · ${m.competition_name}${m.round ? `, ${m.round}. Spieltag` : ''}`,
       at: new Date(Math.min(now.getTime(), start.getTime() + 75 * 60 * 1000)),
       link: m.url,
@@ -1655,7 +1657,7 @@ export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new
   for (const c of changesFor(team.team_id)) {
     const m = team.matches.find(x => x.match_id === c.match_id);
     if (!m) continue;
-    const paarung = `${team.name} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`;
+    const paarung = `${name} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`;
     const wann = (iso: string) => `${DATUM_LANG.format(new Date(iso))}, ${ZEIT.format(new Date(iso))} Uhr`;
     const title = c.kind === 'cancelled' ? `Spiel abgesetzt: ${paarung}` : c.kind === 'postponed' ? `Spiel verschoben: ${paarung}` : `Spiel verlegt: ${paarung}`;
     const desc = c.kind === 'rescheduled'
@@ -1669,7 +1671,7 @@ export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new
     const halle = [n.venue_name, n.venue_address].filter(Boolean).join(', ');
     items.push({
       guid: `fixture:${n.match_id}:${n.starts_at}`,
-      title: `Nächstes Spiel: ${team.name} ${n.is_home ? 'gegen' : 'bei'} ${gegnerVon(n)} — ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr`,
+      title: `Nächstes Spiel: ${name} ${n.is_home ? 'gegen' : 'bei'} ${gegnerVon(n)} — ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr`,
       desc: `${n.is_home ? 'Heimspiel' : 'Auswärts'}${halle ? ` · ${halle}` : ''} · ${n.competition_name}${n.round ? `, ${n.round}. Spieltag` : ''}`,
       at: new Date(Math.min(now.getTime(), start.getTime() - 7 * 24 * 60 * 60 * 1000)),
       link: n.url,
@@ -1686,7 +1688,7 @@ export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>${xml(team.name)}</title>
+    <title>${xml(name)}</title>
     <link>${xml(baseUrl)}</link>
     <atom:link href="${xml(baseUrl)}feed.xml" rel="self" type="application/rss+xml"/>
     <description>${xml(team.championship_name ? `${team.championship_name} — Ergebnisse, Termine, Verlegungen` : 'Ergebnisse, Termine, Verlegungen')}</description>

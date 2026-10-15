@@ -276,6 +276,10 @@ describe('Handball-Microsite', () => {
         expect((await get('/')).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
         expect((await get(`/${TEAM}/`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
         expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
+        // Auch Browser-Tab, App-Name und Feed.
+        expect((await get(`/${TEAM}/`)).body).toContain('<title>Wölfe Voreifel · B-Jugend</title>');
+        expect((await get(`/${TEAM}/manifest.webmanifest`)).json().name).toBe('Wölfe Voreifel');
+        expect((await get(`/${TEAM}/feed.xml`)).body).toContain('<title>Wölfe Voreifel</title>');
       } finally {
         delete process.env.CLUB_NAME;
       }
@@ -1074,13 +1078,15 @@ describe('Handball-Microsite', () => {
       sitePush.saveSiteSubscription(TEAM, { endpoint: 'https://fcm.googleapis.com/fcm/send/tot', p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
       sendPush.mockImplementation(async (target: { endpoint: string }) => (target.endpoint.endsWith('/tot') ? { status: 'gone', reason: 'HTTP 410' } : { status: 'sent' }));
 
-      const r = await sitePush.pushHandballSite(new Date(), deps);
+      // Der Push nennt die Mannschaft mit dem eingestellten Vereinsnamen, nicht mit dem von handball.net.
+      process.env.CLUB_NAME = 'Wölfe Voreifel';
+      const r = await sitePush.pushHandballSite(new Date(), deps).finally(() => { delete process.env.CLUB_NAME; });
       // Ein Endstand (m2, 90 Minuten alt) an beide; m1 ist eine Woche alt und wird nur gemerkt.
       expect(r.messages).toBe(1);
       expect(r.recipients).toBe(1);
       const payloads = sendPush.mock.calls.map(c => c[1] as { title: string; image?: string; tag?: string; vibrate?: number[] });
       expect(payloads).toHaveLength(2);
-      expect(payloads[0].title).toContain('HSG Wölfe Voreifel verliert 20:25');
+      expect(payloads[0].title).toMatch(/^🏁 Wölfe Voreifel verliert 20:25/);
       expect(payloads[0].image).toBe('bild/endstand.png?match=m2');
       expect(payloads[0].tag).toBe('handball-m2');
       // Eine Niederlage vibriert einmal lang, nicht wie ein Torjubel.
