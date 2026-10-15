@@ -91,7 +91,7 @@ h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);dis
 .form i.w{background:var(--win)}.form i.l{background:var(--loss)}
 main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,1fr)}
 .col{display:contents}
-.s-next{order:1}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-fotos{order:7}.s-team{order:8}
+.s-next{order:1}.s-last{order:3}.s-table{order:4}.s-plan{order:5}.s-season{order:6}.s-team{order:7}.s-stats{order:8}
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,38,44,.04);min-width:0}
 .card.dark{background:linear-gradient(135deg,var(--g),var(--p) 60%,var(--s));color:#fff;border-color:transparent}
 .card.dark h2{color:var(--a)}

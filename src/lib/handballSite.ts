@@ -953,38 +953,44 @@ export function fotoFreigegeben(team: HandballTeamView, wer: string, players: bo
   return !!frei && (portraet ? frei.spieler : frei.gruppe);
 }
 
-/** „Das Team": Gruppenbild und Porträts der Vereinsseite — in der Vorschau alles, öffentlich nach Freigabe. */
-function teamFotosHtml(team: HandballTeamView, players: boolean, anhang: string, vorschau: boolean): string {
+/**
+ * „Team": wer spielt — Gruppenbild, Kadergrafik (nur mit Spielernamen) und
+ * die Porträts der Vereinsseite. Fotos in der Vorschau alle, öffentlich nach
+ * Freigabe. Leer, wenn nichts davon da ist.
+ */
+function teamHtml(team: HandballTeamView, players: boolean, anhang: string, vorschau: boolean): string {
   const gruppe = hatGruppenbild(team.team_id) && fotoFreigegeben(team, 'gruppe', players, vorschau);
   const personen = portraits(team.team_id).filter(p => fotoFreigegeben(team, p.contactId, players, vorschau));
-  if (!gruppe && personen.length === 0) return '';
+  const kader = players && bildKader(team) !== null;
+  if (!gruppe && !kader && personen.length === 0) return '';
   const abschnitte = new Map<string, typeof personen>();
   for (const p of personen) abschnitte.set(p.section, [...(abschnitte.get(p.section) ?? []), p]);
-  const k = klappe('fotos', [gruppe ? 'Mannschaftsfoto' : '', personen.length > 0 ? `${personen.length} Porträt${personen.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' und '));
-  return `<section class="card s-fotos" id="team"${k.attr}>
-  <h2>Das Team${vorschau ? ' <span class="badge">Vorschau</span>' : ''}</h2>
+  const teile = [gruppe ? 'Mannschaftsfoto' : '', kader ? 'Kader' : '', personen.length > 0 ? `${personen.length} Porträt${personen.length === 1 ? '' : 's'}` : ''].filter(Boolean);
+  const k = klappe('team', teile.length > 1 ? `${teile.slice(0, -1).join(', ')} und ${teile[teile.length - 1]}` : teile[0]!);
+  const fotos = gruppe || personen.length > 0;
+  return `<section class="card s-team" id="team"${k.attr}>
+  <h2>Team${vorschau && fotos ? ' <span class="badge">Vorschau</span>' : ''}</h2>
   ${k.zeile}
   ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${team.name}`)}" loading="lazy" width="1600">` : ''}
+  ${kader ? `<img class="bild" src="./bild/kader.png" alt="Kader" loading="lazy" width="800" height="450"${gruppe ? ' style="margin-top:14px"' : ''}>` : ''}
   ${[...abschnitte].map(([titel, leute]) => `<h3 class="unter">${h(titel)}</h3>
   <ul class="portraets">${leute.map(p => `<li><img src="./foto/${h(p.contactId)}.jpg${h(anhang)}" alt="" loading="lazy" width="400" height="500"><b>${h(p.name)}</b>${p.position ? `<span>${h(p.position)}</span>` : ''}</li>`).join('')}</ul>`).join('')}
-  <p class="muted small" style="margin:10px 0 0">Fotos: Vereinsseite der Wölfe Voreifel (ClubDesk).</p>
+  ${fotos ? '<p class="muted small" style="margin:10px 0 0">Fotos: Vereinsseite der Wölfe Voreifel (ClubDesk).</p>' : ''}
 </section>`;
 }
 
-function spielerHtml(team: HandballTeamView): string {
+/** „Statistiken": Torverlauf und Torjäger der Saison — nur mit Spielernamen. */
+function statistikenHtml(team: HandballTeamView): string {
   const stats = playerStats(team.team_id);
-  const torjaeger = stats.some(p => p.goals > 0);
-  const kader = bildKader(team) !== null;
+  const bester = stats.filter(p => p.goals > 0)[0];
+  if (!bester) return '';
   const verlauf = torverlaufHtml(team);
-  if (!torjaeger && !kader) return '';
-  const bester = stats.filter(p => p.goals > 0).sort((a, b) => b.goals - a.goals)[0];
-  const k = klappe('kader', bester ? `${stats.length} Spieler · Torjäger ${bester.name} mit ${bester.goals} Toren` : `${stats.length} Spieler`);
-  return `<section class="card s-team" id="mannschaft"${k.attr}>
-  <h2>Mannschaft</h2>
+  const k = klappe('statistiken', `${stats.length} Spieler · Torjäger ${bester.name} mit ${bester.goals} Toren`);
+  return `<section class="card s-stats" id="statistiken"${k.attr}>
+  <h2>Statistiken</h2>
   ${k.zeile}
   ${verlauf ? `<h3 class="unter">Tore im Saisonverlauf</h3>${verlauf}` : ''}
-  ${torjaeger ? `<img class="bild" src="./bild/torjaeger.png" alt="Torschützen der Saison" loading="lazy" width="800">` : ''}
-  ${kader ? `<img class="bild" src="./bild/kader.png" alt="Kader" loading="lazy" width="800" height="450" style="margin-top:14px">` : ''}
+  <img class="bild" src="./bild/torjaeger.png" alt="Torschützen der Saison" loading="lazy" width="800">
 </section>`;
 }
 
@@ -1049,7 +1055,7 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
 /**
  * Die ganze Seite als HTML. Liest nur, was `handballOverview()` schon
  * geliefert hat; kein Aufruf nach draußen. Ab 960 px zwei Spalten: links
- * das Spiel (nächstes, letztes, Tabelle, Saison, Mannschaft), rechts der
+ * das Spiel (nächstes, letztes, Tabelle, Saison, Team, Statistiken), rechts der
  * Spielplan; die Wege, nichts zu verpassen, sitzen als Icons im Kopf; am Telefon eine Spalte in
  * der Reihenfolge, in der man die Seite liest (`order` je Abschnitt).
  */
@@ -1080,8 +1086,8 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
     letztes: letztesSpielHtml(team, opts.baseUrl),
     tabelle: tabelleHtml(team, now),
     saison: saisonHtml(team, opts.players),
-    fotos: teamFotosHtml(team, opts.players, anhang, !!opts.vorschau),
-    kader: opts.players ? spielerHtml(team) : '',
+    team: teamHtml(team, opts.players, anhang, !!opts.vorschau),
+    statistiken: opts.players ? statistikenHtml(team) : '',
     spielplan: spielplanHtml(team, now),
   };
   return `<!doctype html>
@@ -1115,13 +1121,13 @@ ${opts.vorschau ? '<div class="vorschau-band" role="note">Vorschau — nur über
 <div class="offline" data-offline role="status" hidden>Du bist offline — gezeigt wird der zuletzt geladene Stand.</div>
 ${heroHtml(team, logo, now, opts.teams ?? [], anhang, '../', verpassen.leiste)}
 ${sprungleisteHtml([
-  ['naechstes', naechstes?.is_live ? 'Live' : 'Spiel', abschnitte.naechstes],
-  ['letztes', 'Letztes', abschnitte.letztes],
+  ['naechstes', naechstes?.is_live ? 'Läuft gerade' : 'Nächstes Spiel', abschnitte.naechstes],
+  ['letztes', 'Letztes Spiel', abschnitte.letztes],
   ['tabelle', 'Tabelle', abschnitte.tabelle],
   ['spielplan', 'Spielplan', abschnitte.spielplan],
   ['saison', 'Saison', abschnitte.saison],
-  ['team', 'Fotos', abschnitte.fotos],
-  ['mannschaft', 'Kader', abschnitte.kader],
+  ['team', 'Team', abschnitte.team],
+  ['statistiken', 'Statistiken', abschnitte.statistiken],
 ])}
 <main class="wrap" id="inhalt">
 <div class="col main">
@@ -1129,8 +1135,8 @@ ${abschnitte.naechstes}
 ${abschnitte.letztes}
 ${abschnitte.tabelle}
 ${abschnitte.saison}
-${abschnitte.fotos}
-${abschnitte.kader}
+${abschnitte.team}
+${abschnitte.statistiken}
 </div>
 <div class="col side">
 ${abschnitte.spielplan}
