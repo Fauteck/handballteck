@@ -4,7 +4,7 @@
  * Speichern werden die Werte an `config.ts` gereicht (`setConfigOverrides`);
  * von da an gehen sie der Umgebung vor.
  */
-import { desc } from 'drizzle-orm';
+import { desc, eq, count } from 'drizzle-orm';
 import { db, sqlite } from '../db';
 import { settings_audit } from '../db/schema';
 import { setConfigOverrides, configOverride } from '../config';
@@ -107,9 +107,18 @@ export function speichere(aenderungen: Aenderung[], actor: string): string[] {
 
 export interface ProtokollZeile { at: string; actor: string; key: string; action: string; old_value: string | null; new_value: string | null }
 
-export function protokoll(limit = 50): ProtokollZeile[] {
-  return db.select().from(settings_audit).orderBy(desc(settings_audit.id)).limit(limit).all()
-    .map(({ at, actor, key, action, old_value, new_value }) => ({ at, actor, key, action, old_value, new_value }));
+export function protokoll(limit = 50, offset = 0, key?: string): ProtokollZeile[] {
+  const basis = db.select().from(settings_audit);
+  const gefiltert = key ? basis.where(eq(settings_audit.key, key)) : basis;
+  return gefiltert.orderBy(desc(settings_audit.id)).limit(limit).offset(offset).all()
+    .map(({ at, actor, key: k, action, old_value, new_value }) => ({ at, actor, key: k, action, old_value, new_value }));
+}
+
+/** Zahl der Protokollzeilen, optional nur einer Einstellung — für das Blättern auf der Seite. */
+export function protokollAnzahl(key?: string): number {
+  const basis = db.select({ n: count() }).from(settings_audit);
+  const zeile = (key ? basis.where(eq(settings_audit.key, key)) : basis).get();
+  return zeile?.n ?? 0;
 }
 
 /** Die wirksamen Werte als `.env`-Block (ohne Geheimnisse) — zum Übernehmen in docker-configs. */

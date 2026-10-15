@@ -50,6 +50,11 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Browser-Test der Einstellungsseite
+        run: |
+          npx playwright-core install --with-deps chromium
+          npm run test:e2e
+
       # Nur Laufzeit-Abhängigkeiten und nur ab „high": Was im Image landet,
       # soll keine bekannte schwere Lücke tragen; Werkzeuge der Entwicklung
       # (vitest, esbuild) kommen nicht ins Image.

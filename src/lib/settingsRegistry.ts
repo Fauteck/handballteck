@@ -37,6 +37,11 @@ export interface Einstellung {
   /** Anzeigeeinheit bei Zahlen: der gespeicherte Wert ist in Millisekunden, die Seite zeigt Minuten/Sekunden. */
   faktor?: number;
   einheit?: string;
+  /** Grenzen bei Zahlen, in der gespeicherten Einheit — die Seite setzt daraus `min`/`max` am Feld. */
+  min?: number;
+  max?: number;
+  /** 0 ist zusätzlich erlaubt und heißt „aus“. */
+  nullErlaubt?: boolean;
   pruefe: (roh: string) => Pruefung;
 }
 
@@ -64,6 +69,11 @@ function ganzzahl(min: number, max: number, nullErlaubt = false, anzeige?: { fak
     }
     return ok(String(n));
   };
+}
+
+/** Grenzen und Prüfer einer Zahl in einem — die Seite zeigt dieselben Grenzen, die der Server prüft. */
+function zahl(min: number, max: number, nullErlaubt = false, anzeige?: { faktor: number; einheit: string }) {
+  return { min, max, nullErlaubt, pruefe: ganzzahl(min, max, nullErlaubt, anzeige) };
 }
 
 const farbe = leerOk(t => (/^#[0-9a-fA-F]{6}$/.test(t) ? ok(t.toLowerCase()) : fehler('Eine Farbe wie #003e51 eingeben.')));
@@ -165,19 +175,19 @@ export const EINSTELLUNGEN: readonly Einstellung[] = [
   {
     key: 'SYNC_INTERVAL_MS', gruppe: 'abruf', art: 'zahl', label: 'Abruf-Takt', standard: '900000', faktor: 60_000, einheit: 'Minuten', wirkung: 'naechster-takt',
     hinweis: 'Wie oft nachgesehen wird, mindestens 5 Minuten. handball.net hat keine veröffentlichte Schnittstelle: ein engerer Takt erhöht das Risiko, gesperrt zu werden.',
-    pruefe: ganzzahl(5 * 60_000, 24 * 3_600_000, false, { faktor: 60_000, einheit: 'Minuten' }),
+    ...zahl(5 * 60_000, 24 * 3_600_000, false, { faktor: 60_000, einheit: 'Minuten' }),
   },
   {
     key: 'SYNC_LIVE_INTERVAL_MS', gruppe: 'abruf', art: 'zahl', label: 'Live-Takt', standard: '60000', faktor: 1000, einheit: 'Sekunden', wirkung: 'naechster-takt',
     hinweis: 'Takt während eines laufenden Spiels, mindestens 20 Sekunden; 0 schaltet die Live-Ansicht aus.',
-    pruefe: ganzzahl(20_000, 600_000, true, { faktor: 1000, einheit: 'Sekunden' }),
+    ...zahl(20_000, 600_000, true, { faktor: 1000, einheit: 'Sekunden' }),
   },
   { key: 'TELEGRAM_INVITE_CODE', gruppe: 'telegram', art: 'text', label: 'Einladungscode', standard: '', wirkung: 'sofort', hinweis: 'Gesetzt abonniert nur, wer /start <code> schickt oder den Link t.me/<bot>?start=<code> öffnet. Leer: offen für jeden, der den Bot-Namen kennt.', pruefe: einladungscode },
   { key: 'TELEGRAM_ADMIN_CHAT_IDS', gruppe: 'telegram', art: 'liste', label: 'Admin-Chats', standard: '', wirkung: 'sofort', hinweis: 'Chat-IDs des Betreibers, durch Komma. Diese Chats dürfen /status, /rundruf und /erledigt und bekommen die Ausfallmeldungen. /status in irgendeinem Chat nennt die eigene ID.', pruefe: chatIds },
   { key: 'BOT_AUTO_DESCRIPTION', gruppe: 'telegram', art: 'schalter', label: 'Bot-Profiltext automatisch pflegen', standard: 'true', wirkung: 'naechster-takt', hinweis: 'Profiltext und „Was kann dieser Bot?“ aus Tabellenplatz und nächstem Spiel setzen (überschreibt den Text im BotFather).', pruefe: schalter },
   { key: 'SITE_ENABLED', gruppe: 'microsite', art: 'schalter', label: 'Microsite anbieten', standard: 'true', wirkung: 'sofort', hinweis: 'Die öffentliche Mannschaftsseite unter /<Team-ID>/. Aus: sie antwortet 404. Diese Einstellungsseite bleibt erreichbar.', pruefe: schalter },
   { key: 'SITE_PLAYERS', gruppe: 'microsite', art: 'schalter', label: 'Spielernamen zeigen', standard: 'false', wirkung: 'sofort', hinweis: 'Torjäger, Kader, Saisonkarte und Spielbericht mit Namen. Gilt für alle Mannschaften — auch für Jugendspieler; nur auf Wunsch einschalten.', pruefe: schalter },
-  { key: 'SITE_PUSH_MAX', gruppe: 'microsite', art: 'zahl', label: 'Obergrenze Browser-Anmeldungen', standard: '2000', wirkung: 'sofort', hinweis: 'Darüber antwortet die Anmeldung mit 503, bis Platz ist.', pruefe: ganzzahl(1, 1_000_000) },
+  { key: 'SITE_PUSH_MAX', gruppe: 'microsite', art: 'zahl', label: 'Obergrenze Browser-Anmeldungen', standard: '2000', wirkung: 'sofort', hinweis: 'Darüber antwortet die Anmeldung mit 503, bis Platz ist.', ...zahl(1, 1_000_000) },
   { key: 'SITE_URL', gruppe: 'microsite', art: 'text', label: 'Eigene Domain der Seite', standard: '', wirkung: 'sofort', hinweis: 'Liefert ein Proxy die Seiten unter einer eigenen Domain aus, steht hier deren Wurzel (https, ohne Pfad). Webcal-Link, Feed und Vorschau zeigen dann dorthin.', pruefe: httpsWurzel(true) },
   { key: 'SITE_OPERATOR', gruppe: 'microsite', art: 'text', label: 'Betreiber (Footer)', standard: '', wirkung: 'sofort', hinweis: 'Wer die Seite betreibt; steht im Footer.', pruefe: kurztext(120) },
   { key: 'SITE_FEEDBACK_MAIL', gruppe: 'microsite', art: 'text', label: 'Rückmelde-Adresse (Footer)', standard: '', wirkung: 'sofort', hinweis: 'E-Mail-Adresse für Rückmeldungen; steht im Footer.', pruefe: mailadresse },
