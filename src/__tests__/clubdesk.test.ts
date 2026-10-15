@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { unlinkSync } from 'fs';
 
 /**
@@ -9,9 +9,24 @@ import { unlinkSync } from 'fs';
 
 process.env.DATABASE_PATH = `/tmp/handball-clubdesk-${process.pid}.db`;
 
+// Kein Netz im Test: die Vereinsseite kommt aus den Vorlagen unten.
+const netz = vi.hoisted(() => ({ seiten: new Map<string, string>(), bild: Buffer.alloc(0) }));
+vi.mock('../lib/safeFetch', () => ({
+  safeFetchHtml: async (url: string) => {
+    const pfad = new URL(url).pathname;
+    const seite = netz.seiten.get(pfad);
+    if (seite === undefined) throw new Error(`nicht da: ${pfad}`);
+    return seite;
+  },
+  safeFetchImage: async () => ({ buffer: netz.bild, contentType: 'image/png' }),
+}));
+
 let cd: typeof import('../lib/clubdesk');
 
 beforeAll(async () => {
+  const { runMigrations } = await import('../db/migrate');
+  runMigrations();
+  netz.bild = await (await import('sharp')).default({ create: { width: 8, height: 8, channels: 3, background: '#888' } }).png().toBuffer();
   cd = await import('../lib/clubdesk');
 });
 
@@ -90,5 +105,35 @@ describe('ClubDesk lesen', () => {
     // Nur https und nur die Wurzel — sonst gilt die Adresse als nicht gesetzt.
     expect((await cd.clubdeskHolen(new Map())).status).toBe('aus');
     delete process.env.CLUBDESK_URL; delete process.env.CLUBDESK_TEAMS;
+  });
+
+  it('holt Porträts der Jugend nur mit freigegebenen Spielerbildern — und räumt sie ohne Freigabe weg', async () => {
+    const pfad = '/spielbetrieb/teams-und-tabellen';
+    netz.seiten.set(pfad, UEBERSICHT);
+    netz.seiten.set(`${pfad}/woelfe_b`, TEAMSEITE);
+    process.env.CLUBDESK_URL = 'https://verein.clubdesk.com';
+    process.env.CLUBDESK_TEAMS = '96254=woelfe_b';
+    const jugend = new Map([['96254', 'B-Jugend']]);
+    const { db } = await import('../db');
+    const { clubdesk_photo } = await import('../db/schema');
+    const gespeichert = () => db.select({ id: clubdesk_photo.id }).from(clubdesk_photo).all().map(r => r.id).sort();
+    try {
+      process.env.SITE_PHOTOS = '96254=mannschaft';
+      expect((await cd.clubdeskHolen(jugend, true)).status).toBe('ok');
+      expect(gespeichert()).toEqual(['96254:gruppe']);
+      process.env.SITE_PHOTOS = '96254=mannschaft+spieler';
+      await cd.clubdeskHolen(jugend, true);
+      expect(gespeichert()).toEqual(['96254:gruppe', '96254:person:2001', '96254:person:2002', '96254:person:2004']);
+      // Nur noch Spielerbilder frei: das Gruppenbild der Jugend wird nicht mehr vorgehalten.
+      process.env.SITE_PHOTOS = '96254=spieler';
+      await cd.clubdeskHolen(jugend, true);
+      expect(gespeichert()).toEqual(['96254:person:2001', '96254:person:2002', '96254:person:2004']);
+      process.env.SITE_PHOTOS = '96254=mannschaft';
+      await cd.clubdeskHolen(jugend, true);
+      expect(gespeichert()).toEqual(['96254:gruppe']);
+    } finally {
+      db.delete(clubdesk_photo).run();
+      delete process.env.CLUBDESK_URL; delete process.env.CLUBDESK_TEAMS; delete process.env.SITE_PHOTOS;
+    }
   });
 });

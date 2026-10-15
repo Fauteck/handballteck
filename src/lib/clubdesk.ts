@@ -15,8 +15,8 @@
  *
  * Abgerufen wird einmal am Tag, nach bestem Bemühen: Was scheitert, bleibt
  * beim alten Stand und meldet sich im Log — der Abruf von handball.net hängt
- * nicht daran. Jugendbilder werden nur mit `SITE_PLAYERS` oder freigegebenem
- * Gruppenbild überhaupt geholt, Porträts nur für Senioren.
+ * nicht daran. Jugendbilder werden nur mit `SITE_PLAYERS` oder Freigabe
+ * überhaupt geholt, Jugend-Porträts nur mit Freigabe der Spielerbilder.
  */
 
 import sharp from 'sharp';
@@ -133,6 +133,11 @@ export function __resetClubdeskForTests(): void {
   letzterAbruf = 0;
 }
 
+/** Macht den nächsten Abruf fällig — nach einer geänderten Foto-Freigabe auf der Einstellungsseite. */
+export function clubdeskFaelligMachen(): void {
+  letzterAbruf = 0;
+}
+
 function bildUrl(basis: string, imageId: string, signature: string, format: string | null): string {
   return `${basis}/clubdesk/fileservlet?type=image&id=${imageId}&s=${encodeURIComponent(signature)}${format ? `&imageFormat=${format}` : ''}`;
 }
@@ -157,7 +162,8 @@ export interface ClubdeskAbruf {
 
 /**
  * Ein Abruf: Übersicht lesen, je eingetragener Mannschaft das Gruppenbild
- * (Jugend nur mit `SITE_PLAYERS`) und bei Senioren die Porträts. Geladen wird
+ * (Jugend nur mit `SITE_PLAYERS` oder Freigabe) und die Porträts (Jugend nur
+ * mit freigegebenen Spielerbildern). Geladen wird
  * nur, was neu ist oder sich geändert hat; wer von der Teamseite
  * verschwunden ist, fliegt raus. `force` überspringt den Tagesabstand.
  */
@@ -175,12 +181,15 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
     for (const [teamId, slug] of zuordnung) {
       const gruppe = gruppen.find(g => g.slug === slug) ?? null;
       const jugend = istJugend(teamLabels.get(teamId), gruppe?.caption);
-      if (jugend && !sitePlayers() && !sitePhotos().get(teamId)?.gruppe) {
+      const frei = sitePhotos().get(teamId);
+      if (jugend && !sitePlayers() && !frei?.gruppe && !frei?.spieler) {
         // Jugendbilder nur mit SITE_PLAYERS (Vorschau) oder ausdrücklicher Freigabe — sonst auch nicht vorhalten.
         db.delete(clubdesk_photo).where(eq(clubdesk_photo.team_id, teamId)).run();
         continue;
       }
-      if (gruppe) {
+      if (jugend && !sitePlayers() && !frei?.gruppe) {
+        db.delete(clubdesk_photo).where(eq(clubdesk_photo.id, `${teamId}:gruppe`)).run();
+      } else if (gruppe) {
         const id = `${teamId}:gruppe`;
         const schluessel = `${gruppe.imageId}:${gruppe.signature}`;
         if (gespeicherterSchluessel(id) !== schluessel) {
@@ -194,8 +203,11 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
           }
         }
       }
-      if (jugend) continue;
-      // Porträts nur bei Senioren.
+      if (jugend && !frei?.spieler) {
+        // Jugend-Porträts nur mit ausdrücklicher Freigabe der Spielerbilder — sonst auch nicht vorhalten.
+        db.delete(clubdesk_photo).where(and(eq(clubdesk_photo.team_id, teamId), eq(clubdesk_photo.kind, 'person'))).run();
+        continue;
+      }
       try {
         const personen = parseTeamseite(await safeFetchHtml(`${basis}${TEAMS_PFAD}/${slug}`, { allowHost: nurHost }));
         const behalten: string[] = [`${teamId}:gruppe`];

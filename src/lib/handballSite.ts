@@ -933,21 +933,16 @@ export function torverlaufHtml(team: HandballTeamView): string | null {
 }
 
 /**
- * Die Fotos der Vereinsseite — bisher nur in der Vorschau. Das Gruppenbild bei
- * Senioren immer, bei der Jugend nur mit Spielernamen; die Porträts nur bei
- * Senioren und nur mit Spielernamen (sie tragen Namen). Leer ohne Fotos.
- */
-/**
  * Ob ein Foto der Vereinsseite gezeigt werden darf — `gruppe` oder die
- * Kontakt-ID eines Porträts. In der Vorschau: Jugend-Gruppenbild nur mit
- * Spielernamen, Porträts nur bei Senioren mit Spielernamen. Öffentlich: nur,
- * was die Einstellungsseite je Mannschaft freigegeben hat (`SITE_PHOTOS`);
- * Porträts auch dann nie bei der Jugend.
+ * Kontakt-ID eines Porträts. In der Vorschau: Jugend-Gruppenbild und
+ * Porträts nur mit Spielernamen (Jugend-Porträts holt der Abruf ohnehin nur
+ * mit Freigabe). Öffentlich: nur, was die Einstellungsseite je Mannschaft
+ * freigegeben hat (`SITE_PHOTOS`) — auch bei der Jugend.
  */
 export function fotoFreigegeben(team: HandballTeamView, wer: string, players: boolean, vorschau: boolean): boolean {
   const jugend = istJugend(team.label, team.championship_name);
   const portraet = wer !== 'gruppe';
-  if (portraet && (jugend || !portraits(team.team_id).some(p => p.contactId === wer))) return false;
+  if (portraet && !portraits(team.team_id).some(p => p.contactId === wer)) return false;
   if (vorschau) return portraet ? players : (!jugend || players);
   const frei = sitePhotos().get(team.team_id);
   return !!frei && (portraet ? frei.spieler : frei.gruppe);

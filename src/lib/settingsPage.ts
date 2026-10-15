@@ -224,7 +224,7 @@ export const SETTINGS_JS = String.raw`(function () {
         slugFeld.addEventListener('input', function () { m.slug = slugFeld.value.trim(); aenderung(); });
         gruppeFeld.addEventListener('change', function () { m.gruppe = gruppeFeld.checked; aenderung(); });
         spielerFeld.addEventListener('change', function () {
-          if (spielerFeld.checked && !window.confirm('Porträts mit Namen werden öffentlich gezeigt. Nur bei Senioren und nur, wenn die Bildrechte mit dem Verein geklärt sind. Wirklich einschalten?')) { spielerFeld.checked = false; return; }
+          if (spielerFeld.checked && !window.confirm('Porträts mit Namen werden öffentlich gezeigt — bei Jugendmannschaften Fotos von Kindern. Nur, wenn die Bildrechte mit Verein und Eltern geklärt sind. Wirklich einschalten?')) { spielerFeld.checked = false; return; }
           m.spieler = spielerFeld.checked; aenderung();
         });
         function schieben(d) {
