@@ -10,7 +10,7 @@
  * `PUBLIC_URL`, `LOG_LEVEL`) oder einmalig gelten (`IMPORT_TODOTECK_DB`), dazu
  * das Konto der Seite selbst (`ADMIN_*`). Sie bleiben Umgebung.
  */
-import { parseTeamEntries, ADMIN_PASSWORD_MIN } from '../config';
+import { parseTeamEntries, ADMIN_PASSWORD_MIN, TEAM_GROUP_IDS } from '../config';
 
 export type Gruppe = 'mannschaften' | 'aussehen' | 'abruf' | 'telegram' | 'microsite';
 export type Art = 'text' | 'schalter' | 'zahl' | 'farbe' | 'liste' | 'geheim';
@@ -83,6 +83,18 @@ const teamIdListe = leerOk(t => {
   return ok(eintraege.map(e => e.id).join(','));
 });
 
+const bereiche = leerOk(t => {
+  const eintraege: string[] = [];
+  for (const teil of t.split(/[,;\n]+/)) {
+    const x = teil.trim();
+    if (!x) continue;
+    const [id, bereich] = x.split('=').map(s => s?.trim().toLowerCase() ?? '');
+    if (!/^\d{1,12}$/.test(id) || !(TEAM_GROUP_IDS as readonly string[]).includes(bereich)) return fehler(`„${x}“ passt nicht zu id=bereich (${TEAM_GROUP_IDS.join(', ')}).`);
+    eintraege.push(`${id}=${bereich}`);
+  }
+  return ok(eintraege.join(','));
+});
+
 const fotoFreigaben = leerOk(t => {
   const eintraege: string[] = [];
   for (const teil of t.split(/[,;\n]+/)) {
@@ -138,12 +150,12 @@ const mailadresse = leerOk(t => (t.length <= 120 && /^[^\s@<>"]+@[^\s@<>"]+\.[^\
 export const EINSTELLUNGEN: readonly Einstellung[] = [
   {
     key: 'TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften', lang: true, zeilen: 'mannschaften', standard: '', wirkung: 'abruf',
-    hinweis: 'Je Mannschaft eine Zeile: die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen; bei der Jugend werden sie nur mit diesem Häkchen überhaupt geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge ist die der Mannschaftswahl.',
+    hinweis: 'Je Mannschaft eine Zeile, gruppiert nach Bereich: der Bereich (automatisch: aus Wettbewerb und Name gelesen), die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen; bei der Jugend werden sie nur mit diesem Häkchen überhaupt geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge im Bereich ist die der Mannschaftswahl.',
     pruefe: teams,
   },
   {
     key: 'CLUB_TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften des Vereins unter fremdem Namen', standard: '', wirkung: 'abruf',
-    hinweis: 'Team-IDs, die bei handball.net noch unter dem Namen des Stammvereins laufen, in der Spielvereinigung aber zum Verein gehören; sie erscheinen überall als Vereinsname.',
+    hinweis: 'Nur für Mannschaften des Vereins, die oben nicht in der Tabelle stehen (z. B. als Gegner einer eigenen Mannschaft), bei handball.net aber unter dem Namen des Stammvereins laufen: Sie erscheinen überall als Vereinsname. Die Mannschaften in der Tabelle heißen ohnehin so.',
     pruefe: teamIdListe,
   },
   { key: 'CLUB_NAME', gruppe: 'mannschaften', art: 'text', label: 'Vereinsname', standard: 'HSG Wölfe Voreifel', wirkung: 'sofort', hinweis: 'Der Name, unter dem die eigenen Mannschaften überall erscheinen: Seite, Push, Feed, Bilder, Telegram und API — egal wie handball.net sie schreibt. Eine römische Ziffer („… II“) bleibt.', pruefe: kurztext(80) },
@@ -172,6 +184,7 @@ export const EINSTELLUNGEN: readonly Einstellung[] = [
   { key: 'SITE_PREVIEW_TOKEN', gruppe: 'microsite', art: 'geheim', label: 'Vorschau-Schlüssel', standard: '', wirkung: 'sofort', hinweis: 'Mit /<Team-ID>/?vorab=<Schlüssel> zeigt die Seite, was noch nicht öffentlich ist. Mindestens 32 Zeichen. Wird nie angezeigt, nur ersetzt.', pruefe: vorschauSchluessel },
   { key: 'CLUBDESK_URL', gruppe: 'microsite', art: 'text', label: 'Vereinsseite bei ClubDesk', standard: '', wirkung: 'abruf', hinweis: 'Wurzel der Vereinsseite (https, ohne Pfad). Geholt wird einmal am Tag (und gleich nach einer geänderten Freigabe) das Gruppenbild und die Porträts; welche Mannschaft welche Fotos öffentlich zeigt, steht bei den Mannschaften.', pruefe: httpsWurzel(false) },
   { key: 'CLUBDESK_TEAMS', gruppe: 'mannschaften', art: 'liste', label: 'ClubDesk-Teamseiten', lang: true, versteckt: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID die Teamseite unter /spielbetrieb/teams-und-tabellen/, z. B. 75796=woelfe_1. Gepflegt in der Mannschaftszeile.', pruefe: clubdeskTeams },
+  { key: 'TEAM_GROUPS', gruppe: 'mannschaften', art: 'liste', label: 'Bereiche', lang: true, versteckt: true, standard: '', wirkung: 'sofort', hinweis: `Je Team-ID der Bereich, wenn er nicht automatisch gelesen werden soll: 96254=jungen (${TEAM_GROUP_IDS.join(', ')}). Gepflegt in der Mannschaftszeile.`, pruefe: bereiche },
   { key: 'SITE_PHOTOS', gruppe: 'mannschaften', art: 'liste', label: 'Fotos öffentlich', lang: true, versteckt: true, standard: '', wirkung: 'abruf', hinweis: 'Je Team-ID, welche Fotos der Vereinsseite öffentlich stehen: 96254=mannschaft oder 75796=mannschaft+spieler. Gepflegt in der Mannschaftszeile.', pruefe: fotoFreigaben },
 ];
 

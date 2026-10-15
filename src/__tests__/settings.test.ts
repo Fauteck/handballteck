@@ -45,6 +45,9 @@ describe('Register', () => {
     expect(p('SITE_PHOTOS', '75796=spieler+mannschaft; 96254=Mannschaft')).toEqual({ ok: true, wert: '75796=mannschaft+spieler,96254=mannschaft' });
     expect(p('SITE_PHOTOS', '75796=alles').ok).toBe(false);
     expect(p('SITE_PHOTOS', '')).toEqual({ ok: true, wert: '' });
+    expect(p('TEAM_GROUPS', '96254=Jungen; 75796=herren')).toEqual({ ok: true, wert: '96254=jungen,75796=herren' });
+    expect(p('TEAM_GROUPS', '96254=senioren').ok).toBe(false);
+    expect(p('TEAM_GROUPS', '')).toEqual({ ok: true, wert: '' });
   });
 
   it('steht vollständig in .env.example und README', async () => {
@@ -177,6 +180,10 @@ describe('Einstellungsseite', () => {
     const exp = await fastify.inject({ method: 'GET', url: '/settings/api/export', headers: { cookie } });
     expect(exp.body).not.toContain(token);
     expect(state.json().geheimnisse.map((g: { key: string }) => g.key)).toContain('TELEGRAM_BOT_TOKEN');
+    // Für die Mannschaftszeilen: die Bereiche der Seite und je Mannschaft der automatisch gelesene.
+    expect(state.json().bereiche.map((b: { id: string }) => b.id)).toEqual(['herren', 'frauen', 'jungen', 'maedchen', 'kinder']);
+    expect(Object.keys(state.json().bereichAutomatisch)).toContain('96254');
+    expect(state.json().felder.find((f: { key: string }) => f.key === 'TEAM_GROUPS').versteckt).toBe(true);
   });
 
   it('leitet zur geheimen Vorschau weiter — nur angemeldet und nur mit Schlüssel', async () => {
