@@ -270,6 +270,15 @@ describe('Handball-Microsite', () => {
       const team = (await get(`/${TEAM}/`)).body;
       // Logo und Vereinsname oben (führen zur Startseite), das Team als Text unter der Navigation.
       expect(team).toContain('<div class="verein"><a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a></div>');
+      // Der Vereinsname kommt überall aus der Einstellung, nicht aus dem Teamnamen bei handball.net.
+      process.env.CLUB_NAME = 'Wölfe Voreifel';
+      try {
+        expect((await get('/')).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
+        expect((await get(`/${TEAM}/`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
+        expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
+      } finally {
+        delete process.env.CLUB_NAME;
+      }
       expect(team).toContain('<div class="teaminfo">\n    <h1>B-Jugend</h1>');
       expect(team.indexOf('class="kaesten')).toBeLessThan(team.indexOf('<h1>B-Jugend</h1>'));
       expect(team.indexOf('class="verein"')).toBeLessThan(team.indexOf('class="kaesten'));

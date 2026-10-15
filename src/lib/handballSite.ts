@@ -508,7 +508,7 @@ function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannsc
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen}
   <a class="heim" href="${h(startUrl + anhang)}" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialen)}</div>`}</a>
-  <div class="verein"><a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(team.name === team.label ? clubName() : team.name.replace(team.label, '').trim() || clubName())}</span></a></div>
+  <div class="verein"><a class="heim titel" href="${h(startUrl + anhang)}"><span class="kicker">${h(clubName())}</span></a></div>
   ${gruppenKaesten(mannschaften, team.team_id, anhang, true, startUrl)}
   <div class="teaminfo">
     <h1>${h(team.label)}</h1>
