@@ -146,7 +146,7 @@ export const EINSTELLUNGEN: readonly Einstellung[] = [
     hinweis: 'Team-IDs, die bei handball.net noch unter dem Namen des Stammvereins laufen, in der Spielvereinigung aber zum Verein gehören; sie erscheinen überall als Vereinsname.',
     pruefe: teamIdListe,
   },
-  { key: 'CLUB_NAME', gruppe: 'mannschaften', art: 'text', label: 'Vereinsname', standard: 'HSG Wölfe Voreifel', wirkung: 'sofort', hinweis: 'Der Name, unter dem die Mannschaften oben dargestellt werden.', pruefe: kurztext(80) },
+  { key: 'CLUB_NAME', gruppe: 'mannschaften', art: 'text', label: 'Vereinsname', standard: 'HSG Wölfe Voreifel', wirkung: 'sofort', hinweis: 'Der Name, unter dem die eigenen Mannschaften überall erscheinen: Seite, Push, Feed, Bilder, Telegram und API — egal wie handball.net sie schreibt. Eine römische Ziffer („… II“) bleibt.', pruefe: kurztext(80) },
   { key: 'PRIMARY_COLOR', gruppe: 'aussehen', art: 'farbe', label: 'Hauptfarbe', standard: '#003e51', wirkung: 'sofort', hinweis: 'Farbe der Bilder und der Microsite, #rrggbb. Leer: die Farben der HSG Wölfe Voreifel.', pruefe: farbe },
   { key: 'SECONDARY_COLOR', gruppe: 'aussehen', art: 'farbe', label: 'Zweitfarbe', standard: '#015069', wirkung: 'sofort', hinweis: '#rrggbb.', pruefe: farbe },
   { key: 'ACCENT_COLOR', gruppe: 'aussehen', art: 'farbe', label: 'Akzentfarbe', standard: '#0bdbd6', wirkung: 'sofort', hinweis: '#rrggbb.', pruefe: farbe },

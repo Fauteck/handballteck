@@ -31,7 +31,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_site_subscription, handball_bot_sent } from '../db/schema';
 import { sendPush as sendWebPush, isPushConfigured, getVapidPublicKey, type PushPayload, type PushResult, type PushTarget } from './webPush';
-import { handballOverview, changesFor, type HandballTeamView, type HandballMatchView } from './handballTeam';
+import { handballOverview, changesFor, vereinsName, type HandballTeamView, type HandballMatchView } from './handballTeam';
 import {
   textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung,
   LEADS, type Lead, type Mode,
@@ -266,7 +266,7 @@ export function themenText(abo: Pick<SiteSubscriber, 'topics' | 'lead'>): string
 export async function sendSiteWelcome(abo: SiteSubscriber, team: HandballTeamView | null, deps: SitePushDeps = DEFAULT_DEPS): Promise<boolean> {
   const club = abo.team_id === CLUB;
   return zustellen(abo, {
-    title: `${club ? 'Wölfe im Revier' : team?.name ?? 'Handball'}: Benachrichtigungen an`,
+    title: `${club ? 'Wölfe im Revier' : team ? vereinsName(team.name) : 'Handball'}: Benachrichtigungen an`,
     body: `Du bekommst ${club ? 'zu allen Heimspielen' : 'ab jetzt'}: ${themenText(abo)}.`,
     tag: 'handball-welcome',
     url: './',
@@ -299,9 +299,11 @@ export async function pushHandballSite(now = new Date(), deps: SitePushDeps = DE
   const fuer = (abos: SiteSubscriber[], thema: Topic, m: HandballMatchView) =>
     abos.filter(a => a.topics.includes(thema) && (a.team_id !== CLUB || m.is_home));
 
-  for (const team of sicht.teams) {
+  for (const quelle of sicht.teams) {
     // Eine abgeschaltete Seite schickt auch nichts mehr: Die Glocke war ihr einziger Eingang.
-    if (!siteConfig(team.team_id).enabled) continue;
+    if (!siteConfig(quelle.team_id).enabled) continue;
+    // Im Push heißt die Mannschaft wie oben auf der Seite: mit dem eingestellten Vereinsnamen.
+    const team: HandballTeamView = { ...quelle, name: vereinsName(quelle.name) };
     const abos = [...listSiteSubscribers(team.team_id), ...verein];
     if (abos.length === 0) continue;
     const schluessel = (m: HandballMatchView, art: string) => `${team.team_id}:${m.match_id}:${art}`;

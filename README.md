@@ -137,7 +137,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `PUBLIC_URL` | `http://localhost:3000` | External address of this service (webhook, page links). |
 | `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). The page groups the teams in two levels — Herren · Frauen · Jungen · Mädchen on top, the teams of that group below — from the competition (or the name given here: `wC-Jugend`, `2. Damen`). |
 | `CLUB_TEAM_IDS` | – | Team IDs that handball.net still lists under their original club but that belong to the club in fact: shown everywhere (page, images, bot, API) as `CLUB_NAME`. A trailing Roman numeral of the source name (`… II`) is kept. |
-| `CLUB_NAME` | `HSG Wölfe Voreifel` | The name used for `CLUB_TEAM_IDS`. |
+| `CLUB_NAME` | `HSG Wölfe Voreifel` | The club's name everywhere (page, push, feed, images, bot, API) for the own teams (`TEAM_IDS`) and for `CLUB_TEAM_IDS`, whatever handball.net calls them. A trailing Roman numeral of the source name (`… II`) is kept. |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
 | `SYNC_LIVE_INTERVAL_MS` | `60000` | Tick while a match is live (min 20 s, `0` = off); also polls from 5 minutes before kick-off instead of kick-off + 45 min. Each tick stores score, game clock and the latest goals; the page replaces „Nächstes Spiel“ by a live view and reloads itself every 30 s. |
