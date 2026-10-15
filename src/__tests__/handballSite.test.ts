@@ -270,9 +270,11 @@ describe('Handball-Microsite', () => {
       const team = (await get(`/${TEAM}/`)).body;
       // Logo und Vereinsname oben (führen zur Startseite), das Team als Text unter der Navigation.
       expect(team).toContain('<div class="verein"><a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a></div>');
-      // Der Vereinsname kommt überall aus der Einstellung, nicht aus dem Teamnamen bei handball.net.
+      // Oben steht der Vereinsname aus der Einstellung; mit Häkchen „Vereinsname“ (CLUB_TEAM_IDS) heißt die Mannschaft auch in Tab, App und Feed so.
       process.env.CLUB_NAME = 'Wölfe Voreifel';
       try {
+        expect((await get(`/${TEAM}/`)).body).toContain('<title>HSG Wölfe Voreifel B-Jugend · B-Jugend</title>');
+        process.env.CLUB_TEAM_IDS = TEAM;
         expect((await get('/')).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
         expect((await get(`/${TEAM}/`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
         expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
@@ -282,6 +284,7 @@ describe('Handball-Microsite', () => {
         expect((await get(`/${TEAM}/feed.xml`)).body).toContain('<title>Wölfe Voreifel</title>');
       } finally {
         delete process.env.CLUB_NAME;
+        delete process.env.CLUB_TEAM_IDS;
       }
       expect(team).toContain('<div class="teaminfo">\n    <h1>B-Jugend</h1>');
       expect(team.indexOf('class="kaesten')).toBeLessThan(team.indexOf('<h1>B-Jugend</h1>'));
@@ -1078,9 +1081,10 @@ describe('Handball-Microsite', () => {
       sitePush.saveSiteSubscription(TEAM, { endpoint: 'https://fcm.googleapis.com/fcm/send/tot', p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
       sendPush.mockImplementation(async (target: { endpoint: string }) => (target.endpoint.endsWith('/tot') ? { status: 'gone', reason: 'HTTP 410' } : { status: 'sent' }));
 
-      // Der Push nennt die Mannschaft mit dem eingestellten Vereinsnamen, nicht mit dem von handball.net.
+      // Mit Häkchen „Vereinsname“ nennt der Push die Mannschaft mit dem eingestellten Vereinsnamen, nicht mit dem von handball.net.
       process.env.CLUB_NAME = 'Wölfe Voreifel';
-      const r = await sitePush.pushHandballSite(new Date(), deps).finally(() => { delete process.env.CLUB_NAME; });
+      process.env.CLUB_TEAM_IDS = TEAM;
+      const r = await sitePush.pushHandballSite(new Date(), deps).finally(() => { delete process.env.CLUB_NAME; delete process.env.CLUB_TEAM_IDS; });
       // Ein Endstand (m2, 90 Minuten alt) an beide; m1 ist eine Woche alt und wird nur gemerkt.
       expect(r.messages).toBe(1);
       expect(r.recipients).toBe(1);

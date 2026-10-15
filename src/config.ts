@@ -163,15 +163,14 @@ export function syncLiveIntervalMs(): number {
   return Math.max(n, 20 * 1000);
 }
 
-/** Der Vereinsname, unter dem die eigenen Mannschaften (`TEAM_IDS`) und `CLUB_TEAM_IDS` überall erscheinen. */
+/** Der Vereinsname: oben auf jeder Seite und als Name der Mannschaften aus `CLUB_TEAM_IDS`. */
 export function clubName(): string {
   return env('CLUB_NAME') || 'HSG Wölfe Voreifel';
 }
 
 /**
- * Mannschaften, die bei handball.net noch unter dem Namen ihres Stammvereins
- * laufen, in der Spielvereinigung aber zum Verein gehören: Sie erscheinen
- * überall als `CLUB_NAME` (Spielplan, Tabelle, Bilder, Bot).
+ * Mannschaften, die überall als `CLUB_NAME` erscheinen (Spielplan, Tabelle,
+ * Bilder, Bot, API) — auf der Einstellungsseite das Häkchen „Vereinsname“.
  */
 export function clubTeamIds(): Set<string> {
   return new Set(parseTeamIds(env('CLUB_TEAM_IDS')));

@@ -42,7 +42,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { siteEnabled, sitePlayers, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
 import {
-  handballOverview, vereinsName, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
+  handballOverview, logoDataUri, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, renderWeekendSvg, type FullPalette } from './handballTableImage';
@@ -994,7 +994,7 @@ function teamHtml(team: HandballTeamView, players: boolean, anhang: string, vors
   return `<section class="card s-team" id="team"${k.attr}>
   <h2>Team${vorschau && fotos ? ' <span class="badge">Vorschau</span>' : ''}</h2>
   ${k.zeile}
-  ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${vereinsName(team.name)} ${team.label}`)}" loading="lazy" width="1600">` : ''}
+  ${gruppe ? `<img class="bild" src="./foto/gruppe.jpg${h(anhang)}" alt="${h(`Gruppenbild ${team.name} ${team.label}`)}" loading="lazy" width="1600">` : ''}
   ${kader ? `<img class="bild" src="./bild/kader.png" alt="Kader" loading="lazy" width="800" height="450"${gruppe ? ' style="margin-top:14px"' : ''}>` : ''}
   ${[...abschnitte].map(([titel, leute]) => `<h3 class="unter">${h(titel)}</h3>
   <ul class="portraets">${leute.map(p => `<li><img src="./foto/${h(p.contactId)}.jpg${h(anhang)}" alt="" loading="lazy" width="400" height="500"><b>${h(p.name)}</b>${p.position ? `<span>${h(p.position)}</span>` : ''}</li>`).join('')}</ul>`).join('')}
@@ -1099,7 +1099,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
     ? `${opts.baseUrl}bild/spiel.png`
     : letztes && letztes.score_home !== null ? `${opts.baseUrl}bild/endstand.png?match=${encodeURIComponent(letztes.match_id)}` : null;
   const wettbewerb = team.standings[0]?.competition_name ?? team.matches[0]?.competition_name ?? '';
-  const titel = `${vereinsName(team.name)}${team.championship_name ? ` · ${team.championship_name}` : ''}`;
+  const titel = `${team.name}${team.championship_name ? ` · ${team.championship_name}` : ''}`;
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();
   const telegram = botLink && botName ? { link: botLink, handle: `@${botName}` } : null;
@@ -1126,7 +1126,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
 <meta name="theme-color" content="${palette.primary}">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="${h(vereinsName(team.name))}">
+<meta name="apple-mobile-web-app-title" content="${h(team.name)}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${h(titel)}">
@@ -1136,7 +1136,7 @@ ${ogBild ? `<meta property="og:image" content="${h(ogBild)}">\n<meta property="o
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./logo.png" type="image/png">
 <link rel="apple-touch-icon" href="./logo.png">
-<link rel="alternate" type="application/rss+xml" title="${h(vereinsName(team.name))} — Ergebnisse" href="./feed.xml">
+<link rel="alternate" type="application/rss+xml" title="${h(team.name)} — Ergebnisse" href="./feed.xml">
 <script src="./theme.js?v=${inhaltsHash(SITE_THEME_JS)}"></script>
 <link rel="stylesheet" href="./site.css?v=${siteCssText().hash}">
 </head>
@@ -1283,7 +1283,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   const hz = fertig && m.halftime_home !== null && m.halftime_away !== null ? `Halbzeit ${m.halftime_home}:${m.halftime_away}` : null;
   const paarung = `${m.home_name} gegen ${m.away_name}`;
   const stand = fertig ? `${m.score_home}:${m.score_away}` : null;
-  const titel = `${stand ? `${m.home_name} ${stand} ${m.away_name}` : paarung} · ${vereinsName(team.name)}`;
+  const titel = `${stand ? `${m.home_name} ${stand} ${m.away_name}` : paarung} · ${team.name}`;
   const beschreibung = `${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr · ${wettbewerb}${ausgang ? ` · ${ausgang}` : ''}`;
   const logo = logoDataUri(team.team_id);
   const verlauf = fertig ? spielverlaufSvg(m) : null;
@@ -1569,7 +1569,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 
 export function renderManifest(team: HandballTeamView): Record<string, unknown> {
   const palette = vervollstaendigePalette(readPalette());
-  const name = vereinsName(team.name);
+  const name = team.name;
   return {
     name,
     short_name: name.length > 12 ? name.split(/\s+/).filter(w => w.length > 2).slice(-1)[0] ?? name : name,
@@ -1639,7 +1639,7 @@ function xml(text: string): string {
  */
 export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new Date()): string {
   const items: Array<{ guid: string; title: string; desc: string; at: Date; link: string }> = [];
-  const name = vereinsName(team.name);
+  const name = team.name;
   for (const m of gespielt(team)) {
     const start = new Date(m.starts_at);
     const eigene = eigeneTore(m)!; const gegner = gegnerTore(m)!;

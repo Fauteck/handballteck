@@ -114,7 +114,7 @@ Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies 
 - **On the page:** `TEAM_IDS`, `CLUB_TEAM_IDS`, `CLUB_NAME`, the three colours, `SYNC_INTERVAL_MS`,
   `SYNC_LIVE_INTERVAL_MS`, `TELEGRAM_INVITE_CODE`, `TELEGRAM_ADMIN_CHAT_IDS`, `BOT_AUTO_DESCRIPTION`,
   `SITE_ENABLED`, `SITE_PLAYERS`, `SITE_PUSH_MAX`, `SITE_URL`, `SITE_OPERATOR`, `SITE_FEEDBACK_MAIL`,
-  `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`, `CLUBDESK_TEAMS`, `SITE_PHOTOS`, `TEAM_GROUPS` (the last three inside the team rows of `TEAM_IDS`, which the page groups by area).
+  `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`, `CLUBDESK_TEAMS`, `SITE_PHOTOS`, `TEAM_GROUPS`, `CLUB_TEAM_IDS` (the last four inside the team rows of `TEAM_IDS`, which the page groups by area).
 - **Environment only:** `PUBLIC_URL`, `PORT`, `TRUST_PROXY`, `DATA_DIR`, `DATABASE_PATH`, `SQLITE_JOURNAL_MODE`,
   `LOG_LEVEL`, `IMPORT_TODOTECK_DB`, `TELEGRAM_BOT_TOKEN`, `API_TOKEN`, `VAPID_*` and the `ADMIN_*` account.
   The page only shows whether the secrets are set. The bot token already runs through the same lookup, so
@@ -137,8 +137,8 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `PUBLIC_URL` | `http://localhost:3000` | External address of this service (webhook, page links). |
 | `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). The page groups the teams in two levels — Herren · Frauen · Jungen · Mädchen on top, the teams of that group below — from the competition (or the name given here: `wC-Jugend`, `2. Damen`). |
 | `TEAM_GROUPS` | – (read from competition and name) | Area per team when the automatic one is wrong: `96254=jungen,75796=herren` (`herren`, `frauen`, `jungen`, `maedchen`, `kinder`). Edited per team row on `/settings`. |
-| `CLUB_TEAM_IDS` | – | Team IDs not in `TEAM_IDS` (e.g. a club team met as an opponent) that handball.net still lists under their original club: shown everywhere (page, images, bot, API) as `CLUB_NAME`. Teams in `TEAM_IDS` get the club name anyway. A trailing Roman numeral of the source name (`… II`) is kept. |
-| `CLUB_NAME` | `HSG Wölfe Voreifel` | The club's name everywhere (page, push, feed, images, bot, API) for the own teams (`TEAM_IDS`) and for `CLUB_TEAM_IDS`, whatever handball.net calls them. A trailing Roman numeral of the source name (`… II`) is kept. |
+| `CLUB_TEAM_IDS` | – | Team IDs shown everywhere (page, push, feed, images, bot, API) as `CLUB_NAME`, whatever handball.net calls them. On `/settings` the „Vereinsname“ tick in a team row; IDs outside the table (e.g. a club team met as an opponent) are kept. Teams without it keep the source name (e.g. member clubs of a youth partnership). A trailing Roman numeral (`… II`) is kept. |
+| `CLUB_NAME` | `HSG Wölfe Voreifel` | The club's name at the top of every page and the name of the teams in `CLUB_TEAM_IDS`. |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
 | `SYNC_LIVE_INTERVAL_MS` | `60000` | Tick while a match is live (min 20 s, `0` = off); also polls from 5 minutes before kick-off instead of kick-off + 45 min. Each tick stores score, game clock and the latest goals; the page replaces „Nächstes Spiel“ by a live view and reloads itself every 30 s. |

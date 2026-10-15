@@ -184,6 +184,8 @@ describe('Einstellungsseite', () => {
     expect(state.json().bereiche.map((b: { id: string }) => b.id)).toEqual(['herren', 'frauen', 'jungen', 'maedchen', 'kinder']);
     expect(Object.keys(state.json().bereichAutomatisch)).toContain('96254');
     expect(state.json().felder.find((f: { key: string }) => f.key === 'TEAM_GROUPS').versteckt).toBe(true);
+    // „Vereinsname“ ist ein Häkchen in der Mannschaftszeile, kein eigenes Feld mehr.
+    expect(state.json().felder.find((f: { key: string }) => f.key === 'CLUB_TEAM_IDS').versteckt).toBe(true);
   });
 
   it('leitet zur geheimen Vorschau weiter — nur angemeldet und nur mit Schlüssel', async () => {

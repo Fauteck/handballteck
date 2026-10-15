@@ -809,27 +809,8 @@ describe('Gruppen, Vereinsname und Live-Stand', () => {
       delete process.env.CLUB_TEAM_IDS;
       delete process.env.CLUB_NAME;
     }
-    // Die eigene Mannschaft (TEAM_IDS) heißt auch ohne Liste wie der Verein; der Gegner wieder wie die Quelle.
-    const ohneListe = mod.handballOverview().teams[0];
-    expect(ohneListe.name).toBe('HSG Wölfe Voreifel');
-    expect(ohneListe.matches[0].home_name).toBe('HSG Wölfe Voreifel');
-    expect(ohneListe.matches[0].away_name).toBe('HV Erftstadt');
-    expect(ohneListe.standings[0].rows[0].teamName).toBe('HSG Wölfe Voreifel');
-  });
-
-  it('nennt die eigenen Mannschaften (TEAM_IDS) mit dem eingestellten Vereinsnamen, nicht wie handball.net', () => {
-    trageTeamEin('96254');
-    legeSpiel({ home_name: 'HSG Wölfe Voreifel', away_id: '96300', away_name: 'HV Erftstadt' });
-    process.env.CLUB_NAME = 'Wölfe Voreifel';
-    try {
-      const t = mod.handballOverview().teams[0];
-      expect(t.name).toBe('Wölfe Voreifel');
-      expect(t.matches[0].home_name).toBe('Wölfe Voreifel');
-      expect(t.matches[0].away_name).toBe('HV Erftstadt');
-      expect(mod.anzeigeName('96254', 'HSG Wölfe Voreifel II')).toBe('Wölfe Voreifel II');
-    } finally {
-      delete process.env.CLUB_NAME;
-    }
+    // Ohne Häkchen „Vereinsname“ behält auch eine eigene Mannschaft den Namen der Quelle (z. B. ein Verein der Spielgemeinschaft).
+    expect(mod.handballOverview().teams[0].name).toBe('TuS Altverein');
   });
 
   it('behält die römische Ziffer der Mannschaft beim Umbenennen', () => {

@@ -150,15 +150,15 @@ const mailadresse = leerOk(t => (t.length <= 120 && /^[^\s@<>"]+@[^\s@<>"]+\.[^\
 export const EINSTELLUNGEN: readonly Einstellung[] = [
   {
     key: 'TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften', lang: true, zeilen: 'mannschaften', standard: '', wirkung: 'abruf',
-    hinweis: 'Je Mannschaft eine Zeile, gruppiert nach Bereich: der Bereich (automatisch: aus Wettbewerb und Name gelesen), die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen; bei der Jugend werden sie nur mit diesem Häkchen überhaupt geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge im Bereich ist die der Mannschaftswahl.',
+    hinweis: 'Je Mannschaft eine Zeile, gruppiert nach Bereich: der Bereich (automatisch: aus Wettbewerb und Name gelesen), die Team-ID aus der Adresse der Mannschaftsseite auf handball.net (/team/96254), der Name, unter dem sie erscheint (leer: Bezeichnung von handball.net), ob sie wie der Verein heißt (sonst wie bei handball.net, z. B. TV Rheinbach), die Teamseite auf ClubDesk (z. B. woelfe_1) und welche Fotos von dort öffentlich stehen. Mannschaftsbild: das Gruppenbild. Spielerbilder: Porträts mit Namen; bei der Jugend werden sie nur mit diesem Häkchen überhaupt geholt. Ohne Häkchen bleiben Fotos in der Vorschau. Die Reihenfolge im Bereich ist die der Mannschaftswahl.',
     pruefe: teams,
   },
   {
-    key: 'CLUB_TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften des Vereins unter fremdem Namen', standard: '', wirkung: 'abruf',
-    hinweis: 'Nur für Mannschaften des Vereins, die oben nicht in der Tabelle stehen (z. B. als Gegner einer eigenen Mannschaft), bei handball.net aber unter dem Namen des Stammvereins laufen: Sie erscheinen überall als Vereinsname. Die Mannschaften in der Tabelle heißen ohnehin so.',
+    key: 'CLUB_TEAM_IDS', gruppe: 'mannschaften', art: 'liste', label: 'Mannschaften mit Vereinsname', versteckt: true, standard: '', wirkung: 'abruf',
+    hinweis: 'Team-IDs, die überall (Seite, Bilder, Telegram, API) wie der Verein heißen, egal wie handball.net sie schreibt. Gepflegt mit dem Häkchen „Vereinsname“ in der Mannschaftszeile; IDs außerhalb der Tabelle (z. B. als Gegner) bleiben erhalten.',
     pruefe: teamIdListe,
   },
-  { key: 'CLUB_NAME', gruppe: 'mannschaften', art: 'text', label: 'Vereinsname', standard: 'HSG Wölfe Voreifel', wirkung: 'sofort', hinweis: 'Der Name, unter dem die eigenen Mannschaften überall erscheinen: Seite, Push, Feed, Bilder, Telegram und API — egal wie handball.net sie schreibt. Eine römische Ziffer („… II“) bleibt.', pruefe: kurztext(80) },
+  { key: 'CLUB_NAME', gruppe: 'mannschaften', art: 'text', label: 'Vereinsname', standard: 'HSG Wölfe Voreifel', wirkung: 'sofort', hinweis: 'Steht oben auf jeder Seite. Mannschaften mit Häkchen „Vereinsname“ heißen überall so (Seite, Push, Feed, Bilder, Telegram, API), egal wie handball.net sie schreibt. Eine römische Ziffer („… II“) bleibt.', pruefe: kurztext(80) },
   { key: 'PRIMARY_COLOR', gruppe: 'aussehen', art: 'farbe', label: 'Hauptfarbe', standard: '#003e51', wirkung: 'sofort', hinweis: 'Farbe der Bilder und der Microsite, #rrggbb. Leer: die Farben der HSG Wölfe Voreifel.', pruefe: farbe },
   { key: 'SECONDARY_COLOR', gruppe: 'aussehen', art: 'farbe', label: 'Zweitfarbe', standard: '#015069', wirkung: 'sofort', hinweis: '#rrggbb.', pruefe: farbe },
   { key: 'ACCENT_COLOR', gruppe: 'aussehen', art: 'farbe', label: 'Akzentfarbe', standard: '#0bdbd6', wirkung: 'sofort', hinweis: '#rrggbb.', pruefe: farbe },
