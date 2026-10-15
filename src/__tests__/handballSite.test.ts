@@ -255,7 +255,9 @@ describe('Handball-Microsite', () => {
       expect((await get('/96300/')).statusCode).toBe(200);
       const wurzel = await get('/');
       expect(wurzel.statusCode).toBe(200);
-      expect(wurzel.body).toContain('<a class="heim titel" href="./"><span class="kicker">HSG Wölfe Voreifel</span><h1>Wölfe im Revier</h1></a>');
+      // Kopf wie auf der Mannschaftsseite: Vereinsname oben, dann die Kästen, darunter der Titel.
+      expect(wurzel.body).toContain('<div class="verein"><a class="heim titel" href="./"><span class="kicker">HSG Wölfe Voreifel</span></a></div>');
+      expect(wurzel.body).toContain('<div class="teaminfo">\n    <h1>Wölfe im Revier</h1>');
       // Installierbar: Manifest und Service Worker an der Wurzel, Dateien von der ersten Mannschaft.
       expect(wurzel.body).toContain('<link rel="manifest" href="./manifest.webmanifest">');
       expect(wurzel.body).toContain('<meta name="apple-mobile-web-app-title" content="Wölfe im Revier">');
@@ -271,8 +273,9 @@ describe('Handball-Microsite', () => {
       expect(team).toContain('<div class="teaminfo">\n    <h1>B-Jugend</h1>');
       expect(team.indexOf('class="kaesten')).toBeLessThan(team.indexOf('<h1>B-Jugend</h1>'));
       expect(team.indexOf('class="verein"')).toBeLessThan(team.indexOf('class="kaesten'));
-      // Fünf große Bereichskästen; die Mannschaften klappen darunter auf.
-      expect(wurzel.body.match(/class="kasten[ "]/g)?.length).toBe(5);
+      // „Alle" vorne (hier markiert), dann fünf große Bereichskästen; die Mannschaften klappen darunter auf.
+      expect(wurzel.body.match(/class="kasten[ "]/g)?.length).toBe(6);
+      expect(wurzel.body).toContain('<nav class="kaesten flach" aria-label="Mannschaften nach Bereich"><a class="kasten alle aktiv" href="./" aria-current="page"><span class="kopf"><b>Alle</b>');
       expect(wurzel.body).toContain('<details class="kasten" name="bereich" data-bereich="jungen">');
       expect(wurzel.body).toContain('<li><a href="./96300/">C-Jugend</a></li>');
       expect(wurzel.body).toContain('id="heimspiele"');
@@ -294,8 +297,9 @@ describe('Handball-Microsite', () => {
     db.insert(schema.handball_team_match).values([zeile('96300', 'Landesliga Frauen', 'Frauen'), zeile('96301', 'Kreisliga mC', 'C-Jugend')] as never).run();
     try {
       const html = (await get(`/${TEAM}/`)).body;
-      // Dieselben fünf Kästen wie auf der Startseite; der eigene Bereich ist offen, die eigene Mannschaft markiert.
-      expect(html.match(/class="kasten[ "]/g)?.length).toBe(5);
+      // Dieselben Kästen wie auf der Startseite; „Alle" führt zurück, der eigene Bereich ist markiert, die eigene Mannschaft auch.
+      expect(html.match(/class="kasten[ "]/g)?.length).toBe(6);
+      expect(html).toContain('<nav class="kaesten flach" aria-label="Mannschaften nach Bereich"><a class="kasten alle" href="../"><span class="kopf"><b>Alle</b>');
       expect(html).toContain('<nav class="kaesten flach"');
       expect(html).toContain('<details class="kasten aktiv" name="bereich" data-bereich="jungen">');
       expect(html).not.toContain(' open>');
@@ -307,11 +311,13 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<a class="heim titel" href="../"><span class="kicker">HSG Wölfe Voreifel</span></a>');
       expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a class="heim titel" href="../../">');
       expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<li><a href="../../96300/">1. Damen</a></li>');
+      expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<a class="kasten alle" href="../../">');
       // Die Vorschau trägt ihren Schlüssel in jeden Verweis.
       process.env.SITE_PREVIEW_TOKEN = 'p'.repeat(40);
       const vorschau = (await get(`/${TEAM}/?vorab=${'p'.repeat(40)}`)).body;
       expect(vorschau).toContain(`<a href="../96301/?vorab=${'p'.repeat(40)}">C-Jugend</a>`);
       expect(vorschau).toContain(`<a class="heim titel" href="../?vorab=${'p'.repeat(40)}">`);
+      expect(vorschau).toContain(`<a class="kasten alle" href="../?vorab=${'p'.repeat(40)}">`);
       delete process.env.SITE_PREVIEW_TOKEN;
     } finally {
       db.delete(schema.handball_team_match).where(eq(schema.handball_team_match.team_id, '96300')).run();
@@ -873,10 +879,10 @@ describe('Handball-Microsite', () => {
       }
     });
 
-    it('setzt auf der Startseite Logo und Titel über die Navigation', async () => {
+    it('baut den Kopf der Startseite wie den der Mannschaftsseite: Logo und Verein oben, Kästen, darunter der Titel', async () => {
       const html = (await get('/')).body;
-      expect(html.indexOf('<h1>Wölfe im Revier</h1>')).toBeGreaterThan(-1);
-      expect(html.indexOf('<h1>Wölfe im Revier</h1>')).toBeLessThan(html.indexOf('class="kaesten'));
+      expect(html.indexOf('class="verein"')).toBeLessThan(html.indexOf('class="kaesten flach'));
+      expect(html.indexOf('class="kaesten flach')).toBeLessThan(html.indexOf('<h1>Wölfe im Revier</h1>'));
     });
 
     it('sagt im Dialog, dass Verein und Mannschaft gleichzeitig gehen, und zeigt die Live-Ansicht schon vorher an', async () => {

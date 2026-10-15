@@ -69,6 +69,8 @@ h1,h2,h3{font-family:'Barlow Condensed','Barlow',system-ui,sans-serif;letter-spa
 h2{font-size:1.5rem;font-weight:700;text-transform:uppercase;color:var(--hd);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
 .hero{background:linear-gradient(135deg,var(--g) 0%,var(--p) 45%,var(--s) 100%);color:#fff;position:relative;overflow:hidden}
+/* Die Liste eines Bereichskastens hängt als Overlay unter dem Kopf: nur seitlich beschneiden (der Kreis rechts), nach unten nicht. */
+@supports (overflow:clip){.hero{overflow:visible;overflow-x:clip}}
 .hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-55deg,rgba(255,255,255,.035) 0 2px,transparent 2px 14px);pointer-events:none}
 .hero::after{content:"";position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;border:38px solid rgba(255,255,255,.05);pointer-events:none}
 .hero .wrap{position:relative;padding-top:28px;padding-bottom:24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px 20px;align-items:center}
@@ -204,10 +206,14 @@ html.kompakt .hero .verpassen{position:static;grid-column:1/-1;justify-self:end}
 .verpassen+.kaesten{margin-top:-4px}
 .hero .theme+.kaesten{margin-top:44px}
 html.kompakt .hero .theme+.kaesten{margin-top:0}
-.kasten{border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
+.kasten{position:relative;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22);color:#fff}
+.kasten[open]{z-index:40}
 .kasten[open]{background:rgba(255,255,255,.16);border-color:var(--a)}
 .kasten.aktiv{border-color:var(--a)}
-.kaesten.flach .kasten summary,.kaesten.flach .kasten.leer{min-height:56px;padding:8px 14px}
+.kasten.alle{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:84px;padding:14px 16px;text-decoration:none}
+.kasten.alle::after{content:"→";font-size:1.2rem;color:var(--a)}
+.kasten.alle:hover{background:rgba(255,255,255,.16)}
+.kaesten.flach .kasten summary,.kaesten.flach .kasten.leer,.kaesten.flach .kasten.alle{min-height:56px;padding:8px 14px}
 .kaesten.flach .kasten .kopf b{font-size:1.15rem}
 .kaesten.flach .kasten .kopf small{display:none}
 .kaesten.flach{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
@@ -220,7 +226,7 @@ html.kompakt .hero .theme+.kaesten{margin-top:0}
 .kasten .kopf b{font-family:'Barlow Condensed',sans-serif;font-size:1.5rem;font-weight:700;text-transform:uppercase;line-height:1.05}
 .kasten .kopf small{color:rgba(255,255,255,.75);font-size:.85rem}
 .kasten.leer{opacity:.55;padding:14px 16px;min-height:84px;display:flex;align-items:center}
-.kasten .liste{list-style:none;margin:0;padding:0 8px 10px;display:grid;gap:2px}
+.kasten .liste{position:absolute;top:calc(100% + 6px);left:-1px;right:-1px;list-style:none;margin:0;padding:8px;display:grid;gap:2px;background:var(--g);border:1px solid var(--a);border-radius:14px;box-shadow:0 12px 28px rgba(0,0,0,.4);max-height:min(60vh,420px);overflow-y:auto}
 .kasten .liste a{display:flex;align-items:center;min-height:44px;padding:0 10px;border-radius:10px;color:#fff;text-decoration:none;font-weight:600}
 .kasten .liste a:hover{background:rgba(255,255,255,.16)}
 main.wrap.breit{grid-template-columns:minmax(0,1fr)}
@@ -839,6 +845,22 @@ export const SITE_APP_JS = `(function () {
   });
   window.addEventListener('hashchange', function () { ankerOeffnen(location.hash); });
   klappenAnwenden();
+
+  // Bereichskästen im Kopf: Die Liste liegt als Overlay über der Seite — ein Klick daneben oder Esc schließt sie.
+  function kaestenSchliessen(ausser) {
+    Array.prototype.forEach.call(document.querySelectorAll('details.kasten[open]'), function (d) { if (d !== ausser) d.open = false; });
+  }
+  document.addEventListener('click', function (ev) {
+    kaestenSchliessen(ev.target && ev.target.closest ? ev.target.closest('details.kasten') : null);
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape') return;
+    var offen = document.querySelector('details.kasten[open]');
+    if (!offen) return;
+    offen.open = false;
+    var s = offen.querySelector('summary');
+    if (s) s.focus();
+  });
 
   // Sprungleiste: klebt oben (unter dem Mini-Kopf, wenn der zu sehen ist) und markiert den Abschnitt, in dem man gerade liest.
   (function () {
