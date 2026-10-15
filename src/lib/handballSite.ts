@@ -1540,11 +1540,12 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   <button type="button" class="theme" data-theme-toggle hidden aria-label="Farbschema: automatisch" title="Farbschema: automatisch">◐</button>
   ${verpassen.leiste}
   <a class="heim" href="./" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
-  <div class="verein">
-    <a class="heim titel" href="./"><span class="kicker">${h(clubName())}</span><h1>${h(titel)}</h1></a>
+  <div class="verein"><a class="heim titel" href="./"><span class="kicker">${h(clubName())}</span></a></div>
+  ${gruppenKaesten(teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: link(t) })), null, '', true)}
+  <div class="teaminfo">
+    <h1>${h(titel)}</h1>
     <div class="sub">Heimspiele, Spielorte und Ergebnisse aller Mannschaften</div>
   </div>
-  ${gruppenKaesten(teams.map(t => ({ id: t.team_id, label: t.label, group: t.group, url: link(t) })), null)}
 </div></header>`;
   const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
   return unterseiteHtml({
