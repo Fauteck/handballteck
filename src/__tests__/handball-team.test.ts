@@ -778,6 +778,14 @@ describe('Gruppen, Vereinsname und Live-Stand', () => {
     legeSpiel({ championship_name: 'B-Jugend' });
     legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', competition_name: 'Landesliga Frauen', championship_name: 'Frauen' });
     expect(mod.handballOverview().teams.map(t => t.group)).toEqual(['jungen', 'frauen']);
+    // Ein von Hand gesetzter Bereich (TEAM_GROUPS) geht vor; der automatische bleibt für die Einstellungsseite lesbar.
+    process.env.TEAM_GROUPS = '96300=maedchen, 1=quatsch';
+    try {
+      expect(mod.handballOverview().teams.map(t => t.group)).toEqual(['jungen', 'maedchen']);
+      expect(mod.automatischeBereiche()).toEqual({ '96254': 'jungen', '96300': 'frauen' });
+    } finally {
+      delete process.env.TEAM_GROUPS;
+    }
   });
 
   it('zeigt Mannschaften aus CLUB_TEAM_IDS als Verein — Spielplan, Gegner und Tabelle', () => {

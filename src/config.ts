@@ -177,6 +177,23 @@ export function clubTeamIds(): Set<string> {
   return new Set(parseTeamIds(env('CLUB_TEAM_IDS')));
 }
 
+/** Die Bereiche, in die die Seite Mannschaften gruppiert — dieselben Schlüssel wie `HandballGroup`. */
+export const TEAM_GROUP_IDS = ['herren', 'frauen', 'jungen', 'maedchen', 'kinder'] as const;
+export type TeamGroupId = typeof TEAM_GROUP_IDS[number];
+
+/**
+ * Von Hand gesetzte Bereiche je Mannschaft (`TEAM_GROUPS`): `96254=jungen,75796=herren`.
+ * Wer hier nicht steht, bekommt den Bereich, den die Seite aus Wettbewerb und Name liest.
+ */
+export function teamGroups(): Map<string, TeamGroupId> {
+  const out = new Map<string, TeamGroupId>();
+  for (const teil of (env('TEAM_GROUPS') ?? '').split(/[,;\n]+/)) {
+    const [id, bereich] = teil.split('=').map(x => x?.trim().toLowerCase() ?? '');
+    if (/^\d{1,12}$/.test(id) && (TEAM_GROUP_IDS as readonly string[]).includes(bereich)) out.set(id, bereich as TeamGroupId);
+  }
+  return out;
+}
+
 // --- Telegram ---------------------------------------------------------------
 
 export function botToken(): string | null {

@@ -32,7 +32,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
-import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds } from '../config';
+import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds, teamGroups } from '../config';
 import {
   HANDBALL_KIND,
   fetchActiveSeason,
@@ -1477,6 +1477,26 @@ export function gruppeVon(name: string, rows: Array<{ competition_name: string; 
 }
 
 /**
+ * Der Bereich, den die Seite je Mannschaft aus Wettbewerb und Name liest —
+ * ohne die Hand-Einstellung `TEAM_GROUPS`. Für die Einstellungsseite: Sie
+ * zeigt ihn als „automatisch“ und gruppiert die Zeilen danach. Null, wenn
+ * sich nichts lesen lässt (noch keine Spiele, kein Hinweis im Namen).
+ */
+export function automatischeBereiche(): Record<string, HandballGroup | null> {
+  const teams = readTeamIds();
+  const alle = teams.length > 0 ? db.select().from(handball_team_match).where(inArray(handball_team_match.team_id, teams)).all() : [];
+  const out: Record<string, HandballGroup | null> = {};
+  for (const teamId of teams) {
+    const meine = alle.filter(r => r.team_id === teamId).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const erste = meine[0];
+    const quellname = erste ? (erste.home_id === teamId ? erste.home_name : erste.away_name) : `Team ${teamId}`;
+    const label = teamLabelAusConfig(teamId) ?? automatischesLabel(quellname, meine) ?? erste?.championship_name ?? quellname;
+    out[teamId] = gruppeVon(quellname, meine, label);
+  }
+  return out;
+}
+
+/**
  * Der Tab liest ausschließlich die Datenbank — **kein** Aufruf nach draußen.
  * Gefüllt hat sie der Job; steht dort nichts, sagt der Tab das.
  */
@@ -1527,7 +1547,8 @@ export function handballOverview(): HandballOverview {
       name,
       label,
       championship_name: erste?.championship_name ?? null,
-      group: gruppeVon(quellname, meine, label),
+      // Ein von Hand gesetzter Bereich (TEAM_GROUPS) geht dem gelesenen vor.
+      group: teamGroups().get(teamId) ?? gruppeVon(quellname, meine, label),
       next_match: naechstes ? sicht(naechstes) : null,
       last_match: zuletzt.length > 0 ? sicht(zuletzt[zuletzt.length - 1], gewertet.has(zuletzt[zuletzt.length - 1].match_id)) : null,
       matches: meine.map(r => sicht(r, gewertet.has(r.match_id))),

@@ -48,14 +48,15 @@ td,th{text-align:left;padding:4px 8px;border-top:1px solid var(--line);vertical-
 .hidden{display:none}
 .vorschau{display:inline-flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);height:28px;vertical-align:middle}
 .vorschau span{width:36px;display:block}
-.mrow{display:grid;grid-template-columns:110px 1fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
+.mrow{display:grid;grid-template-columns:165px 90px 1fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
+h4.bereich{margin:14px 0 6px;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:4px}
 .mrow.kopf{font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:4px}
 .mrow .fotos{display:flex;flex-direction:column;gap:2px;font-size:.85rem;font-weight:400;white-space:nowrap}
 .mrow .fotos label{display:flex;align-items:center;gap:6px;margin:0;font-weight:400;min-height:20px}
 .mrow .fotos input{width:auto;margin:0}
 .mrow .knoepfe{display:flex;gap:4px}
 .mrow .knoepfe button{padding:4px 10px;min-height:40px}
-@media (max-width:720px){.mrow{grid-template-columns:1fr 1fr}.mrow .fotos,.mrow .knoepfe{grid-column:1/-1}.mrow.kopf{display:none}.mrow{padding-bottom:10px;border-bottom:1px solid var(--line)}}
+@media (max-width:720px){.mrow{grid-template-columns:1fr 1fr}.mrow select,.mrow .fotos,.mrow .knoepfe{grid-column:1/-1}.mrow.kopf{display:none}.mrow{padding-bottom:10px;border-bottom:1px solid var(--line)}}
 </style>
 </head>
 <body>
@@ -178,21 +179,40 @@ export const SETTINGS_JS = String.raw`(function () {
       return m.id + '=' + [m.gruppe ? 'mannschaft' : null, m.spieler ? 'spieler' : null].filter(Boolean).join('+');
     }).join(',');
   }
+  function bereicheText(liste) {
+    return liste.filter(function (m) { return m.id && m.bereich; }).map(function (m) { return m.id + '=' + m.bereich; }).join(',');
+  }
   function feldVon(key) { return state.felder.filter(function (x) { return x.key === key; })[0] || null; }
   function mannschaftenEditor(f, ziel, fehler, geaendertMelden) {
     var liste = mannschaftenLesen(f.wert);
     var clubdeskFeld = feldVon('CLUBDESK_TEAMS');
     var fotosFeld = feldVon('SITE_PHOTOS');
+    var bereichFeld = feldVon('TEAM_GROUPS');
     var slugs = paareLesen(clubdeskFeld ? clubdeskFeld.wert : '');
     var fotos = paareLesen(fotosFeld ? fotosFeld.wert : '');
+    var gesetzt = paareLesen(bereichFeld ? bereichFeld.wert : '');
+    // Die Bereiche der Seite in ihrer Reihenfolge; dazu je Mannschaft der automatisch gelesene.
+    var bereiche = state.bereiche || [];
+    var automatisch = state.bereichAutomatisch || {};
+    function wirksam(m) { return m.bereich || automatisch[m.id] || ''; }
+    function rang(m) { var w = wirksam(m); var i = bereiche.map(function (b) { return b.id; }).indexOf(w); return i < 0 ? bereiche.length : i; }
     liste.forEach(function (m) {
+      m.bereich = gesetzt[m.id] || '';
       m.slug = slugs[m.id] || '';
       var rechte = (fotos[m.id] || '').toLowerCase().split('+');
       m.gruppe = rechte.indexOf('mannschaft') >= 0;
       m.spieler = rechte.indexOf('spieler') >= 0;
     });
-    var startClubdesk = clubdeskText(liste), startFotos = fotosText(liste);
-    if (liste.length === 0) liste.push({ id: '', name: '', slug: '', gruppe: false, spieler: false });
+    var startClubdesk = clubdeskText(liste), startFotos = fotosText(liste), startBereiche = bereicheText(liste);
+    function leer() { return { id: '', name: '', bereich: '', slug: '', gruppe: false, spieler: false }; }
+    if (liste.length === 0) liste.push(leer());
+    // Gruppiert nach Bereich, im Bereich in der bisherigen Reihenfolge (stabil sortiert).
+    function sortieren() {
+      var mitIndex = liste.map(function (m, i) { return { m: m, i: i }; });
+      mitIndex.sort(function (a, b) { return rang(a.m) - rang(b.m) || a.i - b.i; });
+      liste = mitIndex.map(function (x) { return x.m; });
+    }
+    sortieren();
     var behaelter = el('div');
     function pruefen() {
       var meldung = '';
@@ -211,14 +231,26 @@ export const SETTINGS_JS = String.raw`(function () {
     }
     function neuZeichnen() {
       behaelter.textContent = '';
-      behaelter.appendChild(el('div', { class: 'mrow kopf' }, el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: von handball.net)' }), el('span', { text: 'ClubDesk-Seite' }), el('span', { text: 'Fotos öffentlich' }), el('span', { class: 'knoepfe' })));
+      behaelter.appendChild(el('div', { class: 'mrow kopf' }, el('span', { text: 'Bereich' }), el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: von handball.net)' }), el('span', { text: 'ClubDesk-Seite' }), el('span', { text: 'Fotos öffentlich' }), el('span', { class: 'knoepfe' })));
+      var letzterRang = -1;
       liste.forEach(function (m, i) {
+        var r = rang(m);
+        if (r !== letzterRang) {
+          behaelter.appendChild(el('h4', { class: 'bereich', text: r < bereiche.length ? bereiche[r].label : 'Ohne Bereich' }));
+          letzterRang = r;
+        }
+        var bereichWahl = el('select', { 'aria-label': 'Bereich, Mannschaft ' + (i + 1) });
+        // Die Überschrift nennt den Bereich schon; „automatisch“ heißt: aus Wettbewerb und Name gelesen.
+        bereichWahl.appendChild(el('option', { value: '', text: 'automatisch' }));
+        bereiche.forEach(function (b) { bereichWahl.appendChild(el('option', { value: b.id, text: b.label })); });
+        bereichWahl.value = m.bereich;
         var idFeld = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', placeholder: '96254', 'aria-label': 'Team-ID, Mannschaft ' + (i + 1) });
         var nameFeld = el('input', { type: 'text', autocomplete: 'off', placeholder: 'z. B. B-Jugend', 'aria-label': 'Name, Mannschaft ' + (i + 1) });
         var slugFeld = el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'z. B. woelfe_1', 'aria-label': 'ClubDesk-Seite, Mannschaft ' + (i + 1) });
         var gruppeFeld = el('input', { type: 'checkbox', 'aria-label': 'Mannschaftsbild öffentlich, Mannschaft ' + (i + 1) });
         var spielerFeld = el('input', { type: 'checkbox', 'aria-label': 'Spielerbilder öffentlich, Mannschaft ' + (i + 1) });
         idFeld.value = m.id; nameFeld.value = m.name; slugFeld.value = m.slug; gruppeFeld.checked = m.gruppe; spielerFeld.checked = m.spieler;
+        bereichWahl.addEventListener('change', function () { m.bereich = bereichWahl.value; sortieren(); neuZeichnen(); aenderung(); });
         idFeld.addEventListener('input', function () { m.id = idFeld.value.trim(); aenderung(); });
         nameFeld.addEventListener('input', function () { m.name = nameFeld.value.trim(); aenderung(); });
         slugFeld.addEventListener('input', function () { m.slug = slugFeld.value.trim(); aenderung(); });
@@ -227,22 +259,23 @@ export const SETTINGS_JS = String.raw`(function () {
           if (spielerFeld.checked && !window.confirm('Porträts mit Namen werden öffentlich gezeigt — bei Jugendmannschaften Fotos von Kindern. Nur, wenn die Bildrechte mit Verein und Eltern geklärt sind. Wirklich einschalten?')) { spielerFeld.checked = false; return; }
           m.spieler = spielerFeld.checked; aenderung();
         });
+        // Verschoben wird nur innerhalb des Bereichs.
         function schieben(d) {
           var j = i + d;
-          if (j < 0 || j >= liste.length) return;
+          if (j < 0 || j >= liste.length || rang(liste[j]) !== r) return;
           var x = liste[i]; liste[i] = liste[j]; liste[j] = x;
           neuZeichnen(); aenderung();
         }
-        behaelter.appendChild(el('div', { class: 'mrow' }, idFeld, nameFeld, slugFeld,
+        behaelter.appendChild(el('div', { class: 'mrow' }, bereichWahl, idFeld, nameFeld, slugFeld,
           el('span', { class: 'fotos' },
             el('label', null, gruppeFeld, 'Mannschaftsbild'),
             el('label', null, spielerFeld, 'Spielerbilder')),
           el('span', { class: 'knoepfe' },
-            el('button', { type: 'button', text: '↑', 'aria-label': 'Nach oben', onclick: function () { schieben(-1); } }),
-            el('button', { type: 'button', text: '↓', 'aria-label': 'Nach unten', onclick: function () { schieben(1); } }),
-            el('button', { type: 'button', text: '✕', 'aria-label': 'Mannschaft entfernen', onclick: function () { liste.splice(i, 1); if (liste.length === 0) liste.push({ id: '', name: '', slug: '', gruppe: false, spieler: false }); neuZeichnen(); aenderung(); } }))));
+            el('button', { type: 'button', text: '↑', 'aria-label': 'Im Bereich nach oben', onclick: function () { schieben(-1); } }),
+            el('button', { type: 'button', text: '↓', 'aria-label': 'Im Bereich nach unten', onclick: function () { schieben(1); } }),
+            el('button', { type: 'button', text: '✕', 'aria-label': 'Mannschaft entfernen', onclick: function () { liste.splice(i, 1); if (liste.length === 0) liste.push(leer()); neuZeichnen(); aenderung(); } }))));
       });
-      behaelter.appendChild(el('p', null, el('button', { type: 'button', text: '+ Mannschaft hinzufügen', onclick: function () { liste.push({ id: '', name: '', slug: '', gruppe: false, spieler: false }); neuZeichnen(); } })));
+      behaelter.appendChild(el('p', null, el('button', { type: 'button', text: '+ Mannschaft hinzufügen', onclick: function () { liste.push(leer()); sortieren(); neuZeichnen(); } })));
     }
     // Die versteckten Felder wandern mit: geändert, sobald ihr Text vom Start abweicht.
     function nebenfeld(feld, start, text) {
@@ -254,6 +287,7 @@ export const SETTINGS_JS = String.raw`(function () {
       ziel.value = mannschaftenText(liste);
       nebenfeld(clubdeskFeld, startClubdesk, clubdeskText(liste));
       nebenfeld(fotosFeld, startFotos, fotosText(liste));
+      nebenfeld(bereichFeld, startBereiche, bereicheText(liste));
       geaendertMelden();
     }
     neuZeichnen();

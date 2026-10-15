@@ -18,7 +18,7 @@ import { speichere, protokoll, alsEnvBlock, quelleVon, wirksamerText, syncJetzt,
 import { settingsHtml, SETTINGS_JS } from '../lib/settingsPage';
 import { getBackoffSnapshot } from '../lib/pollerBackoff';
 import { getHandballNetStats } from '../lib/handballNetClient';
-import { getHandballHealth } from '../lib/handballTeam';
+import { getHandballHealth, automatischeBereiche, HANDBALL_GROUPS } from '../lib/handballTeam';
 import { isHandballBotEnabled, getHandballBotUsername, getHandballWebhookState, listSubscribers } from '../lib/handballBot';
 import { countSiteSubscribers } from '../lib/handballSitePush';
 import { serviceLog } from '../lib/serviceLogger';
@@ -146,6 +146,9 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       eigenerAnschluss: adminPort() !== null,
       vorschau: sitePreviewToken() !== null && teamIds().length > 0,
       gruppen: GRUPPEN,
+      // Für die Mannschaftszeilen: die Bereiche der Seite und je Mannschaft der automatisch gelesene.
+      bereiche: HANDBALL_GROUPS,
+      bereichAutomatisch: automatischeBereiche(),
       felder: EINSTELLUNGEN.map(e => {
         const geheim = e.art === 'geheim';
         const wert = wirksamerText(e.key);
