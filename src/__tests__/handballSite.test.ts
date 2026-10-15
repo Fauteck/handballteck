@@ -418,6 +418,23 @@ describe('Handball-Microsite', () => {
     expect(ruhig.headers['cache-control']).toBe('public, max-age=60');
   });
 
+  it('zeigt die Kadergrafik im Abschnitt „Team" — nur mit Spielernamen', async () => {
+    db.insert(schema.handball_roster).values({ id: `${TEAM}:p1`, team_id: TEAM, player_id: 'p1', first_name: 'Erika', last_name: 'Muster', number: 7, role: 'player', season_id: 2627, updated_at: new Date().toISOString() }).run();
+    try {
+      expect((await get(`/${TEAM}/`)).body).not.toContain('id="team"');
+      setConfig({ site_enabled: 'true', site_players: 'true' });
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toContain('<li><a href="#team">Team</a></li>');
+      const team = html.slice(html.indexOf('id="team"'));
+      expect(team).toContain('<h2>Team</h2>');
+      expect(team.slice(0, team.indexOf('</section>'))).toContain('./bild/kader.png');
+      // Ohne Fotos kein Bildnachweis der Vereinsseite.
+      expect(team.slice(0, team.indexOf('</section>'))).not.toContain('ClubDesk');
+    } finally {
+      db.delete(schema.handball_roster).run();
+    }
+  });
+
   it('zeichnet den Torverlauf der besten Schützen — nur mit Spielernamen', async () => {
     const jetzt = new Date().toISOString();
     const zeile = (matchId: string, playerId: string, nummer: number, tore: number) => ({
@@ -434,6 +451,12 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('aria-label="Tore der besten Torschützen je Spiel, aufsummiert"');
       expect(html).toContain('<li><i style="background:var(--ad)"></i>Nr. 7 <b>13</b></li>');
       expect(html).toContain('Nr. 11 <b>9</b>');
+      // Chips heißen wie die Überschriften; Torverlauf und Torjäger stehen unter „Statistiken".
+      expect(html).toContain('<li><a href="#statistiken">Statistiken</a></li>');
+      const statistiken = html.slice(html.indexOf('id="statistiken"'));
+      expect(statistiken).toContain('<h2>Statistiken</h2>');
+      expect(statistiken.indexOf('Tore im Saisonverlauf')).toBeLessThan(statistiken.indexOf('./bild/torjaeger.png'));
+      expect(html).not.toContain('id="mannschaft"');
     } finally {
       db.delete(schema.handball_match_player).run();
     }
@@ -480,7 +503,7 @@ describe('Handball-Microsite', () => {
     it('zeigt ohne oder mit falschem Schlüssel nichts davon — und die Fotos antworten 404', async () => {
       for (const url of [`/${SENIOR}/`, `/${SENIOR}/?vorab=falsch`, `/${SENIOR}/?vorab=${'x'.repeat(40)}`]) {
         const res = await get(url);
-        expect(res.body, url).not.toContain('Das Team');
+        expect(res.body, url).not.toContain('id="team"');
         expect(res.body, url).not.toContain('vorschau-band');
         expect(res.headers['cache-control'], url).toBe('public, max-age=60');
       }
@@ -488,7 +511,7 @@ describe('Handball-Microsite', () => {
       expect((await get(`/${SENIOR}/foto/gruppe.jpg?vorab=falsch`)).statusCode).toBe(404);
       // Ein zu kurzer Schlüssel in der Umgebung schaltet die Vorschau gar nicht erst ein.
       process.env.SITE_PREVIEW_TOKEN = 'kurz';
-      expect((await get(`/${SENIOR}/?vorab=kurz`)).body).not.toContain('Das Team');
+      expect((await get(`/${SENIOR}/?vorab=kurz`)).body).not.toContain('id="team"');
     });
 
     it('zeigt mit Schlüssel Gruppenbild und Porträts der Senioren — privat, nicht zwischenspeicherbar', async () => {
@@ -520,7 +543,7 @@ describe('Handball-Microsite', () => {
 
     it('zeigt bei der Jugend das Gruppenbild nur mit Spielernamen und nie Porträts', async () => {
       let html = (await get(`/${TEAM}/?vorab=${TOKEN}`)).body;
-      expect(html).not.toContain('Das Team');
+      expect(html).not.toContain('id="team"');
       expect((await get(`/${TEAM}/foto/gruppe.jpg?vorab=${TOKEN}`)).statusCode).toBe(404);
       setConfig({ site_enabled: 'true', team_ids: `${TEAM},${SENIOR}`, site_players: 'true' });
       html = (await get(`/${TEAM}/?vorab=${TOKEN}`)).body;
@@ -535,7 +558,7 @@ describe('Handball-Microsite', () => {
       const senior = await get(`/${SENIOR}/`);
       expect(senior.headers['cache-control']).toBe('public, max-age=60');
       expect(senior.body).not.toContain('vorschau-band');
-      expect(senior.body).toContain('<h2>Das Team</h2>');
+      expect(senior.body).toContain('<h2>Team</h2>');
       expect(senior.body).toContain('<img class="bild" src="./foto/gruppe.jpg"');
       expect(senior.body).toContain('<img src="./foto/8001.jpg"');
       expect(senior.body).toContain('<b>Senior Eins</b>');
@@ -680,7 +703,7 @@ describe('Handball-Microsite', () => {
     expect(heim.match(/<tr data-ts=/g)?.length).toBe(3);
     expect(heim).not.toContain('Fremde Halle');
     expect(html.slice(html.indexOf('id="auswaertsspiele"'))).toContain('Fremde Halle');
-    expect(html).toContain('<h2>So stehen wir</h2>');
+    expect(html).toContain('<h2>Tabellenplätze</h2>');
     // Nach Bereich gruppiert wie die Kästen im Kopf.
     expect(html).toContain('<tr class="bereich"><th scope="rowgroup" colspan="4">Jugend männlich</th></tr>');
     expect(html).not.toContain('Alle Mannschaften</h2>');
@@ -888,16 +911,26 @@ describe('Handball-Microsite', () => {
     it('setzt eine Sprungleiste mit Ankern zu den vorhandenen Abschnitten', async () => {
       const team = (await get(`/${TEAM}/`)).body;
       expect(team).toContain('<nav class="sprung" aria-label="Abschnitte" data-sprung>');
-      for (const [id, label] of [['naechstes', 'Spiel'], ['letztes', 'Letztes'], ['tabelle', 'Tabelle'], ['spielplan', 'Spielplan']]) {
+      for (const [id, label] of [['naechstes', 'Nächstes Spiel'], ['letztes', 'Letztes Spiel'], ['tabelle', 'Tabelle'], ['spielplan', 'Spielplan']]) {
         expect(team).toContain(`<li><a href="#${id}">${label}</a></li>`);
         expect(team).toContain(`id="${id}"`);
       }
-      // Ohne Spielernamen kein Kader, also auch kein Chip dafür.
-      expect(team).not.toContain('href="#mannschaft"');
+      // Ohne Spielernamen keine Statistiken, also auch kein Chip dafür.
+      expect(team).not.toContain('href="#statistiken"');
       expect(team.indexOf('data-sprung')).toBeLessThan(team.indexOf('id="inhalt"'));
       const start = (await get('/')).body;
       expect(start).toContain('<li><a href="#live">Live</a></li>');
       expect(start).toContain('<li><a href="#stand">Tabellenplätze</a></li>');
+      // Jeder Chip heißt wie die Überschrift seines Abschnitts — auf beiden Seiten.
+      for (const seite of [team, start]) {
+        const chips = [...seite.matchAll(/<li><a href="#([^"]+)">([^<]+)<\/a><\/li>/g)];
+        expect(chips.length).toBeGreaterThan(1);
+        for (const [, id, label] of chips) {
+          const abschnitt = seite.slice(seite.indexOf(`id="${id}"`));
+          const titel = abschnitt.slice(abschnitt.indexOf('<h2>') + 4).split(/ <|<\/h2>/)[0];
+          expect(titel, id).toBe(label);
+        }
+      }
       const js = (await get(`/${TEAM}/app.js`)).body;
       expect(js).toContain("document.querySelector('[data-sprung]')");
       expect((await get(`/${TEAM}/site.css`)).body).toContain('.sprung{position:sticky;top:var(--oben,0px)');
