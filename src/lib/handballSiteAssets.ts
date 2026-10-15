@@ -945,6 +945,7 @@ export const SITE_APP_JS = `(function () {
           var doc = new DOMParser().parseFromString(html, 'text/html');
           torHinweis(staende(document), staende(doc));
           var tickerOffen = !!document.querySelector('#naechstes details.ticker[open]');
+          var saisonOffen = !!document.querySelector('#saison[open]');
           // Mannschaftsseite: Spiel, Letztes, Tabelle; Startseite: Läuft gerade, Heim- und Auswärtsspiele, Stand.
           ['naechstes', 'letztes', 'tabelle', 'live', 'heute', 'heimspiele', 'auswaertsspiele', 'letztes-wochenende', 'stand'].forEach(function (id) {
             var neu = doc.getElementById(id);
@@ -956,6 +957,8 @@ export const SITE_APP_JS = `(function () {
           klappenAnwenden();
           var ticker = document.querySelector('#naechstes details.ticker');
           if (ticker && tickerOffen) ticker.open = true;
+          var saison = document.querySelector('details#saison');
+          if (saison && saisonOffen) saison.open = true;
           var kopfNeu = doc.querySelector('.hero .stats');
           var kopfAlt = document.querySelector('.hero .stats');
           if (kopfNeu && kopfAlt) kopfAlt.replaceWith(kopfNeu);

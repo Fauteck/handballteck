@@ -922,6 +922,10 @@ describe('Handball-Microsite', () => {
       }
       // Ohne Spielernamen keine Statistiken, also auch kein Chip dafür.
       expect(team).not.toContain('href="#statistiken"');
+      // Die Saison steht zugeklappt unter der Tabelle, ohne eigenen Abschnitt und Chip.
+      expect(team).not.toContain('href="#saison"');
+      const tabelle = team.slice(team.indexOf('id="tabelle"'));
+      expect(tabelle.slice(0, tabelle.indexOf('</section>'))).toContain('<details class="more season" id="saison"><summary>Saisonverlauf</summary>');
       expect(team.indexOf('data-sprung')).toBeLessThan(team.indexOf('id="inhalt"'));
       const start = (await get('/')).body;
       expect(start).toContain('<li><a href="#live">Live</a></li>');
