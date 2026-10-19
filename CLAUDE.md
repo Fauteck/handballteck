@@ -7,7 +7,7 @@ API for the Todoteck cockpit. It was carved out of
 
 ## Where knowledge lives
 
-- **This repo:** code, `README.md` (setup, configuration, API), `.env.example`
+- **This repo:** code, `README.md` (setup, configuration, API, outbound connections), `.env.example`
   (the complete list of variables — every variable the code reads is in it).
 - **Wiki „Handball-Verfolgung (handball.net)“ (llm-wiki):** the history and reasoning behind every
   feature — source checks, the time-zone reading, the bot's rounds, the microsite, the
@@ -46,6 +46,9 @@ In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; ther
   automatic trigger; new checks go as steps into its `quality` job, not into a second
   workflow. Production is deployed from `docker-configs`, never by `docker compose up`
   on a server, never by hand in Portainer.
+- **Every foreign host has a row in README → „Outbound connections“** (kind, purpose,
+  trigger). `outbound.test.ts` fails on a host in the code without a row and on a row
+  without a host. Addresses from input or from foreign answers go through `safeFetch`.
 - **OWASP applies**: the microsite, the webhook and the inline images are public.
   Every public route keeps its rate limit and its reason to be open; no inline
   JavaScript (CSP). `/settings` is the one place with a login and a cookie: it stays

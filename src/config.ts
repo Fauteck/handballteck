@@ -18,7 +18,8 @@ import type { HandballPalette } from './lib/handballTableImage';
  * jedem Speichern ersetzt. Sie gehen der Umgebung vor; ein leerer Wert hier
  * heißt „bewusst leer“ und verdeckt die Umgebung. Ohne Eintrag gilt die
  * Umgebung — so verhalten sich Tests und ein Dienst ohne Einstellungsseite
- * wie bisher.
+ * wie bisher. Entscheidung und Grenzen: Wiki „Handball-Verfolgung
+ * (handball.net)“ §8.6.
  */
 let overrides: ReadonlyMap<string, string> = new Map();
 
