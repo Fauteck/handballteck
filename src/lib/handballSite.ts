@@ -1019,7 +1019,7 @@ function statistikenHtml(team: HandballTeamView): string {
 }
 
 /**
- * „Nichts verpassen": die Wege im Kopf der Mannschaftsseite, rechtsbündig als
+ * „Team-Infos nicht verpassen" (Startseite: „Alle Infos nicht verpassen"): die Wege im Kopf der Mannschaftsseite, rechtsbündig als
  * Icons mit der kleinen Überschrift darüber — Browser-Push (öffnet ein Fenster
  * mit dem Formular), Telegram-Bot (wenn er registriert ist), Kalender-Abo und
  * Feed (Adresse kopieren). Das Fenster steht für sich am Ende der Seite
@@ -1027,14 +1027,16 @@ function statistikenHtml(team: HandballTeamView): string {
  */
 function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: string; handle: string } | null, club = false, team: { id: string; label: string } | null = null): { leiste: string; dialog: string } {
   const webcal = baseUrl.replace(/^https?:\/\//, 'webcal://') + 'kalender.ics';
+  const appName = club ? 'Wölfe im Revier' : team?.label ?? '';
+  const installTitel = `${appName} als App installieren`;
   const leiste = `<div class="verpassen" role="group" aria-labelledby="verpassen-titel">
-    <span class="titel" id="verpassen-titel">Nichts verpassen</span>
+    <span class="titel" id="verpassen-titel">${club ? 'Alle Infos nicht verpassen' : 'Team-Infos nicht verpassen'}</span>
     <span class="icons">
       <button type="button" class="vicon" data-dialog-open="push" title="Benachrichtigungen im Browser" aria-label="Benachrichtigungen im Browser" hidden>${ICON.bell}<span class="punkt" data-aktiv hidden></span></button>
       ${telegram ? `<a class="vicon tg" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer" title="Telegram-Bot ${h(telegram.handle)}" aria-label="Telegram-Bot ${h(telegram.handle)}">${ICON.send}</a>` : ''}
       ${club ? '' : `<a class="vicon" href="${h(webcal)}" title="Kalender abonnieren" aria-label="Kalender abonnieren">${ICON.calendar}</a>
       <button type="button" class="vicon rss" data-copy="${h(baseUrl + 'feed.xml')}" title="RSS-Feed-Adresse kopieren" aria-label="RSS-Feed-Adresse kopieren">${ICON.rss}</button>`}
-      <a class="vicon" href="./?installieren=1" target="_blank" rel="noopener" data-install title="Als App installieren" aria-label="Als App installieren" hidden>${ICON.app}</a>
+      <a class="vicon" href="./?installieren=1" target="_blank" rel="noopener" data-install title="${h(installTitel)}" aria-label="${h(installTitel)}" hidden>${ICON.app}</a>
     </span>
   </div>`;
   const dialog = `<dialog class="popup" id="push" data-push="${pushEnabled ? '1' : '0'}" data-scope="${club ? 'club' : 'team'}" data-team="${h(team?.id ?? '*')}" data-label="${h(club ? 'Alle Heimspiele' : team?.label ?? '')}" aria-labelledby="push-titel">
@@ -1075,8 +1077,8 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
   <form method="dialog" class="schliessen"><button class="btn ghost" type="submit">Schließen</button></form>
 </dialog>
 <dialog class="popup" id="installieren" aria-labelledby="installieren-titel">
-  <h2 id="installieren-titel">Als App installieren</h2>
-  <p class="lead">Die Seite liegt dann wie eine App auf dem Startbildschirm: ein Tipp, und ${club ? 'alle Mannschaften sind' : 'Spielplan, Ergebnisse und Tabelle sind'} da, in der vollen Ansicht und ohne Netz mit dem zuletzt geladenen Stand.</p>
+  <h2 id="installieren-titel">${h(installTitel)}</h2>
+  <p class="lead">${h(`„${appName}“`)} liegt dann wie eine App auf dem Startbildschirm: ein Tipp, und ${club ? 'alle Mannschaften sind' : 'Spielplan, Ergebnisse und Tabelle dieser Mannschaft sind'} da, in der vollen Ansicht und ohne Netz mit dem zuletzt geladenen Stand.</p>
   <div class="row" data-install-prompt hidden><button class="btn primary" type="button" data-install-go>Jetzt installieren</button></div>
   <div data-install-ios hidden>
     <ol>
@@ -1144,7 +1146,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
 <meta name="theme-color" content="${palette.primary}">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="${h(vereinsName(team.name))}">
+<meta name="apple-mobile-web-app-title" content="${h(team.label)}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta property="og:type" content="website">
 <meta property="og:title" content="${h(titel)}">
@@ -1587,10 +1589,11 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 
 export function renderManifest(team: HandballTeamView): Record<string, unknown> {
   const palette = vervollstaendigePalette(readPalette());
-  const name = vereinsName(team.name);
+  // Jede Mannschaft ist eine eigene App: Der Name trägt die Mannschaft, sonst stünden auf dem
+  // Startbildschirm mehrere gleiche Vereinsnamen nebeneinander.
   return {
-    name,
-    short_name: name.length > 12 ? name.split(/\s+/).filter(w => w.length > 2).slice(-1)[0] ?? name : name,
+    name: `${vereinsName(team.name)} ${team.label}`,
+    short_name: team.label,
     description: team.championship_name ? `${team.championship_name} · Spielplan, Ergebnisse, Tabelle` : 'Spielplan, Ergebnisse, Tabelle',
     start_url: './',
     scope: './',
