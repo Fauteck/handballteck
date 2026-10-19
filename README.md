@@ -213,6 +213,56 @@ each and recorded in `migrations`.
 - The `quality` job runs `npm audit` (runtime, high+) and Trivy (lockfile vulnerabilities and committed secrets).
 - The page is `noindex` and `robots.txt` disallows everything: it is for sharing, not for finding.
 
+## Outbound connections
+
+Every foreign host the code knows, and why. `src/__tests__/outbound.test.ts` keeps this
+table against the code (it runs in `npm test`, so in the `quality` job): a host in a
+string with `http://` or `https://` in `src/` or `scripts/` (tests and comments excluded),
+or in one of the host allowlists (`PUSH_HOSTS_*` in `lib/ssrf.ts`, `HANDBALL_LOGO_HOSTS`
+in `lib/handballNetClient.ts`), needs a row here; a row whose host is gone fails as well.
+
+**Kind** says what happens with the host: *Connection* — the server calls it.
+*Link* — the server only builds an address a person clicks later. *Identifier* — a URL
+used as a name (XML namespace), never fetched. *Default* — fallback when a variable is
+unset. *Browser* — allowed by the CSP, the visitor's browser loads from it (none today:
+the CSP allows only `'self'`). A host with several roles lists them comma separated.
+
+| Host | Kind | Purpose | Trigger |
+|---|---|---|---|
+| `api.telegram.org` | Connection | Bot API: send messages and images, fetch files, set webhook, commands and profile texts | Telegram bot, only with `TELEGRAM_BOT_TOKEN` |
+| `fcm.googleapis.com` | Connection | Web Push to Chrome, Opera, Samsung Internet, Brave (through `web-push`) | Push after a result or a change, only to subscribed browsers |
+| `*.push.services.mozilla.com` | Connection | Web Push to Firefox | as above |
+| `*.notify.windows.com` | Connection | Web Push to Edge | as above |
+| `*.push.apple.com` | Connection | Web Push to Safari | as above |
+| `www.handball.net` | Connection, Link | Source: token page and internal API (matches, standings, line-ups), team logos; links to team and match pages | Scheduler tick, live tick, `POST /api/sync` |
+| `handball.net` | Connection | Team logos (allowlist of `safeFetchImage`) | Scheduler tick, at most ten logos per run, 30 days cached |
+| `handball360.isquad.de` | Connection | Team logos (allowlist of `safeFetchImage`) | as above |
+| `localhost` | Default | Fallback for `PUBLIC_URL` | only without `PUBLIC_URL` |
+| `t.me` | Link | Deep link to the bot (invite), share target | Bot, share dialog of the page |
+| `wa.me` | Link | Share target | Share dialog of the page |
+| `www.facebook.com` | Link | Share target | Share dialog of the page |
+| `www.linkedin.com` | Link | Share target | Share dialog of the page |
+| `www.google.com` | Link | Route to the venue (Google Maps) | Match page, bot |
+| `www.openstreetmap.org` | Link | Route to the venue | Match page, bot |
+| `www.w3.org` | Identifier | SVG namespace of the images | Image rendering |
+
+Not in the table, on purpose:
+
+- **Targets the operator enters.** `CLUBDESK_URL` (the club website, e.g.
+  `woelfevoreifel.clubdesk.com`) is set on `/settings` or in the environment, not in the
+  code. It is fetched only through `safeFetch` with `allowHost` pinned to that one host:
+  DNS resolved, every address checked, the connection bound to the checked address,
+  every redirect checked again.
+- **Addresses read at runtime.** Push endpoints come from visitors' browsers and are
+  accepted only for the push hosts above (`isPushServiceUrl`, at subscription and at
+  delivery). Logo URLs come from handball.net's answers and are fetched only from the
+  logo hosts above, through `safeFetch`.
+- **Inbound callers.** Telegram (webhook) and Todoteck (`/api/*`) call this service;
+  this service never calls Todoteck.
+
+Adding a host: write the client (addresses from input or foreign answers through
+`safeFetch`), add the row here, run `npm test -- outbound`.
+
 ## Technology stack
 
 Node 22 · TypeScript · Fastify 5 (`@fastify/helmet`, `@fastify/rate-limit`) · better-sqlite3 + drizzle-orm ·

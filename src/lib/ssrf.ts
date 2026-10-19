@@ -75,8 +75,8 @@ export function isSafeExternalUrl(raw: string, opts: { requireHttps?: boolean } 
  * Edge → WNS; Safari (macOS, iOS ab 16.4) → Apple. Ein Browser mit einem
  * anderen Dienst kommt hier mit 400 an und taucht dann im Log auf.
  */
-const PUSH_HOSTS_EXAKT = new Set(['fcm.googleapis.com']);
-const PUSH_HOSTS_ENDUNG = ['.push.services.mozilla.com', '.notify.windows.com', '.push.apple.com'];
+export const PUSH_HOSTS_EXAKT = new Set(['fcm.googleapis.com']);
+export const PUSH_HOSTS_ENDUNG = ['.push.services.mozilla.com', '.notify.windows.com', '.push.apple.com'];
 
 export function isPushServiceUrl(raw: string): boolean {
   let parsed: URL;
