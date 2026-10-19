@@ -151,11 +151,18 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('<div><dt>Siege · Unent. · Niederl.</dt><dd>1-0-1</dd></div>');
     expect(html).toContain('<div><dt>Punkte</dt><dd>2<small>2 Sp.</small></dd></div>');
     expect(html).toContain('In 7 Tagen');
-    // Die Wege: Icons im Kopf unter „Nichts verpassen" (Glocke, Kalender, Feed), kein Telegram, solange kein Bot registriert ist.
-    expect(html).toContain('id="verpassen-titel">Nichts verpassen</span>');
+    // Die Wege: Icons im Kopf unter „Team-Infos nicht verpassen" (Glocke, Kalender, Feed), kein Telegram, solange kein Bot registriert ist.
+    expect(html).toContain('id="verpassen-titel">Team-Infos nicht verpassen</span>');
     expect(html).toContain('aria-label="Kalender abonnieren"');
     expect(html).toContain('aria-label="RSS-Feed-Adresse kopieren"');
     expect(html).toContain('<dialog class="popup" id="push"');
+    // Als App installieren: Der Knopf zeigt sich erst mit Skript und öffnet im iFrame die volle Seite in einem eigenen Tab.
+    expect(html).toContain('<a class="vicon" href="./?installieren=1" target="_blank" rel="noopener" data-install title="mB-Jugend als App installieren" aria-label="mB-Jugend als App installieren" hidden>');
+    expect(html).toContain('<h2 id="installieren-titel">mB-Jugend als App installieren</h2>');
+    // Jede Mannschaft ist eine eigene App mit ihrem Namen auf dem Startbildschirm.
+    expect(html).toContain('<meta name="apple-mobile-web-app-title" content="mB-Jugend">');
+    expect(html).toContain('<dialog class="popup" id="installieren"');
+    expect(html).toContain('„Zum Home-Bildschirm“ wählen.');
     expect(html.indexOf('class="verpassen"')).toBeLessThan(html.indexOf('<main'));
     expect(html).not.toContain('data-share');
     expect(html).not.toContain('t.me/');
@@ -261,6 +268,10 @@ describe('Handball-Microsite', () => {
       // Installierbar: Manifest und Service Worker an der Wurzel, Dateien von der ersten Mannschaft.
       expect(wurzel.body).toContain('<link rel="manifest" href="./manifest.webmanifest">');
       expect(wurzel.body).toContain('<meta name="apple-mobile-web-app-title" content="Wölfe im Revier">');
+      expect(wurzel.body).toContain('<dialog class="popup" id="installieren"');
+      expect(wurzel.body).toContain('href="./?installieren=1"');
+      expect(wurzel.body).toContain('id="verpassen-titel">Alle Infos nicht verpassen</span>');
+      expect(wurzel.body).toContain('<h2 id="installieren-titel">Wölfe im Revier als App installieren</h2>');
       const manifest = await get('/manifest.webmanifest');
       expect(manifest.statusCode).toBe(200);
       expect(manifest.json()).toMatchObject({ name: 'Wölfe im Revier', start_url: './', scope: './', display: 'standalone' });
@@ -278,7 +289,7 @@ describe('Handball-Microsite', () => {
         expect((await get(`/${TEAM}/spiel/m1`)).body).toContain('<span class="kicker">Wölfe Voreifel</span>');
         // Auch Browser-Tab, App-Name und Feed.
         expect((await get(`/${TEAM}/`)).body).toContain('<title>Wölfe Voreifel · B-Jugend</title>');
-        expect((await get(`/${TEAM}/manifest.webmanifest`)).json().name).toBe('Wölfe Voreifel');
+        expect((await get(`/${TEAM}/manifest.webmanifest`)).json()).toMatchObject({ name: 'Wölfe Voreifel B-Jugend', short_name: 'B-Jugend' });
         expect((await get(`/${TEAM}/feed.xml`)).body).toContain('<title>Wölfe Voreifel</title>');
       } finally {
         delete process.env.CLUB_NAME;
@@ -420,6 +431,12 @@ describe('Handball-Microsite', () => {
     expect(app.body).toContain('data-live');
     expect(app.body).not.toContain('handball-site-open');
     expect(app.body).toContain('button[data-copy]');
+    // Installieren: Angebot des Browsers abfangen, im iFrame nur verlinken, ?installieren=1 öffnet das Fenster.
+    expect(app.body).toContain("addEventListener('beforeinstallprompt'");
+    expect(app.body).toContain('window.top !== window.self');
+    expect(app.body).toContain("searchParams.get('installieren') === '1'");
+    // Der Kompaktmodus wandert nicht in den Install-Link: Die installierte App zeigt die volle Ansicht.
+    expect(app.body).toContain("a.hasAttribute('data-install')");
   });
 
   it('zeigt den Live-Modus nur bei laufendem Spiel — und lässt die Seite dann nur kurz liegen', async () => {
@@ -637,7 +654,7 @@ describe('Handball-Microsite', () => {
     expect(sw.body).toContain("addEventListener('push'");
     const manifest = await get(`/${TEAM}/manifest.webmanifest`);
     expect(manifest.statusCode).toBe(200);
-    expect(manifest.json()).toMatchObject({ name: 'HSG Wölfe Voreifel', start_url: './', display: 'standalone', theme_color: '#003e51' });
+    expect(manifest.json()).toMatchObject({ name: 'HSG Wölfe Voreifel mB-Jugend', short_name: 'mB-Jugend', start_url: './', display: 'standalone', theme_color: '#003e51' });
     const logo = await get(`/${TEAM}/logo.png`);
     expect(logo.statusCode).toBe(200);
     expect(logo.headers['content-type']).toBe('image/png');
