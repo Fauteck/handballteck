@@ -3,6 +3,7 @@
  * (Übersicht „Teams & Tabellen") und bei den Senioren die Porträts aus dem
  * Kader der Teamseite. In der Vorschau (`SITE_PREVIEW_TOKEN`) immer; öffentlich
  * je Mannschaft nach Freigabe auf der Einstellungsseite (`SITE_PHOTOS`).
+ * Warum und welche Freigaben: Wiki „Handball-Verfolgung (handball.net)“ §7.7.
  *
  * Was man über die Quelle wissen muss (geprüft am 01.10.2026):
  * - Bilder gibt es nur über `/clubdesk/fileservlet?type=image&id=…&s=…`; ohne

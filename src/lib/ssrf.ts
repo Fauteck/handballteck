@@ -23,7 +23,8 @@
  * eingetragene oeffentliche Name im eigenen Haus per Split-DNS auf eine
  * private Adresse, wuerde sie die Integration abschalten.
  *
- * Ausfuehrlich samt Abgrenzung: `docs/ssrf-abwehr.md`.
+ * Ausführlich samt Abgrenzung: Wiki „Ausgehende Requests: Ziel aus dem Request,
+ * Ziel aus der Konfiguration“.
  */
 const PRIVATE_IP_RE = /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|127\.|169\.254\.|0\.0\.0\.0|::1$|::$|fc|fd)/i;
 const PRIVATE_HOSTNAMES = new Set(['localhost', '::1', '0.0.0.0', '']);
@@ -74,6 +75,7 @@ export function isSafeExternalUrl(raw: string, opts: { requireHttps?: boolean } 
  * Chrome, Opera, Samsung Internet, Brave → FCM; Firefox → Mozilla Autopush;
  * Edge → WNS; Safari (macOS, iOS ab 16.4) → Apple. Ein Browser mit einem
  * anderen Dienst kommt hier mit 400 an und taucht dann im Log auf.
+ * Web-Push ohne Konto: Wiki „Handball-Verfolgung (handball.net)“ §7.3.
  */
 export const PUSH_HOSTS_EXAKT = new Set(['fcm.googleapis.com']);
 export const PUSH_HOSTS_ENDUNG = ['.push.services.mozilla.com', '.notify.windows.com', '.push.apple.com'];

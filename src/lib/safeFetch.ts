@@ -16,12 +16,12 @@
  *   4. Redirects manuell verfolgen und JEDEN Hop erneut voll pruefen (max. 5).
  *   5. Timeout ueber die gesamte Redirect-Kette + harte Body-Groessenbegrenzung.
  *   6. Optional `allowHost`: eine Host-Allowlist des Aufrufers, ebenfalls je
- *      Sprung geprueft (Untappd-Proxy).
+ *      Sprung geprüft.
  *
- * Der generische Pfad ist nur aktiv, wenn der Nutzer ihn aktiviert hat
- * (Preference `web_fetch_public_enabled`, siehe `webMetadata.isPublicFetchAllowed`).
- * Der bestehende 3D-Plattform-Pfad (og-scraper, curl-impersonate, Whitelist)
- * bleibt davon unberuehrt.
+ * Aufrufer hier: die Fotos der Vereinsseite (`clubdesk.ts`, nur der Host aus
+ * `CLUBDESK_URL`) und die Vereinslogos (`handballTeam.ts`, nur
+ * `HANDBALL_LOGO_HOSTS`). Abgrenzung: Wiki „Ausgehende Requests: Ziel aus dem
+ * Request, Ziel aus der Konfiguration“.
  */
 import http from 'node:http';
 import https from 'node:https';
@@ -56,9 +56,9 @@ export interface SafeFetchOptions {
    * Zusaetzliche Zusicherung ueber den Ziel-Host, **je Sprung** geprueft.
    *
    * Fuer Aufrufer, die nicht nur „irgendwas Oeffentliches" holen, sondern
-   * einen bestimmten Dienst: Der Untappd-Proxy etwa laesst nur `untappd.com`
-   * zu. Ohne diese Pruefung an jedem Hop haette eine Weiterleitung des
-   * erlaubten Hosts den Proxy zu einem beliebigen anderen oeffentlichen Ziel
+   * einen bestimmten Dienst: Die Fotos der Vereinsseite etwa nur den Host aus
+   * `CLUBDESK_URL`. Ohne diese Pruefung an jedem Hop haette eine Weiterleitung des
+   * erlaubten Hosts den Abruf zu einem beliebigen anderen oeffentlichen Ziel
    * gemacht — die Allowlist haette dann nur den ersten Sprung gedeckt.
    */
   allowHost?: (url: URL) => boolean;
