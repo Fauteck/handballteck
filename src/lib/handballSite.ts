@@ -407,7 +407,8 @@ export function siteCssText(): { text: string; hash: string } {
 }
 
 /** Inline-Icons für die Kanäle — `currentColor`, damit sie die Farbe der Kachel nehmen. */
-const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share', string> = {
+const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share' | 'app', string> = {
+  app: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 1h10a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zm0 3v14h10V4zm5 15.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM11 6h2v5h2.5L12 14.5 8.5 11H11z"/></svg>',
   share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2L8.9 13.7a3 3 0 0 0 0-3.4l6.7-3.5A3 3 0 1 0 15 5a3 3 0 0 0 .1.7L8.4 9.2a3 3 0 1 0 0 5.6l6.7 3.5A3 3 0 1 0 18 16z"/></svg>',
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v4.2L4 15v1h16v-1l-2-2.8V8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22z"/></svg>',
   send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>',
@@ -1033,6 +1034,7 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
       ${telegram ? `<a class="vicon tg" href="${h(telegram.link)}" target="_blank" rel="noopener noreferrer" title="Telegram-Bot ${h(telegram.handle)}" aria-label="Telegram-Bot ${h(telegram.handle)}">${ICON.send}</a>` : ''}
       ${club ? '' : `<a class="vicon" href="${h(webcal)}" title="Kalender abonnieren" aria-label="Kalender abonnieren">${ICON.calendar}</a>
       <button type="button" class="vicon rss" data-copy="${h(baseUrl + 'feed.xml')}" title="RSS-Feed-Adresse kopieren" aria-label="RSS-Feed-Adresse kopieren">${ICON.rss}</button>`}
+      <a class="vicon" href="./?installieren=1" target="_blank" rel="noopener" data-install title="Als App installieren" aria-label="Als App installieren" hidden>${ICON.app}</a>
     </span>
   </div>`;
   const dialog = `<dialog class="popup" id="push" data-push="${pushEnabled ? '1' : '0'}" data-scope="${club ? 'club' : 'team'}" data-team="${h(team?.id ?? '*')}" data-label="${h(club ? 'Alle Heimspiele' : team?.label ?? '')}" aria-labelledby="push-titel">
@@ -1070,6 +1072,22 @@ function verpassenHtml(baseUrl: string, pushEnabled: boolean, telegram: { link: 
     </div>
   </form>
   <p class="muted small" data-ios hidden>iPhone und iPad: Safari erlaubt Benachrichtigungen nur für Seiten auf dem Home-Bildschirm. Erst „Teilen → Zum Home-Bildschirm", dann von dort öffnen und hier einschalten.</p>
+  <form method="dialog" class="schliessen"><button class="btn ghost" type="submit">Schließen</button></form>
+</dialog>
+<dialog class="popup" id="installieren" aria-labelledby="installieren-titel">
+  <h2 id="installieren-titel">Als App installieren</h2>
+  <p class="lead">Die Seite liegt dann wie eine App auf dem Startbildschirm: ein Tipp, und ${club ? 'alle Mannschaften sind' : 'Spielplan, Ergebnisse und Tabelle sind'} da, in der vollen Ansicht und ohne Netz mit dem zuletzt geladenen Stand.</p>
+  <div class="row" data-install-prompt hidden><button class="btn primary" type="button" data-install-go>Jetzt installieren</button></div>
+  <div data-install-ios hidden>
+    <ol>
+      <li>In Safari auf „Teilen“ tippen (das Viereck mit dem Pfeil nach oben).</li>
+      <li>„Zum Home-Bildschirm“ wählen.</li>
+      <li>Mit „Hinzufügen“ bestätigen.</li>
+    </ol>
+    <p class="muted small">Aus WhatsApp, Instagram oder einer anderen App geöffnet? Erst „In Safari öffnen“ wählen.</p>
+  </div>
+  <p data-install-menu hidden>Im Menü des Browsers (⋮) „App installieren“ oder „Zum Startbildschirm hinzufügen“ wählen. Am Telefon geht das mit Chrome, Samsung Internet und Safari.</p>
+  <p data-install-done hidden>Die App ist auf diesem Gerät schon installiert.</p>
   <form method="dialog" class="schliessen"><button class="btn ghost" type="submit">Schließen</button></form>
 </dialog>`;
   return { leiste, dialog };

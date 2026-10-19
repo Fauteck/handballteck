@@ -156,6 +156,10 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('aria-label="Kalender abonnieren"');
     expect(html).toContain('aria-label="RSS-Feed-Adresse kopieren"');
     expect(html).toContain('<dialog class="popup" id="push"');
+    // Als App installieren: Der Knopf zeigt sich erst mit Skript und öffnet im iFrame die volle Seite in einem eigenen Tab.
+    expect(html).toContain('<a class="vicon" href="./?installieren=1" target="_blank" rel="noopener" data-install title="Als App installieren" aria-label="Als App installieren" hidden>');
+    expect(html).toContain('<dialog class="popup" id="installieren"');
+    expect(html).toContain('„Zum Home-Bildschirm“ wählen.');
     expect(html.indexOf('class="verpassen"')).toBeLessThan(html.indexOf('<main'));
     expect(html).not.toContain('data-share');
     expect(html).not.toContain('t.me/');
@@ -261,6 +265,8 @@ describe('Handball-Microsite', () => {
       // Installierbar: Manifest und Service Worker an der Wurzel, Dateien von der ersten Mannschaft.
       expect(wurzel.body).toContain('<link rel="manifest" href="./manifest.webmanifest">');
       expect(wurzel.body).toContain('<meta name="apple-mobile-web-app-title" content="Wölfe im Revier">');
+      expect(wurzel.body).toContain('<dialog class="popup" id="installieren"');
+      expect(wurzel.body).toContain('href="./?installieren=1"');
       const manifest = await get('/manifest.webmanifest');
       expect(manifest.statusCode).toBe(200);
       expect(manifest.json()).toMatchObject({ name: 'Wölfe im Revier', start_url: './', scope: './', display: 'standalone' });
@@ -420,6 +426,12 @@ describe('Handball-Microsite', () => {
     expect(app.body).toContain('data-live');
     expect(app.body).not.toContain('handball-site-open');
     expect(app.body).toContain('button[data-copy]');
+    // Installieren: Angebot des Browsers abfangen, im iFrame nur verlinken, ?installieren=1 öffnet das Fenster.
+    expect(app.body).toContain("addEventListener('beforeinstallprompt'");
+    expect(app.body).toContain('window.top !== window.self');
+    expect(app.body).toContain("searchParams.get('installieren') === '1'");
+    // Der Kompaktmodus wandert nicht in den Install-Link: Die installierte App zeigt die volle Ansicht.
+    expect(app.body).toContain("a.hasAttribute('data-install')");
   });
 
   it('zeigt den Live-Modus nur bei laufendem Spiel — und lässt die Seite dann nur kurz liegen', async () => {

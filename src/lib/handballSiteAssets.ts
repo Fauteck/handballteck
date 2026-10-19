@@ -492,7 +492,7 @@ export const SITE_APP_JS = `(function () {
   if (/[?&]kompakt=1(&|$)/.test(location.search)) {
     Array.prototype.forEach.call(document.querySelectorAll('a[href]'), function (a) {
       var href = a.getAttribute('href') || '';
-      if (/^(https?:|mailto:|webcal:|#)/.test(href) || /kompakt=1/.test(href) || a.hasAttribute('download')) return;
+      if (/^(https?:|mailto:|webcal:|#)/.test(href) || /kompakt=1/.test(href) || a.hasAttribute('download') || a.hasAttribute('data-install')) return;
       var teile = href.split('#');
       a.setAttribute('href', teile[0] + (teile[0].indexOf('?') >= 0 ? '&' : '?') + 'kompakt=1' + (teile[1] ? '#' + teile[1] : ''));
     });
@@ -993,6 +993,66 @@ export const SITE_APP_JS = `(function () {
         })
         .catch(function () {});
     }, 30000);
+  }
+
+  // Als App installieren. Im iFrame der Vereinsseite bietet kein Browser die Installation an:
+  // Dort öffnet der Knopf die volle Seite in einem eigenen Tab (?installieren=1), und die
+  // zeigt gleich das Fenster. Chrome und Co. melden mit beforeinstallprompt, dass sie
+  // installieren können; Safari auf iPhone und iPad kann das nur über „Teilen“.
+  var installKnopf = document.querySelector('[data-install]');
+  var installFenster = document.getElementById('installieren');
+  if (installKnopf && installFenster && document.querySelector('link[rel=manifest]')) {
+    var eingebettet = true;
+    try { eingebettet = window.top !== window.self; } catch (e) {}
+    var installiert = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    var apfel = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var angebot = null;
+    var teil = function (name, an) { var el = installFenster.querySelector('[data-install-' + name + ']'); if (el) el.hidden = !an; };
+    var installStand = function () {
+      teil('prompt', !installiert && angebot !== null);
+      teil('ios', !installiert && angebot === null && apfel);
+      teil('menu', !installiert && angebot === null && !apfel);
+      teil('done', installiert);
+    };
+    var installOeffnen = function () {
+      installStand();
+      if (typeof installFenster.showModal === 'function') installFenster.showModal(); else installFenster.setAttribute('open', '');
+    };
+    window.addEventListener('beforeinstallprompt', function (ev) {
+      ev.preventDefault();
+      angebot = ev;
+      if (!eingebettet) installKnopf.hidden = false;
+      installStand();
+    });
+    window.addEventListener('appinstalled', function () {
+      angebot = null;
+      installiert = true;
+      installKnopf.hidden = true;
+      installStand();
+    });
+    if (eingebettet || (apfel && !installiert)) installKnopf.hidden = false;
+    installKnopf.addEventListener('click', function (ev) {
+      if (eingebettet) return;
+      ev.preventDefault();
+      installOeffnen();
+    });
+    var installLos = installFenster.querySelector('[data-install-go]');
+    if (installLos) installLos.addEventListener('click', function () {
+      if (!angebot) return;
+      var a = angebot;
+      angebot = null;
+      a.prompt();
+      a.userChoice.then(function () { installStand(); if (typeof installFenster.close === 'function') installFenster.close(); }, function () {});
+    });
+    installFenster.addEventListener('click', function (ev) { if (ev.target === installFenster && typeof installFenster.close === 'function') installFenster.close(); });
+    try {
+      var hier = new URL(location.href);
+      if (hier.searchParams.get('installieren') === '1' && !eingebettet) {
+        hier.searchParams.delete('installieren');
+        history.replaceState(null, '', hier.pathname + hier.search + hier.hash);
+        installOeffnen();
+      }
+    } catch (e) {}
   }
 
   // Das Benachrichtigungsfenster: Die Glocke im Kopf öffnet es, ein Klick daneben oder Esc schließt es.
