@@ -51,6 +51,7 @@ import {
   bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSaison, endstandBild,
   textSaison, alsKlartext, icsKalender, handballBotLink, getHandballBotUsername,
 } from './handballBot';
+import { paarungMitStand, ausgangWort } from './handballBotTexts';
 import type { HandballStandingRow } from './handballNetClient';
 import { siteCss, inhaltsHash, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS } from './handballSiteAssets';
 import { hatGruppenbild, portraits, istJugend } from './clubdesk';
@@ -124,9 +125,6 @@ function gegnerVon(m: HandballMatchView): string {
   return m.is_home ? m.away_name : m.home_name;
 }
 
-function eigeneTore(m: HandballMatchView): number | null {
-  return m.is_home ? m.score_home : m.score_away;
-}
 /** Punkte klassisch als Plus- und Minuspunkte („6:4"): je Niederlage zwei, je Unentschieden einer gegen. */
 function punkteText(r: HandballStandingRow): string {
   return `${r.points}:${2 * r.lost + r.drawn}`;
@@ -135,10 +133,6 @@ function punkteText(r: HandballStandingRow): string {
 /** Der Stand klassisch: Heimmannschaft zuerst, wie auf dem Spielberichtsbogen — null ohne Ergebnis. */
 function standHeimGast(m: HandballMatchView): string | null {
   return m.score_home !== null && m.score_away !== null ? `${m.score_home}:${m.score_away}` : null;
-}
-
-function gegnerTore(m: HandballMatchView): number | null {
-  return m.is_home ? m.score_away : m.score_home;
 }
 
 /** Statuswort auf Deutsch — die Quelle mischt Deutsch und Spanisch. */
@@ -1738,13 +1732,10 @@ export function renderFeedXml(team: HandballTeamView, baseUrl: string, now = new
   const name = vereinsName(team.name);
   for (const m of gespielt(team)) {
     const start = new Date(m.starts_at);
-    const eigene = eigeneTore(m)!; const gegner = gegnerTore(m)!;
-    const ausgang = m.won === true ? 'gewinnt' : m.won === false ? 'verliert' : 'spielt unentschieden';
-    const hz = m.halftime_home !== null && m.halftime_away !== null
-      ? ` · Halbzeit ${m.is_home ? m.halftime_home : m.halftime_away}:${m.is_home ? m.halftime_away : m.halftime_home}` : '';
+    const hz = m.halftime_home !== null && m.halftime_away !== null ? ` · Halbzeit ${m.halftime_home}:${m.halftime_away}` : '';
     items.push({
       guid: `result:${m.match_id}`,
-      title: `${name} ${ausgang} ${eigene}:${gegner}${m.rated ? ' (gewertet)' : ''} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`,
+      title: `${paarungMitStand(name, m, m.score_home, m.score_away)} · ${ausgangWort(m)}${m.rated ? ' (gewertet)' : ''}`,
       desc: `${DATUM_LANG.format(start)}${hz} · ${m.competition_name}${m.round ? `, ${m.round}. Spieltag` : ''}`,
       at: new Date(Math.min(now.getTime(), start.getTime() + 75 * 60 * 1000)),
       link: m.url,

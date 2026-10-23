@@ -183,7 +183,7 @@ export function bildSaison(team: HandballTeamView, now = new Date()): string | n
     goalsAgainst: gespielt.reduce((a, m) => a + andere(m), 0),
     points: zeile?.points ?? s * 2 + u,
     topScorer: koenig ? `${koenig.name} · ${koenig.goals} Tor${koenig.goals === 1 ? '' : 'e'}` : null,
-    biggestWin: bester && eigene(bester) > andere(bester) ? `${eigene(bester)}:${andere(bester)} ${bester.is_home ? 'gegen' : 'bei'} ${gegnerVon(bester)}` : null,
+    biggestWin: bester && eigene(bester) > andere(bester) ? `${bester.score_home}:${bester.score_away} ${bester.is_home ? 'gegen' : 'bei'} ${gegnerVon(bester)}` : null,
     positions: staffel ? positionHistory(staffel, team.team_id).map(p => ({ round: p.round, position: p.position })) : null,
     logo: logoDataUri(team.team_id),
     brand: bildMarke(),

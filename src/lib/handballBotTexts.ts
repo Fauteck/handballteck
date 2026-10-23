@@ -36,6 +36,26 @@ export function gegnerVon(m: HandballMatchView): string {
   return m.is_home ? m.away_name : m.home_name;
 }
 
+/** Ein Stand klassisch: Heimmannschaft zuerst, wie auf dem Spielberichtsbogen und der Seite. */
+export function standHeimGast(heim: number | null, gast: number | null): string {
+  return `${heim ?? '–'}:${gast ?? '–'}`;
+}
+
+/**
+ * Die Paarung klassisch mit Stand, Gastgeber vorn: „HV Erftstadt – HSG Wölfe
+ * Voreifel 25:20". Die eigene Mannschaft steht unter `eigenerName`, der
+ * Gegner unter dem Namen der Quelle. Unescaped — der Aufrufer escapt.
+ */
+export function paarungMitStand(eigenerName: string, m: HandballMatchView, heim: number | null, gast: number | null): string {
+  const gegner = gegnerVon(m);
+  return `${m.is_home ? eigenerName : gegner} – ${m.is_home ? gegner : eigenerName} ${standHeimGast(heim, gast)}`;
+}
+
+/** Der Ausgang aus Sicht der eigenen Mannschaft, als Wort. */
+export function ausgangWort(m: HandballMatchView): string {
+  return m.won === true ? 'Sieg' : m.won === false ? 'Niederlage' : 'Unentschieden';
+}
+
 export function wo(m: HandballMatchView): string {
   return m.round ? `${m.competition_name}, ${m.round}. Spieltag` : m.competition_name;
 }
@@ -60,7 +80,7 @@ export function gegnerSteckbrief(team: HandballTeamView, m: HandballMatchView, g
   const zeilen: string[] = [];
   const zeile = team.standings.flatMap(s => s.rows).find(r => r.teamId === gid);
   if (zeile) {
-    zeilen.push(`Gegner: ${zeile.position}. Platz · ${zeile.won}-${zeile.drawn}-${zeile.lost} · ${zeile.goalsFor}:${zeile.goalsAgainst} Tore · ${zeile.points} Pkt`);
+    zeilen.push(`Gegner: ${zeile.position}. Platz · ${zeile.won}-${zeile.drawn}-${zeile.lost} · ${zeile.goalsFor}:${zeile.goalsAgainst} Tore · ${zeile.points}:${2 * zeile.lost + zeile.drawn} Punkte`);
   }
   if (gegnerSpiele) {
     const letzte = gegnerSpiele
@@ -72,7 +92,7 @@ export function gegnerSteckbrief(team: HandballTeamView, m: HandballMatchView, g
         const eigene = heim ? g.scoreHome! : g.scoreAway!;
         const andere = heim ? g.scoreAway! : g.scoreHome!;
         const zeichen = eigene > andere ? '✅' : eigene < andere ? '❌' : '➖';
-        return `${zeichen} ${eigene}:${andere} ${heim ? 'gegen' : 'bei'} ${escapeHtml(heim ? g.awayName : g.homeName)}`;
+        return `${zeichen} ${g.scoreHome}:${g.scoreAway} ${heim ? 'gegen' : 'bei'} ${escapeHtml(heim ? g.awayName : g.homeName)}`;
       });
     if (letzte.length > 0) zeilen.push(`Zuletzt: ${letzte.join(' · ')}`);
   }
@@ -80,11 +100,7 @@ export function gegnerSteckbrief(team: HandballTeamView, m: HandballMatchView, g
   const duelle = team.matches.filter(h => h.match_id !== m.match_id && h.status === 'finished' && gegnerId(h) === gid
     && h.score_home !== null && h.score_away !== null);
   if (duelle.length > 0) {
-    const eintrag = duelle.map(h => {
-      const eigene = h.is_home ? h.score_home : h.score_away;
-      const andere = h.is_home ? h.score_away : h.score_home;
-      return `${eigene}:${andere} (${h.is_home ? 'H' : 'A'})`;
-    });
+    const eintrag = duelle.map(h => `${standHeimGast(h.score_home, h.score_away)} (${h.is_home ? 'H' : 'A'})`);
     zeilen.push(`${duelle.length === 1 ? 'Hinspiel' : 'Bisher'}: ${eintrag.join(' · ')}`);
   }
   return zeilen;
@@ -182,7 +198,7 @@ export function textHalbzeit(team: HandballTeamView, m: HandballMatchView, halbz
   const eigene = m.is_home ? halbzeit.home : halbzeit.away;
   const andere = m.is_home ? halbzeit.away : halbzeit.home;
   const lage = eigene > andere ? 'vorn' : eigene < andere ? 'hinten' : 'gleichauf';
-  return `⏸ <b>Halbzeit: ${escapeHtml(team.name)} ${eigene}:${andere}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} — ${lage}`;
+  return `⏸ <b>Halbzeit: ${escapeHtml(paarungMitStand(team.name, m, halbzeit.home, halbzeit.away))}</b> — ${lage}`;
 }
 
 export function textAenderung(team: HandballTeamView, m: HandballMatchView, c: HandballChangeView): string {
@@ -234,9 +250,7 @@ export function berichtGlaetten(text: string, m: HandballMatchView, championship
  * Bildschirme; der Knopf „Ganzer Bericht" (`cmd:bericht:voll`) holt den Rest.
  */
 export function textBericht(team: HandballTeamView, m: HandballMatchView, laenge: 'kurz' | 'voll' = 'voll'): string {
-  const eigene = m.is_home ? m.score_home : m.score_away;
-  const andere = m.is_home ? m.score_away : m.score_home;
-  const kopf = `📰 <b>Spielbericht: ${escapeHtml(team.name)} ${eigene ?? '–'}:${andere ?? '–'} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}</b>`;
+  const kopf = `📰 <b>Spielbericht: ${escapeHtml(paarungMitStand(team.name, m, m.score_home, m.score_away))}</b>`;
   const roh = berichtGlaetten(m.report_text ?? '', m, team.championship_name).split(/\n\n+/).map(a => a.trim()).filter(Boolean);
   let auswahl = roh;
   if (laenge === 'kurz') {
@@ -375,16 +389,13 @@ export interface EndstandExtras {
 }
 
 export function textEndstand(team: HandballTeamView, m: HandballMatchView, seite: HandballLineupSide | null, name: NameLookup = namenAus(team.team_id), extras: EndstandExtras = {}): string {
-  const eigene = m.is_home ? m.score_home : m.score_away;
-  const gegner = m.is_home ? m.score_away : m.score_home;
-  const stand = `${eigene ?? '–'}:${gegner ?? '–'}`;
-  const ohneStand = eigene === null || gegner === null;
-  const ausgang = ohneStand ? 'Spiel gewertet' : m.won === true ? 'gewinnt' : m.won === false ? 'verliert' : 'spielt unentschieden';
+  const ohneStand = m.score_home === null || m.score_away === null;
   const zusatz = m.rated ? ' (gewertet)' : '';
+  // Klassisch: Gastgeber vorn, dann der Ausgang aus Sicht der eigenen Mannschaft.
   const zeilen = [
     ohneStand
       ? `🏁 <b>${escapeHtml(team.name)}: Spiel gewertet</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}`
-      : `🏁 <b>${escapeHtml(team.name)} ${ausgang} ${stand}${zusatz}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}`,
+      : `🏁 <b>${escapeHtml(paarungMitStand(team.name, m, m.score_home, m.score_away))}</b> · ${ausgangWort(m)}${zusatz}`,
   ];
   if (m.rated) {
     zeilen.push(ohneStand
@@ -392,7 +403,7 @@ export function textEndstand(team: HandballTeamView, m: HandballMatchView, seite
       : `handball.net führt das Spiel als „${escapeHtml(m.status_name || m.status)}", aber mit Ergebnis — Abbruch oder Nichtantreten, von der Spielleitung gewertet.`);
   }
   if (m.halftime_home !== null && m.halftime_away !== null) {
-    zeilen.push(`Halbzeit ${m.is_home ? m.halftime_home : m.halftime_away}:${m.is_home ? m.halftime_away : m.halftime_home}`);
+    zeilen.push(`Halbzeit ${standHeimGast(m.halftime_home, m.halftime_away)}`);
   }
   const schuetzen = (seite?.players ?? []).filter(p => p.goals > 0).sort((a, b) => b.goals - a.goals || a.number - b.number);
   const wer = (p: { playerId: string; number: number }) => { const n = name(p.playerId); return n ? escapeHtml(n) : `Nr. ${p.number}`; };
@@ -440,7 +451,7 @@ export function textRekorde(team: HandballTeamView, spiele: HandballPlayerGame[]
   if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Spiel in dieser Saison — Rekorde gibt es ab dem ersten.`;
   const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
   const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
-  const wann = (m: HandballMatchView) => `${eigene(m)}:${andere(m)} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} (${datum(new Date(m.starts_at), now)})`;
+  const wann = (m: HandballMatchView) => `${standHeimGast(m.score_home, m.score_away)} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} (${datum(new Date(m.starts_at), now)})`;
   const nach = (f: (m: HandballMatchView) => number, richtung: 1 | -1) => [...gespielt].sort((a, b) => richtung * (f(b) - f(a)))[0];
   const zeilen = [`🏆 <b>${escapeHtml(team.name)}</b> — Rekorde der Saison`];
   const sieg = nach(m => eigene(m) - andere(m), 1);
@@ -456,7 +467,7 @@ export function textRekorde(team: HandballTeamView, spiele: HandballPlayerGame[]
     const eigeneHz = (m: HandballMatchView) => (m.is_home ? m.halftime_home! : m.halftime_away!);
     const andereHz = (m: HandballMatchView) => (m.is_home ? m.halftime_away! : m.halftime_home!);
     const beste = [...mitHz].sort((a, b) => (eigeneHz(b) - andereHz(b)) - (eigeneHz(a) - andereHz(a)))[0];
-    zeilen.push(`Beste erste Halbzeit: ${eigeneHz(beste)}:${andereHz(beste)} ${beste.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(beste))}`);
+    zeilen.push(`Beste erste Halbzeit: ${standHeimGast(beste.halftime_home, beste.halftime_away)} ${beste.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(beste))}`);
   }
   const bestes = spiele[0];
   if (bestes && bestes.goals > 0) {
@@ -517,7 +528,7 @@ export function textSaison(team: HandballTeamView): string {
     zeilen.push(`1. Halbzeit Ø ${komma(hz1.f)}:${komma(hz1.a)} · 2. Halbzeit Ø ${komma(hz2.f)}:${komma(hz2.a)}${basis}`);
   }
   if (bester && eigene(bester) > andere(bester)) {
-    zeilen.push(`Höchster Sieg: ${eigene(bester)}:${andere(bester)} ${bester.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(bester))}`);
+    zeilen.push(`Höchster Sieg: ${standHeimGast(bester.score_home, bester.score_away)} ${bester.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(bester))}`);
   }
   if (laengste > 1) zeilen.push(`Längste Siegesserie: ${laengste} Spiele${laufend === laengste ? ' — und sie läuft noch' : ''}`);
   else if (laufend === 1) zeilen.push('Das letzte Spiel gewonnen.');
@@ -531,11 +542,9 @@ export function textLive(team: HandballTeamView, m: HandballMatchView, events: H
   if (!events.latest || events.count === 0) {
     return `⏱ ${escapeHtml(team.name)} ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))} — die Torfolge ist noch leer, der Zeitnehmer hat noch nichts eingetragen.`;
   }
-  const eigene = m.is_home ? events.latest.home : events.latest.away;
-  const andere = m.is_home ? events.latest.away : events.latest.home;
   const minute = events.latestMinute ? `${events.latestMinute.split(':')[0].replace(/^0/, '')}. Minute` : null;
   const wo = [minute, events.latestBlock].filter(Boolean).join(', ');
-  return `⏱ <b>${escapeHtml(team.name)} ${eigene}:${andere}</b> ${m.is_home ? 'gegen' : 'bei'} ${escapeHtml(gegnerVon(m))}${wo ? ` — ${escapeHtml(wo)}` : ''}${events.halftime ? `\nHalbzeit ${m.is_home ? events.halftime.home : events.halftime.away}:${m.is_home ? events.halftime.away : events.halftime.home}` : ''}`;
+  return `⏱ <b>${escapeHtml(paarungMitStand(team.name, m, events.latest.home, events.latest.away))}</b>${wo ? ` — ${escapeHtml(wo)}` : ''}${events.halftime ? `\nHalbzeit ${standHeimGast(events.halftime.home, events.halftime.away)}` : ''}`;
 }
 
 /**
@@ -594,14 +603,12 @@ export function textErgebnisse(teams: HandballTeamView[], now = new Date(), schu
     if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Ergebnis in dieser Saison.`;
     const beste = schuetzen(team.team_id);
     const zeilen = gespielt.map(m => {
-      const eigene = m.is_home ? m.score_home : m.score_away;
-      const gegner = m.is_home ? m.score_away : m.score_home;
       const zeichen = m.won === true ? '✅' : m.won === false ? '❌' : '➖';
       const hz = m.halftime_home !== null && m.halftime_away !== null
-        ? ` (HZ ${m.is_home ? m.halftime_home : m.halftime_away}:${m.is_home ? m.halftime_away : m.halftime_home})` : '';
+        ? ` (HZ ${standHeimGast(m.halftime_home, m.halftime_away)})` : '';
       const b = beste.get(m.match_id);
       const bester = b ? ` · ${escapeHtml(b.name.split(' ').slice(-1)[0])} ${b.goals}` : '';
-      return `${zeichen} ${datum(new Date(m.starts_at), now)} ${m.is_home ? 'H' : 'A'} ${escapeHtml(gegnerVon(m))} ${eigene ?? '–'}:${gegner ?? '–'}${hz}${bester}`;
+      return `${zeichen} ${datum(new Date(m.starts_at), now)} ${m.is_home ? 'H' : 'A'} ${escapeHtml(gegnerVon(m))} ${standHeimGast(m.score_home, m.score_away)}${hz}${bester}`;
     });
     return `<b>${escapeHtml(team.name)}</b> — letzte Ergebnisse\n${zeilen.join('\n')}`;
   });
