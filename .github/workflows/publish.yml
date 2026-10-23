@@ -132,3 +132,116 @@ jobs:
           provenance: false
           cache-from: type=gha
           cache-to: type=gha,mode=min
+
+  # Ergebnis-Meldung an Home Assistant.
+  #
+  # Kein Gate, sondern das Bindeglied der Release-Kette: Home Assistant
+  # erfährt hier, ob der Dispatch durchgelaufen ist, und stößt danach den
+  # Portainer-Redeploy an (script.portainer_deploy, Health-Polling über das
+  # Image-Label). Portainer ist nur im LAN erreichbar, ein GitHub-Runner
+  # kann es nicht aufrufen — deshalb endet der Repo-Anteil hier.
+  #
+  # Läuft per `if: always()` auch dann, wenn ein Job rot ist, sonst gäbe
+  # es für den Fehlerpfad keine Meldung. `repository` in der Nutzlast ist
+  # der Schlüssel, mit dem Home Assistant den Portainer-Stack auswählt.
+  # Vorbild und Nutzlast-Vertrag: Repo Fauteck/todo, publish.yml (notify).
+  notify:
+    name: Ergebnis an Home Assistant melden
+    needs:
+      - quality
+      - build-and-push
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: Ergebnis zusammenfassen
+        id: summary
+        env:
+          RESULT_GATE: ${{ needs.quality.result }}
+          RESULT_BUILD: ${{ needs.build-and-push.result }}
+          GATES_ONLY: ${{ inputs.gates_only }}
+        run: |
+          set -euo pipefail
+
+          status=success
+          failed=''
+          images_published=false
+
+          # Fällt das Gate aus, ist der Build nur „skipped" und darf nicht
+          # als eigener Fehler gemeldet werden.
+          if [ "$RESULT_GATE" != 'success' ]; then
+            status=failure
+            failed='quality'
+          elif [ "$GATES_ONLY" = 'true' ]; then
+            : # Gates-Only-Lauf: Image wurde bewusst nicht gebaut.
+          elif [ "$RESULT_BUILD" != 'success' ]; then
+            status=failure
+            failed='build-and-push'
+          else
+            images_published=true
+          fi
+
+          # `gates_only` und `images_published` sind bewusst getrennt: ein
+          # grüner Gates-Only-Lauf ist ein Erfolg, darf aber KEINEN Deploy
+          # auslösen. Home Assistant prüft deshalb `images_published`.
+          jq -n \
+            --arg     status           "$status" \
+            --argjson gates_only       "${GATES_ONLY:-false}" \
+            --argjson images_published "$images_published" \
+            --arg     failed_jobs      "$failed" \
+            --arg     sha              "$GITHUB_SHA" \
+            --arg     sha_short        "${GITHUB_SHA::7}" \
+            --arg     ref              "$GITHUB_REF_NAME" \
+            --arg     repository       "$GITHUB_REPOSITORY" \
+            --arg     actor            "$GITHUB_ACTOR" \
+            --arg     run_id           "$GITHUB_RUN_ID" \
+            --arg     run_attempt      "$GITHUB_RUN_ATTEMPT" \
+            --arg     run_url          "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{
+              status:           $status,
+              gates_only:       $gates_only,
+              images_published: $images_published,
+              failed_jobs:      ($failed_jobs | split(",") | map(select(length > 0))),
+              sha:              $sha,
+              sha_short:        $sha_short,
+              ref:              $ref,
+              repository:       $repository,
+              actor:            $actor,
+              run_id:           $run_id,
+              run_attempt:      $run_attempt,
+              run_url:          $run_url
+            }' > payload.json
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### Meldung an Home Assistant"
+            echo
+            echo '```json'
+            cat payload.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Schlägt die Zustellung fehl, wird dieser Job rot — der Build-Job
+      # bleibt davon unberührt: Image ist veröffentlicht, nur die Kette steht.
+      - name: Webhook an Home Assistant senden
+        env:
+          HA_WEBHOOK_URL: ${{ secrets.HA_RELEASE_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HA_WEBHOOK_URL:-}" ]; then
+            echo "::notice::Secret HA_RELEASE_WEBHOOK_URL ist nicht gesetzt — die Meldung an Home Assistant wird übersprungen."
+            exit 0
+          fi
+
+          curl --fail-with-body --silent --show-error \
+               --retry 3 --retry-delay 5 --retry-connrefused \
+               --connect-timeout 10 --max-time 30 \
+               --request POST \
+               --header 'Content-Type: application/json' \
+               --data @payload.json \
+               "$HA_WEBHOOK_URL"
+
+          echo "::notice::Ergebnis (${{ steps.summary.outputs.status }}) an Home Assistant gemeldet."
