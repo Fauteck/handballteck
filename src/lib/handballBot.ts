@@ -1659,9 +1659,7 @@ function inlineUnterschrift(team: HandballTeamView, art: InlineArt): { beschreib
   }
   if (art === 'endstand' && team.last_match) {
     const m = team.last_match;
-    const eigene = m.is_home ? m.score_home : m.score_away;
-    const andere = m.is_home ? m.score_away : m.score_home;
-    const zeile = `${eigene}:${andere} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`;
+    const zeile = `${m.score_home}:${m.score_away} ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)}`;
     return { beschreibung: zeile, caption: `${kopf}\n${escapeHtml(zeile)}` };
   }
   const wettbewerb = wettbewerbVon(team);

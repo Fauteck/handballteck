@@ -20,7 +20,7 @@ delete process.env.TELEGRAM_INVITE_CODE;
 delete process.env.TELEGRAM_ADMIN_CHAT_IDS;
 delete process.env.TEAM_IDS;
 delete process.env.PRIMARY_COLOR; delete process.env.SECONDARY_COLOR; delete process.env.ACCENT_COLOR;
-delete process.env.SITE_URL; delete process.env.SITE_PLAYERS; delete process.env.SITE_ENABLED;
+delete process.env.SITE_URL; delete process.env.SITE_ENABLED;
 delete process.env.SITE_OPERATOR; delete process.env.SITE_FEEDBACK_MAIL;
 
 const TEAM = '96254';
@@ -477,7 +477,7 @@ describe('Meldungen', () => {
     const { deps, gesendet } = sammler();
     await bot.pushHandballBot(new Date(), deps);
     const text = gesendet.find(g => g.text.includes('🏁'))!.text;
-    expect(text).toContain('HSG Wölfe Voreifel gewinnt 30:22');
+    expect(text).toContain('HSG Wölfe Voreifel – HV Erftstadt 30:22</b> · Sieg');
     expect(text).toContain('Tore: Eskil Lieck 7 (1× 7m), Nr. 22 2');
     expect(text).toContain('handball.net/match/m1');
   });
@@ -493,7 +493,7 @@ describe('Meldungen', () => {
     await bot.pushHandballBot(new Date(), mitBild);
     expect(fotos).toHaveLength(1);
     expect(fotos[0].filename).toBe('endstand.png');
-    expect(fotos[0].caption).toContain('HSG Wölfe Voreifel gewinnt 30:22');
+    expect(fotos[0].caption).toContain('HSG Wölfe Voreifel – HV Erftstadt 30:22</b> · Sieg');
     expect(fotos[0].caption).toContain('Tore: Eskil Lieck 7');
     expect(fotos[0].png.subarray(0, 4)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     // Kein zweiter Text, wenn die Unterschrift passt.
@@ -546,9 +546,9 @@ describe('Zweite Runde: Halbzeit, Bericht, Verlegung, Route, Steckbrief', () => 
     await bot.pushHandballBot(new Date(), deps);
     expect(f.mock.calls.filter(c => String(c[0]).includes('team_id=96300'))).toHaveLength(1);
     const text = gesendet[0].text;
-    expect(text).toContain('Gegner: 2. Platz · 2-0-1 · 80:70 Tore · 4 Pkt');
-    expect(text).toContain('Zuletzt: ✅ 25:20 gegen TV X · ❌ 21:28 bei TV Y');
-    expect(text).toContain('Hinspiel: 22:30 (A)');
+    expect(text).toContain('Gegner: 2. Platz · 2-0-1 · 80:70 Tore · 4:2 Punkte');
+    expect(text).toContain('Zuletzt: ✅ 25:20 gegen TV X · ❌ 28:21 bei TV Y');
+    expect(text).toContain('Hinspiel: 30:22 (A)');
     const kb = gesendet[0].keyboard as { inline_keyboard: Array<Array<{ text: string; url: string }>> };
     expect(kb.inline_keyboard[0][0].url).toContain('google.com/maps/dir/?api=1&destination=50.6464842%2C6.831915');
     expect(kb.inline_keyboard[0][1].url).toContain('openstreetmap.org');
@@ -570,7 +570,7 @@ describe('Zweite Runde: Halbzeit, Bericht, Verlegung, Route, Steckbrief', () => 
     events.push({ block: ' 2. Halbzeit', event_type: { name: 'Tor', is_goal: true }, score: { local: 14, visitor: 12 } });
     await bot.pushHandballBot(new Date(), deps);
     const text = gesendet.find(g => g.text.includes('Halbzeit'))!.text;
-    expect(text).toContain('Halbzeit: HSG Wölfe Voreifel 13:12');
+    expect(text).toContain('Halbzeit: HSG Wölfe Voreifel – HV Erftstadt 13:12');
     expect(text).toContain('vorn');
     await bot.pushHandballBot(new Date(), deps);
     expect(gesendet.filter(g => g.text.includes('Halbzeit'))).toHaveLength(1);
@@ -588,7 +588,7 @@ describe('Zweite Runde: Halbzeit, Bericht, Verlegung, Route, Steckbrief', () => 
     const { deps, gesendet } = sammler();
     await bot.pushHandballBot(new Date(), deps);
     expect(gesendet.map(g => g.text.slice(0, 2))).toEqual(['🏁', '📰']);
-    expect(gesendet[1].text).toContain('<b>Spielbericht: HSG Wölfe Voreifel 30:22 gegen HV Erftstadt</b>');
+    expect(gesendet[1].text).toContain('<b>Spielbericht: HSG Wölfe Voreifel – HV Erftstadt 30:22</b>');
     expect(gesendet[1].text).toContain('<b>Erste Halbzeit</b>');
     expect(gesendet[1].text).toContain('Früh in Führung &amp; nie abgegeben.');
     expect(gesendet[1].text).toContain('Spielberichtsbogen (PDF)');
@@ -719,7 +719,7 @@ describe('Zweite Runde: Halbzeit, Bericht, Verlegung, Route, Steckbrief', () => 
     await bot.handleHandballUpdate(update('/rekorde'), mitBild);
     const r = gesendet[1].text;
     expect(r).toContain('Höchster Sieg: 30:22 gegen HV Erftstadt');
-    expect(r).toContain('Höchste Niederlage: 21:27 bei HV Erftstadt');
+    expect(r).toContain('Höchste Niederlage: 27:21 bei HV Erftstadt');
     expect(r).toContain('Meiste eigene Tore: 30:22 gegen HV Erftstadt');
     expect(r).toContain('Wenigste Gegentore: 30:22 gegen HV Erftstadt');
     expect(r).toContain('Torreichstes Spiel: 30:22 gegen HV Erftstadt');
@@ -974,7 +974,7 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
     dbRef.update(schemaRef.handball_team_match).set({ starts_at: new Date(Date.now() - 20 * 60 * 1000).toISOString() }).run();
     quelle({ '/events': { data: [{ minute: '19:30', block: ' 1. Halbzeit', event_type: { name: 'Tor' }, score: { local: 9, visitor: 8 } }] } });
     await bot.handleHandballUpdate(update('/live'), deps);
-    expect(gesendet[1].text).toContain('HSG Wölfe Voreifel 9:8');
+    expect(gesendet[1].text).toContain('HSG Wölfe Voreifel – HV Erftstadt 9:8');
     expect(gesendet[1].text).toContain('19. Minute, 1. Halbzeit');
   });
 
@@ -1238,7 +1238,7 @@ describe('Matchday-Optik', () => {
     expect(animationen).toHaveLength(1);
     expect(animationen[0]).toMatchObject({ chatId: '4711', filename: 'endstand.gif' });
     expect(animationen[0].gif.subarray(0, 6).toString('ascii')).toBe('GIF89a');
-    expect(animationen[0].caption).toContain('HSG Wölfe Voreifel gewinnt 30:22');
+    expect(animationen[0].caption).toContain('HSG Wölfe Voreifel – HV Erftstadt 30:22</b> · Sieg');
     expect(fotos).toEqual([{ chatId: '4712', filename: 'endstand.png' }]);
     expect(dbRef.select().from(schemaRef.handball_bot_delivery).all().filter(z => z.kind === 'endstand' && z.ok === 1)).toHaveLength(2);
     // Der Kapitän aus der Aufstellung steht im Kader.
@@ -1259,7 +1259,7 @@ describe('Wertung, Saisonkarte, Zeitzone im Betriebsstand', () => {
     await bot.pushHandballBot(new Date(), deps);
     const endstand = gesendet.filter(g => g.text.startsWith('🏁'));
     expect(endstand).toHaveLength(1);
-    expect(endstand[0].text).toContain('gewinnt 20:0 (gewertet)');
+    expect(endstand[0].text).toContain('20:0</b> · Sieg (gewertet)');
     expect(endstand[0].text).toContain('„Abgebrochen"');
     await bot.pushHandballBot(new Date(), deps);
     expect(gesendet.filter(g => g.text.startsWith('🏁'))).toHaveLength(1);

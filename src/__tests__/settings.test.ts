@@ -39,7 +39,6 @@ describe('Register', () => {
     expect(p('TELEGRAM_ADMIN_CHAT_IDS', '12, -100123, 12')).toEqual({ ok: true, wert: '12,-100123' });
     expect(p('SITE_FEEDBACK_MAIL', 'kein-at').ok).toBe(false);
     expect(p('SITE_OPERATOR', 'Zeile\nzwei').ok).toBe(false);
-    expect(p('SITE_PLAYERS', 'ja')).toEqual({ ok: true, wert: 'true' });
     expect(p('CLUBDESK_TEAMS', '75796=woelfe_1')).toEqual({ ok: true, wert: '75796=woelfe_1' });
     expect(p('CLUBDESK_TEAMS', 'x=y').ok).toBe(false);
     expect(p('SITE_PHOTOS', '75796=spieler+mannschaft; 96254=Mannschaft')).toEqual({ ok: true, wert: '75796=mannschaft+spieler,96254=mannschaft' });
@@ -86,7 +85,7 @@ describe('Einstellungsseite', () => {
 
   beforeEach(() => {
     sessions.__resetSettingsSessionsForTests();
-    store.speichere([{ key: 'CLUB_NAME', wert: null }, { key: 'SITE_PLAYERS', wert: null }, { key: 'SITE_PREVIEW_TOKEN', wert: null }], 'test');
+    store.speichere([{ key: 'CLUB_NAME', wert: null }, { key: 'SITE_PREVIEW_TOKEN', wert: null }], 'test');
     delete process.env.CLUB_NAME;
   });
 

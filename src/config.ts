@@ -222,10 +222,6 @@ export function siteEnabled(): boolean {
   return schalter('SITE_ENABLED', true);
 }
 
-export function sitePlayers(): boolean {
-  return schalter('SITE_PLAYERS', false);
-}
-
 /**
  * Die Wurzel, unter der ein Proxy die Seiten von außen ausliefert — ohne
  * Schrägstrich am Ende; null, wenn keine gesetzt oder unbrauchbar ist (dann

@@ -348,11 +348,12 @@ const ROW_LOGO = 26;
 const COLS = [
   { key: 'pos', label: '#', x: PAD + 30, align: 'end' as const },
   { key: 'name', label: 'Mannschaft', x: PAD + 46 + ROW_LOGO + 10, align: 'start' as const },
-  { key: 'played', label: 'Sp', x: 530, align: 'end' as const },
-  { key: 'sun', label: 'S-U-N', x: 606, align: 'end' as const },
-  { key: 'goals', label: 'Tore', x: 692, align: 'end' as const },
-  { key: 'diff', label: 'Diff.', x: 742, align: 'end' as const },
-  { key: 'points', label: 'Pkt', x: WIDTH - PAD, align: 'end' as const },
+  { key: 'played', label: 'Sp', x: 480, align: 'end' as const },
+  { key: 'sun', label: 'S-U-N', x: 556, align: 'end' as const },
+  { key: 'goals', label: 'Tore', x: 646, align: 'end' as const },
+  { key: 'diff', label: 'Diff.', x: 706, align: 'end' as const },
+  // Punkte klassisch als Plus:Minus („32:4") — je Niederlage zwei, je Unentschieden einer gegen.
+  { key: 'points', label: 'Pkt.', x: WIDTH - PAD, align: 'end' as const },
 ];
 /** Wie breit der Name werden darf, bevor er gekürzt wird. */
 const NAME_MAX_WIDTH = COLS[2].x - 40 - COLS[1].x;
@@ -434,7 +435,7 @@ export function renderStandingsSvg(input: StandingsImageInput): string {
       sun: `${r.won}-${r.drawn}-${r.lost}`,
       goals: `${r.goalsFor}:${r.goalsAgainst}`,
       diff: r.goalsDiff > 0 ? `+${r.goalsDiff}` : String(r.goalsDiff),
-      points: String(r.points),
+      points: `${r.points}:${2 * r.lost + r.drawn}`,
     };
     for (const c of COLS) {
       const nachzuholen = c.key === 'played' && r.played < meisteSpiele;
