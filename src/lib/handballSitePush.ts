@@ -36,7 +36,7 @@ import {
   textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung,
   LEADS, type Lead, type Mode,
 } from './handballBot';
-import { siteConfig, naechstesWochenende } from './handballSite';
+import { siteConfig, naechstesWochenende, SITE_TITEL } from './handballSite';
 import { serviceLog } from './serviceLogger';
 
 /** Ein Endstand, der älter ist, wird nur gemerkt — beim ersten Lauf nicht die ganze Saison nachliefern. */
@@ -266,7 +266,7 @@ export function themenText(abo: Pick<SiteSubscriber, 'topics' | 'lead'>): string
 export async function sendSiteWelcome(abo: SiteSubscriber, team: HandballTeamView | null, deps: SitePushDeps = DEFAULT_DEPS): Promise<boolean> {
   const club = abo.team_id === CLUB;
   return zustellen(abo, {
-    title: `${club ? 'Wölfe im Revier' : team ? vereinsName(team.name) : 'Handball'}: Benachrichtigungen an`,
+    title: `${club ? SITE_TITEL : team ? vereinsName(team.name) : 'Handball'}: Benachrichtigungen an`,
     body: `Du bekommst ${club ? 'zu allen Heimspielen' : 'ab jetzt'}: ${themenText(abo)}.`,
     tag: 'handball-welcome',
     url: './',

@@ -633,6 +633,9 @@ interface RawEvent {
   block?: string | null;
   event_type?: { id?: number; name?: string; is_goal?: boolean } | null;
   score?: { local?: number | null; visitor?: number | null } | null;
+  /** Wer das Ereignis hatte — bei Jugendspielen mit `*` statt Namen, die ID ist trotzdem da. */
+  player?: { id?: string | number | null; number?: number | string | null } | null;
+  is_home?: boolean | null;
 }
 
 /** Die Spielminute eines Ereignisses über beide Halbzeiten — null, wenn die Quelle keine nennt. */
@@ -693,6 +696,11 @@ export interface HandballMatchEventItem {
   goal: boolean;
   /** „1. Halbzeit" / „2. Halbzeit", wie die Quelle den Block nennt (getrimmt). */
   block: string;
+  /** Der Werfer: Spieler-ID (die Brücke zum Kader, siehe `fetchRoster`) und Rückennummer. Fehlt bei älteren gespeicherten Ständen. */
+  player_id?: string | null;
+  number?: number | null;
+  /** Gehört das Ereignis der Heimmannschaft? null, wenn die Quelle es nicht sagt. */
+  is_home?: boolean | null;
 }
 
 /** Die rohe Torfolge in die Liste für den Spielverlauf bringen — nur Ereignisse mit Stand. */
@@ -707,6 +715,9 @@ export function torfolgeAus(events: RawEvent[]): HandballMatchEventItem[] {
       away: e.score.visitor,
       goal: e.event_type?.is_goal === true,
       block,
+      player_id: e.player?.id !== null && e.player?.id !== undefined && e.player.id !== '' ? String(e.player.id) : null,
+      number: e.player?.number !== null && e.player?.number !== undefined && e.player.number !== '' && Number.isFinite(Number(e.player.number)) ? Number(e.player.number) : null,
+      is_home: typeof e.is_home === 'boolean' ? e.is_home : null,
     });
   }
   return out;

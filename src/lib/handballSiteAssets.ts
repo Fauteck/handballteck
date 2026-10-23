@@ -124,6 +124,10 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .live .tore-gross{font-family:'Barlow Condensed',sans-serif;font-size:3.4rem;font-weight:700;line-height:1}
 .livetore{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:4px;font-size:1rem}
 .livetore .min{display:inline-block;min-width:2.4em;opacity:.7}
+.livetore .werfer{opacity:.8}
+.livetore li.eigen{font-weight:600}
+.plan .stumm{margin-top:6px;padding:4px 10px;border-radius:999px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-size:.85rem;cursor:pointer;opacity:.85}
+.plan .stumm[aria-pressed="false"]{opacity:.55}
 .result .stand{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:700;line-height:1}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -930,14 +934,57 @@ export const SITE_APP_JS = `(function () {
       var out = {};
       Array.prototype.forEach.call(wurzel.querySelectorAll('#naechstes [data-stand], #live [data-stand]'), function (el, i) {
         var m = /^(\\d+):(\\d+)$/.exec(el.getAttribute('data-stand') || '');
-        if (m) out[el.getAttribute('data-key') || String(i)] = { label: el.getAttribute('data-label') || '', eigene: +m[1], gegner: +m[2], text: m[0] };
+        // Der Stand steht klassisch als Heim:Gast; data-heim sagt, welche Seite die eigene ist.
+        var heim = el.getAttribute('data-heim') !== '0';
+        if (m) out[el.getAttribute('data-key') || String(i)] = { label: el.getAttribute('data-label') || '', eigene: heim ? +m[1] : +m[2], gegner: heim ? +m[2] : +m[1], text: m[0] };
       });
       return out;
     };
+    // Was dieses Gerät meldet: Vibration an/aus und welche Mannschaften stumm sind — nur im Browser gemerkt.
+    var merkLesen = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    var merkSchreiben = function (k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
+    var vibrationAn = function () { return merkLesen('hb-vibration') !== 'aus'; };
+    var stummeTeams = function () { return (merkLesen('hb-stumm') || '').split(',').filter(Boolean); };
+    var steuerungAnwenden = function () {
+      var an = vibrationAn();
+      var kannVibrieren = typeof navigator.vibrate === 'function';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-vibration]'), function (b) {
+        b.hidden = !kannVibrieren;
+        b.setAttribute('aria-pressed', an ? 'true' : 'false');
+        b.textContent = an ? '📳 Vibration an' : '📴 Vibration aus';
+      });
+      var stumm = stummeTeams();
+      var knoepfe = document.querySelectorAll('[data-stumm]');
+      Array.prototype.forEach.call(knoepfe, function (b) {
+        var aus = stumm.indexOf(b.getAttribute('data-stumm')) >= 0;
+        b.hidden = knoepfe.length < 2;
+        b.setAttribute('aria-pressed', aus ? 'false' : 'true');
+        b.textContent = aus ? '🔕 Tore stumm' : '🔔 Tore melden';
+      });
+      var stummHinweis = document.querySelector('[data-stumm-hinweis]');
+      if (stummHinweis) stummHinweis.hidden = knoepfe.length < 2;
+    };
+    document.addEventListener('click', function (ev) {
+      var ziel = ev.target && ev.target.closest ? ev.target.closest('[data-vibration], [data-stumm]') : null;
+      if (!ziel) return;
+      if (ziel.hasAttribute('data-vibration')) {
+        merkSchreiben('hb-vibration', vibrationAn() ? 'aus' : null);
+      } else {
+        var id = ziel.getAttribute('data-stumm');
+        var liste = stummeTeams();
+        var pos = liste.indexOf(id);
+        if (pos >= 0) liste.splice(pos, 1); else liste.push(id);
+        merkSchreiben('hb-stumm', liste.length ? liste.join(',') : null);
+      }
+      steuerungAnwenden();
+    });
+    steuerungAnwenden();
     var torHinweis = function (alt, neu) {
       var zeilen = [];
       var eigenes = false;
+      var stumm = stummeTeams();
       Object.keys(neu).forEach(function (k) {
+        if (stumm.indexOf(k) >= 0) return;
         var a = alt[k], n = neu[k];
         if (!a || (a.eigene === n.eigene && a.gegner === n.gegner)) return;
         var tor = n.eigene > a.eigene;
@@ -949,7 +996,7 @@ export const SITE_APP_JS = `(function () {
       hinweis.hidden = false;
       clearTimeout(hinweisTimer);
       hinweisTimer = setTimeout(function () { hinweis.hidden = true; }, 6000);
-      try { if (navigator.vibrate) navigator.vibrate(eigenes ? [120, 80, 120] : [220]); } catch (e) {}
+      try { if (navigator.vibrate && vibrationAn()) navigator.vibrate(eigenes ? [120, 80, 120] : [220]); } catch (e) {}
     };
     // Der Stand im Tab-Titel: Wer in einem anderen Tab ist, sieht ihn in der Tab-Leiste.
     var titelOriginal = document.title;
@@ -988,6 +1035,7 @@ export const SITE_APP_JS = `(function () {
           var planAlt = document.getElementById('spielplan');
           if (planNeu && planAlt && !planAlt.querySelector('details[open]')) { planAlt.replaceWith(planNeu); planAnwenden(); klappenAnwenden(); }
           countdown();
+          steuerungAnwenden();
           titelSetzen();
           if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); titelSetzen(); }
         })

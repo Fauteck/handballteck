@@ -149,7 +149,7 @@ describe('Handball-Microsite', () => {
     expect(html).toContain('<b class="a">1.<small>von 2</small></b><span>Platz</span>');
     expect(html.match(/<div class="stat">/g)).toHaveLength(3);
     expect(html).toContain('<div><dt>Siege · Unent. · Niederl.</dt><dd>1-0-1</dd></div>');
-    expect(html).toContain('<div><dt>Punkte</dt><dd>2<small>2 Sp.</small></dd></div>');
+    expect(html).toContain('<div><dt>Punkte</dt><dd>2:2<small>2 Sp.</small></dd></div>');
     expect(html).toContain('In 7 Tagen');
     // Die Wege: Icons im Kopf unter „Team-Infos nicht verpassen" (Glocke, Kalender, Feed), kein Telegram, solange kein Bot registriert ist.
     expect(html).toContain('id="verpassen-titel">Team-Infos nicht verpassen</span>');
@@ -217,13 +217,13 @@ describe('Handball-Microsite', () => {
       let html = (await get(`/${TEAM}/`)).body;
       // Steckbrief: Tabellenzeile, letzte Ergebnisse des Gegners (ohne das anstehende Spiel), Direktvergleich aus den eigenen Spielen.
       expect(html).toContain('<div class="gegner">');
-      expect(html).toContain('2. Platz · 1-0-1 · 47:55 Tore · 2 Pkt');
-      expect(html).toContain('22:30 bei HSG Wölfe Voreifel · 31:20 gegen TV Palmersheim II');
-      expect(html).toContain('<span class="lbl">Bisher</span><span class="res">30:22 (H) · 20:25 (A)</span>');
+      expect(html).toContain('2. Platz · 1-0-1 · 47:55 Tore · 2:2 Punkte');
+      expect(html).toContain('30:22 bei HSG Wölfe Voreifel · 31:20 gegen TV Palmersheim II');
+      expect(html).toContain('<span class="lbl">Bisher</span><span class="res">30:22 (H) · 25:20 (A)</span>');
       // Spielverlauf ohne Namen: immer; der Text des Spielberichts steht nie auf der Seite.
       expect(html).toContain('<summary>Spielverlauf</summary>');
       expect(html).toContain('aria-label="Spielverlauf: Führung je Spielminute"');
-      expect(html).toContain('HZ 10:12');
+      expect(html).toContain('HZ 12:10');
       expect(html).toContain('<b>1:1</b> (4.)');
       expect(html).not.toContain('Eskil Lieck traf');
       setConfig({ site_enabled: 'true', site_players: 'true' });
@@ -264,17 +264,17 @@ describe('Handball-Microsite', () => {
       expect(wurzel.statusCode).toBe(200);
       // Kopf wie auf der Mannschaftsseite: Vereinsname oben, dann die Kästen, darunter der Titel.
       expect(wurzel.body).toContain('<div class="verein"><a class="heim titel" href="./"><span class="kicker">HSG Wölfe Voreifel</span></a></div>');
-      expect(wurzel.body).toContain('<div class="teaminfo">\n    <h1>Wölfe im Revier</h1>');
+      expect(wurzel.body).toContain('<div class="teaminfo">\n    <h1>Wölfe live - Handball im Revier</h1>');
       // Installierbar: Manifest und Service Worker an der Wurzel, Dateien von der ersten Mannschaft.
       expect(wurzel.body).toContain('<link rel="manifest" href="./manifest.webmanifest">');
-      expect(wurzel.body).toContain('<meta name="apple-mobile-web-app-title" content="Wölfe im Revier">');
+      expect(wurzel.body).toContain('<meta name="apple-mobile-web-app-title" content="Wölfe live">');
       expect(wurzel.body).toContain('<dialog class="popup" id="installieren"');
       expect(wurzel.body).toContain('href="./?installieren=1"');
       expect(wurzel.body).toContain('id="verpassen-titel">Alle Infos nicht verpassen</span>');
-      expect(wurzel.body).toContain('<h2 id="installieren-titel">Wölfe im Revier als App installieren</h2>');
+      expect(wurzel.body).toContain('<h2 id="installieren-titel">Wölfe live - Handball im Revier als App installieren</h2>');
       const manifest = await get('/manifest.webmanifest');
       expect(manifest.statusCode).toBe(200);
-      expect(manifest.json()).toMatchObject({ name: 'Wölfe im Revier', start_url: './', scope: './', display: 'standalone' });
+      expect(manifest.json()).toMatchObject({ name: 'Wölfe live - Handball im Revier', start_url: './', scope: './', display: 'standalone' });
       expect(manifest.json().icons[0].src).toBe('./96254/logo-192.png');
       expect((await get('/sw.js')).headers['content-type']).toContain('javascript');
       // Kopf der Mannschaftsseite: Vereinsname klein darüber, die Mannschaft als Titel.
@@ -719,6 +719,24 @@ describe('Handball-Microsite', () => {
     expect(naechstesWochenende(new Date('2026-10-19T00:30:00+02:00'))).toEqual({ fr: '2026-10-23', sa: '2026-10-24', so: '2026-10-25' });
   });
 
+  it('springt in den Ferien zum nächsten Spieltag und zeigt danach das letzte gespielte Wochenende', async () => {
+    const { spielWochenende, letztesSpielWochenende } = await import('../lib/handballSite');
+    const { handballOverview } = await import('../lib/handballTeam');
+    const vorlage = handballOverview().teams[0].matches[0];
+    const spiel = (start: string, status: string, a: number | null = null, b: number | null = null) =>
+      ({ ...vorlage, starts_at: start, status, score_home: a, score_away: b, rated: false });
+    const montag = new Date('2026-10-19T10:00:00+02:00');
+    // Herbstferien: Das kommende Wochenende ist leer, ein Mittwochsspiel zählt nicht — das nächste Spiel ist am 7.11.
+    const ferien = [spiel('2026-10-28T19:00:00+01:00', 'scheduled'), spiel('2026-11-07T15:00:00+01:00', 'scheduled'), spiel('2026-11-14T15:00:00+01:00', 'scheduled')];
+    expect(spielWochenende(ferien, montag)).toEqual({ fr: '2026-11-06', sa: '2026-11-07', so: '2026-11-08' });
+    // Spielt jemand am kommenden Wochenende, bleibt es dabei.
+    expect(spielWochenende([...ferien, spiel('2026-10-25T11:00:00+01:00', 'scheduled')], montag)).toEqual({ fr: '2026-10-23', sa: '2026-10-24', so: '2026-10-25' });
+    // Ergebnisse: das letzte Wochenende mit einem Ergebnis vor dem gezeigten, auch wenn es drei Wochen her ist.
+    const gespielt = [spiel('2026-09-27T15:00:00+02:00', 'finished', 25, 20), spiel('2026-10-03T15:00:00+02:00', 'finished', 20, 21)];
+    expect(letztesSpielWochenende(gespielt, { fr: '2026-10-23', sa: '2026-10-24', so: '2026-10-25' })).toEqual({ fr: '2026-10-02', sa: '2026-10-03', so: '2026-10-04' });
+    expect(letztesSpielWochenende([], { fr: '2026-10-23', sa: '2026-10-24', so: '2026-10-25' })).toEqual({ fr: '2026-10-16', sa: '2026-10-17', so: '2026-10-18' });
+  });
+
   it('zeigt auf der Startseite Heim- und Auswärtsspiele von Freitag bis Sonntag in sortierbaren Tabellen mit Halle', async () => {
     const { renderStartHtml } = await import('../lib/handballSite');
     const { handballOverview } = await import('../lib/handballTeam');
@@ -807,9 +825,54 @@ describe('Handball-Microsite', () => {
       // Neueste zuerst; das Tor der Gäste ist der Gegenseite zugeschrieben.
       expect(html).toContain('Tor für HV Erftstadt · <b>5:4</b>');
       expect(html.indexOf('5:4</b>')).toBeLessThan(html.indexOf('1:0</b>'));
-      expect(html.match(/<li><span class="min">/g)?.length).toBe(9);
+      expect(html.match(/<li(?: class="eigen")?><span class="min">/g)?.length).toBe(9);
+      expect(html).toContain('data-heim="1"');
+      expect(html).toContain('data-vibration');
     } finally {
       db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(), live_payload: null }).where(eq(schema.handball_team_match.id, id)).run();
+    }
+  });
+
+  it('nennt im Live-Ticker den Werfer: Namen aus dem Kader nur mit Spielernamen, sonst die Rückennummer', async () => {
+    const id = `${TEAM}:m3`;
+    const items = [
+      { minute: 2, home: 1, away: 0, goal: true, block: '1. Halbzeit', player_id: 'p1', number: 7, is_home: true },
+      { minute: 4, home: 1, away: 1, goal: true, block: '1. Halbzeit', player_id: 'x9', number: 11, is_home: false },
+    ];
+    db.insert(schema.handball_roster).values({ id: `${TEAM}:p1`, team_id: TEAM, player_id: 'p1', first_name: 'Erika', last_name: 'Muster', number: 7, role: 'player', season_id: 2627, updated_at: new Date().toISOString() }).run();
+    db.update(schema.handball_team_match).set({
+      starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+      live_payload: JSON.stringify({ fetched_at: new Date().toISOString(), home: 1, away: 1, minute: '04:10', block: '1. Halbzeit', halftime: null, items }),
+    }).where(eq(schema.handball_team_match.id, id)).run();
+    try {
+      const ohne = (await get(`/${TEAM}/`)).body;
+      expect(ohne).toContain('Tor für HSG Wölfe Voreifel <span class="werfer">(Nr. 7)</span> · <b>1:0</b>');
+      expect(ohne).toContain('Tor für HV Erftstadt <span class="werfer">(Nr. 11)</span> · <b>1:1</b>');
+      expect(ohne).not.toContain('Erika Muster');
+      setConfig({ site_enabled: 'true', site_players: 'true' });
+      const mit = (await get(`/${TEAM}/`)).body;
+      expect(mit).toContain('<li class="eigen"><span class="min">2.</span> Tor für HSG Wölfe Voreifel <span class="werfer">(Erika Muster)</span>');
+      expect(mit).toContain('<span class="werfer">(Nr. 11)</span>');
+    } finally {
+      db.delete(schema.handball_roster).run();
+      db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(), live_payload: null }).where(eq(schema.handball_team_match.id, id)).run();
+    }
+  });
+
+  it('zeigt auswärts live den Stand Heim:Gast mit dem Gastgeber links', async () => {
+    const id = `${TEAM}:m2`;
+    const alt = db.select().from(schema.handball_team_match).where(eq(schema.handball_team_match.id, id)).get()!;
+    db.update(schema.handball_team_match).set({
+      starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(), status: 'scheduled', score_home: null, score_away: null,
+      live_payload: JSON.stringify({ fetched_at: new Date().toISOString(), home: 3, away: 1, minute: '06:00', block: '1. Halbzeit', halftime: null, items: [] }),
+    }).where(eq(schema.handball_team_match.id, id)).run();
+    db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 9 * 24 * 3600 * 1000).toISOString() }).where(eq(schema.handball_team_match.id, `${TEAM}:m3`)).run();
+    try {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).toMatch(/data-stand="3:1" data-heim="0">\s*<span class="seite">HV Erftstadt<\/span>\s*<b class="tore-gross">3:1<\/b>\s*<span class="seite">HSG Wölfe Voreifel<\/span>/);
+    } finally {
+      db.update(schema.handball_team_match).set({ starts_at: alt.starts_at, status: alt.status, score_home: alt.score_home, score_away: alt.score_away, live_payload: null }).where(eq(schema.handball_team_match.id, id)).run();
+      db.update(schema.handball_team_match).set({ starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString() }).where(eq(schema.handball_team_match.id, `${TEAM}:m3`)).run();
     }
   });
 
@@ -856,9 +919,9 @@ describe('Handball-Microsite', () => {
       const html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('data-ansicht="kalender"');
       expect(html).toContain('<div class="kal" data-kalender>');
-      // m1: Heimsieg 30:22 vor einer Woche, m2: Auswärtsniederlage 20:25, m3: kommendes Heimspiel.
+      // m1: Heimsieg 30:22 vor einer Woche, m2: Auswärtsniederlage 20:25 — klassisch Heim:Gast, also 25:20.
       expect(html).toMatch(/<a class="chip heim w" href="\.\/spiel\/m1"[^>]*>H 30:22<\/a>/);
-      expect(html).toMatch(/<a class="chip aus l" href="\.\/spiel\/m2"[^>]*>A 20:25<\/a>/);
+      expect(html).toMatch(/<a class="chip aus l" href="\.\/spiel\/m2"[^>]*>A 25:20<\/a>/);
       expect(html).toMatch(/<span class="chip heim"[^>]*>H \d\d:\d\d<\/span>/);
       expect(html).toContain('data-monat-weiter');
       const js = (await get(`/${TEAM}/app.js`)).body;
@@ -912,7 +975,7 @@ describe('Handball-Microsite', () => {
     it('baut den Kopf der Startseite wie den der Mannschaftsseite: Logo und Verein oben, Kästen, darunter der Titel', async () => {
       const html = (await get('/')).body;
       expect(html.indexOf('class="verein"')).toBeLessThan(html.indexOf('class="kaesten flach'));
-      expect(html.indexOf('class="kaesten flach')).toBeLessThan(html.indexOf('<h1>Wölfe im Revier</h1>'));
+      expect(html.indexOf('class="kaesten flach')).toBeLessThan(html.indexOf('<h1>Wölfe live - Handball im Revier</h1>'));
     });
 
     it('sagt im Dialog, dass Verein und Mannschaft gleichzeitig gehen, und zeigt die Live-Ansicht schon vorher an', async () => {
@@ -1146,7 +1209,7 @@ describe('Handball-Microsite', () => {
       expect(res.json().topics).toEqual(['upcoming', 'result', 'preview', 'halftime']);
       expect(sitePush.listClubSubscribers()).toHaveLength(1);
       await new Promise(r => setTimeout(r, 10));
-      expect(sendPush.mock.calls.at(-1)![1].title).toContain('Wölfe im Revier');
+      expect(sendPush.mock.calls.at(-1)![1].title).toContain('Wölfe live - Handball im Revier');
       expect(sendPush.mock.calls.at(-1)![1].body).toContain('zu allen Heimspielen');
 
       sitePush.resetSiteSent();
