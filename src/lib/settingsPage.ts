@@ -875,20 +875,17 @@ export const SETTINGS_JS = String.raw`(function () {
       return;
     }
     var liste = el('ul');
-    var spieler = false;
     Object.keys(geaendert).forEach(function (k) {
       var g = geaendert[k], f = g.f;
       var neu;
       if (g.wert === null) neu = 'auf die Umgebung zurück' + (f.art === 'geheim' ? '' : ' (' + wertText(f, f.umgebungWert) + ')');
       else if (f.art === 'geheim') neu = g.entfernen ? 'wird entfernt' : 'neuer Wert';
       else neu = wertText(f, rohFuerServer(g));
-      if (k === 'SITE_PLAYERS' && g.wert === 'true') spieler = true;
       liste.appendChild(el('li', null, el('strong', { text: f.label + ': ' }), el('span', { class: 'alt', text: wertText(f, f.art === 'geheim' ? (f.gesetzt ? 'x' : '') : f.wert) }), ' → ', el('span', { text: neu })));
     });
     var dlg = el('dialog', { 'aria-labelledby': 'dlg_t' },
       el('h2', { id: 'dlg_t', text: anzahl() === 1 ? 'Diese Änderung speichern?' : 'Diese ' + anzahl() + ' Änderungen speichern?' }),
       liste,
-      spieler ? el('p', { class: 'warn', text: 'Spielernamen werden öffentlich gezeigt — bei Jugendmannschaften auch Namen von Kindern.' }) : null,
       el('div', { class: 'zeile', style: 'justify-content:flex-end' },
         el('button', { type: 'button', text: 'Abbrechen', onclick: function () { dlg.close(); } }),
         el('button', { type: 'button', class: 'primary', text: 'Speichern', onclick: function () { dlg.close(); speichern(); } })));

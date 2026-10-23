@@ -8,8 +8,8 @@
  * Was den offenen Zugang vertretbar macht:
  * - Die Seite antwortet nur mit `SITE_ENABLED`; sonst 404 für alles, ohne zu
  *   unterscheiden, ob es die Mannschaft gibt.
- * - Die Daten sind die, die handball.net jedem zeigt; Spielernamen nur mit
- *   `SITE_PLAYERS`.
+ * - Die Daten sind die, die handball.net jedem zeigt; Spielernamen aus dem
+ *   Kader stehen dort ebenso (Freigabe des Vereins vom 2026-10-23).
  * - Die Bilder kommen aus einem Cache, die Routen sind gedrosselt — sonst
  *   wäre der Bild-Generator eine offene Rechenlast.
  * - Die Push-Anmeldung speichert nur den Endpoint des Browsers; wer ihn
@@ -35,11 +35,11 @@ import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
   sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode, bereinigeThemen, CLUB, type SiteSubscriber,
 } from '../lib/handballSitePush';
-import { readPalette, handballOverview } from '../lib/handballTeam';
+import { readPalette, handballOverview, mitLabelsInSpielen } from '../lib/handballTeam';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
 import { isPushServiceUrl } from '../lib/ssrf';
-import { sitePushMax, sitePreviewToken, sitePlayers } from '../config';
+import { sitePushMax, sitePreviewToken } from '../config';
 
 const APP_JS_HASH = inhaltsHash(SITE_APP_JS);
 const THEME_JS_HASH = inhaltsHash(SITE_THEME_JS);
@@ -115,7 +115,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
    * Schrägstrich (die Wurzel hat ihn immer).
    */
   fastify.get('/', limit(60), async (_request, reply) => {
-    const sicht = handballOverview();
+    const sicht = mitLabelsInSpielen(handballOverview());
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
     const html = renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/`, stand: sicht.updated_at, pushEnabled: sitePushConfig().enabled });
@@ -129,7 +129,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
 
   // Das Wochenende als Bild zum Weiterschicken — ein Cache-Eintrag je Wochenende, wie die Bilder der Mannschaften.
   fastify.get('/bild/wochenende.png', limit(30), async (_request, reply) => {
-    const sicht = handballOverview();
+    const sicht = mitLabelsInSpielen(handballOverview());
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
     const png = await wochenendePng(sicht.teams, sicht.updated_at);
@@ -163,7 +163,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     if (!t) return nichtDa(reply);
     const vorschau = vorschauAus(request.query);
     const html = renderSiteHtml(t.team, {
-      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
+      baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
     });
     // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
     const live = istLiveFenster(t.team.next_match);
@@ -180,7 +180,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const t = freigegeben(request.params.teamId);
     if (!t || !/^[\w-]{1,64}$/.test(request.params.matchId)) return nichtDa(reply);
     const html = renderSpielHtml(t.team, request.params.matchId, {
-      players: t.cfg.players, baseUrl: t.cfg.baseUrl, pushEnabled: false, stand: t.stand, teams: mannschaftswahl(),
+      baseUrl: t.cfg.baseUrl, pushEnabled: false, stand: t.stand, teams: mannschaftswahl(),
     });
     if (!html) return nichtDa(reply);
     const live = t.team.matches.find(m => m.match_id === request.params.matchId)?.is_live === true;
@@ -212,7 +212,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const wer = /^(gruppe|\d{1,12})\.jpg$/.exec(request.params.wer)?.[1];
     if (!wer) return nichtDa(reply);
     const vorschau = vorschauAus(request.query) !== null;
-    if (!fotoFreigegeben(t.team, wer, sitePlayers(), vorschau)) return nichtDa(reply);
+    if (!fotoFreigegeben(t.team, wer, vorschau)) return nichtDa(reply);
     const jpeg = fotoJpeg(t.team.team_id, wer);
     if (!jpeg) return nichtDa(reply);
     return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', vorschau ? 'private, max-age=3600' : 'public, max-age=3600').header('X-Robots-Tag', 'noindex').send(jpeg);
@@ -261,7 +261,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
     const art = /^([a-z]+)\.png$/.exec(request.params.datei)?.[1] ?? '';
-    if (!istBildArt(art, t.cfg.players)) return nichtDa(reply);
+    if (!istBildArt(art)) return nichtDa(reply);
     const match = typeof request.query.match === 'string' && /^[\w-]{1,64}$/.test(request.query.match) ? request.query.match : null;
     const png = await siteImagePng(t.team, art, art === 'endstand' ? match : null, t.stand);
     if (!png) return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });

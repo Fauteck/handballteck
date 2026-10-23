@@ -1497,6 +1497,28 @@ export function automatischeBereiche(): Record<string, HandballGroup | null> {
 }
 
 /**
+ * Für die Microsite: In Spielen heißen die eigenen Mannschaften wie überall auf
+ * der Seite — unter ihrem Label („D1 (RTV)"), nicht unter dem Vereinsnamen mit
+ * der Ziffer der Quelle („Wölfe Voreifel II"); auch als Gegner einer anderen
+ * eigenen. Bot, Kalender des Bots und `/api` behalten den Vereinsnamen, denn
+ * dort fehlt der Zusammenhang der Seite. Ändert die übergebene Sicht.
+ */
+export function mitLabelsInSpielen(sicht: HandballOverview): HandballOverview {
+  const labelVon = new Map(sicht.teams.map(v => [v.team_id, v.label]));
+  const benennen = (m: HandballMatchView | null) => {
+    if (!m) return;
+    m.home_name = labelVon.get(m.home_id) ?? m.home_name;
+    m.away_name = labelVon.get(m.away_id) ?? m.away_name;
+  };
+  for (const v of sicht.teams) {
+    v.matches.forEach(benennen);
+    benennen(v.next_match);
+    benennen(v.last_match);
+  }
+  return sicht;
+}
+
+/**
  * Der Tab liest ausschließlich die Datenbank — **kein** Aufruf nach draußen.
  * Gefüllt hat sie der Job; steht dort nichts, sagt der Tab das.
  */

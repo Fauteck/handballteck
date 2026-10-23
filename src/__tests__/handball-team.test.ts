@@ -20,7 +20,7 @@ delete process.env.TELEGRAM_INVITE_CODE;
 delete process.env.TELEGRAM_ADMIN_CHAT_IDS;
 delete process.env.TEAM_IDS;
 delete process.env.PRIMARY_COLOR; delete process.env.SECONDARY_COLOR; delete process.env.ACCENT_COLOR;
-delete process.env.SITE_URL; delete process.env.SITE_PLAYERS; delete process.env.SITE_ENABLED;
+delete process.env.SITE_URL; delete process.env.SITE_ENABLED;
 delete process.env.SITE_OPERATOR; delete process.env.SITE_FEEDBACK_MAIL;
 
 const TEAM = '96254';
@@ -830,6 +830,19 @@ describe('Gruppen, Vereinsname und Live-Stand', () => {
     } finally {
       delete process.env.CLUB_NAME;
     }
+  });
+
+  it('nennt eigene Mannschaften für die Seite in Spielen unter ihrem Label — auch als Gegner, Bot und API behalten den Vereinsnamen', () => {
+    trageTeamEin(`${TEAM}=D1 (RTV),96300=D2 (SGO)`);
+    legeSpiel({ home_name: 'HSG Wölfe Voreifel', away_id: '96300', away_name: 'HSG Wölfe Voreifel II' });
+    const roh = mod.handballOverview().teams[0];
+    expect(roh.matches[0].home_name).toBe('HSG Wölfe Voreifel');
+    expect(roh.matches[0].away_name).toBe('HSG Wölfe Voreifel II');
+    const seite = mod.mitLabelsInSpielen(mod.handballOverview()).teams[0];
+    expect(seite.label).toBe('D1 (RTV)');
+    expect(seite.matches[0].home_name).toBe('D1 (RTV)');
+    expect(seite.matches[0].away_name).toBe('D2 (SGO)');
+    expect(seite.next_match?.away_name).toBe('D2 (SGO)');
   });
 
   it('behält die römische Ziffer der Mannschaft beim Umbenennen', () => {

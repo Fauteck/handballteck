@@ -622,12 +622,12 @@ export function textTabelle(team: HandballTeamView, standings: HandballStandings
     const name = r.teamName.length > breite ? `${r.teamName.slice(0, breite - 1)}…` : r.teamName.padEnd(breite);
     const marker = r.teamId === team.team_id ? '▶' : ' ';
     const nachzuholen = r.played < meiste ? '*' : ' ';
-    return `${marker}${String(r.position).padStart(2)} ${name} ${String(r.played).padStart(2)}${nachzuholen}${`${r.goalsFor}:${r.goalsAgainst}`.padStart(7)} ${String(r.points).padStart(3)}`;
+    return `${marker}${String(r.position).padStart(2)} ${name} ${String(r.played).padStart(2)}${nachzuholen}${`${r.goalsFor}:${r.goalsAgainst}`.padStart(7)} ${`${r.points}:${2 * r.lost + r.drawn}`.padStart(5)}`;
   });
   const spieltag = standings.rows[0]?.round;
   const teile = [
     `<b>${escapeHtml(standings.competition_name)}</b>${spieltag ? ` — nach dem ${spieltag}. Spieltag` : ''}`,
-    `<pre>${escapeHtml([` #  ${'Mannschaft'.padEnd(breite)} Sp    Tore Pkt`, ...zeilen].join('\n'))}</pre>`,
+    `<pre>${escapeHtml([` #  ${'Mannschaft'.padEnd(breite)} Sp    Tore  Pkt.`, ...zeilen].join('\n'))}</pre>`,
   ];
   if (standings.rows.some(r => r.played < meiste)) teile.push('* weniger Spiele als die Spitze — der Spieltag ist noch nicht komplett.');
   return teile.join('\n');

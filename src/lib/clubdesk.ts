@@ -16,7 +16,7 @@
  *
  * Abgerufen wird einmal am Tag, nach bestem Bemühen: Was scheitert, bleibt
  * beim alten Stand und meldet sich im Log — der Abruf von handball.net hängt
- * nicht daran. Jugendbilder werden nur mit `SITE_PLAYERS` oder Freigabe
+ * nicht daran. Jugendbilder werden nur mit Freigabe
  * überhaupt geholt, Jugend-Porträts nur mit Freigabe der Spielerbilder.
  */
 
@@ -24,7 +24,7 @@ import sharp from 'sharp';
 import { and, eq, notInArray } from 'drizzle-orm';
 import { db } from '../db';
 import { clubdesk_photo } from '../db/schema';
-import { clubdeskUrl, clubdeskTeams, sitePlayers, sitePhotos } from '../config';
+import { clubdeskUrl, clubdeskTeams, sitePhotos } from '../config';
 import { safeFetchHtml, safeFetchImage } from './safeFetch';
 import { serviceLog } from './serviceLogger';
 
@@ -163,7 +163,7 @@ export interface ClubdeskAbruf {
 
 /**
  * Ein Abruf: Übersicht lesen, je eingetragener Mannschaft das Gruppenbild
- * (Jugend nur mit `SITE_PLAYERS` oder Freigabe) und die Porträts (Jugend nur
+ * (Jugend nur mit Freigabe) und die Porträts (Jugend nur
  * mit freigegebenen Spielerbildern). Geladen wird
  * nur, was neu ist oder sich geändert hat; wer von der Teamseite
  * verschwunden ist, fliegt raus. `force` überspringt den Tagesabstand.
@@ -183,12 +183,12 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
       const gruppe = gruppen.find(g => g.slug === slug) ?? null;
       const jugend = istJugend(teamLabels.get(teamId), gruppe?.caption);
       const frei = sitePhotos().get(teamId);
-      if (jugend && !sitePlayers() && !frei?.gruppe && !frei?.spieler) {
-        // Jugendbilder nur mit SITE_PLAYERS (Vorschau) oder ausdrücklicher Freigabe — sonst auch nicht vorhalten.
+      if (jugend && !frei?.gruppe && !frei?.spieler) {
+        // Jugendbilder nur mit ausdrücklicher Freigabe — sonst auch nicht vorhalten.
         db.delete(clubdesk_photo).where(eq(clubdesk_photo.team_id, teamId)).run();
         continue;
       }
-      if (jugend && !sitePlayers() && !frei?.gruppe) {
+      if (jugend && !frei?.gruppe) {
         db.delete(clubdesk_photo).where(eq(clubdesk_photo.id, `${teamId}:gruppe`)).run();
       } else if (gruppe) {
         const id = `${teamId}:gruppe`;

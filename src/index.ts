@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   setzeSyncAktion(einTakt);
   beiAenderung(keys => {
     // Eine geänderte Foto-Freigabe soll nicht bis zum nächsten Tagesabruf der Vereinsseite warten.
-    const fotos = keys.some(k => ['CLUBDESK_URL', 'CLUBDESK_TEAMS', 'SITE_PHOTOS', 'SITE_PLAYERS'].includes(k));
+    const fotos = keys.some(k => ['CLUBDESK_URL', 'CLUBDESK_TEAMS', 'SITE_PHOTOS'].includes(k));
     if (fotos) clubdeskFaelligMachen();
     if (fotos || keys.some(k => ['TEAM_IDS', 'CLUB_TEAM_IDS', 'CLUB_NAME'].includes(k))) void einTakt();
   });

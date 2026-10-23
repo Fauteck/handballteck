@@ -20,7 +20,7 @@ delete process.env.TELEGRAM_INVITE_CODE;
 delete process.env.TELEGRAM_ADMIN_CHAT_IDS;
 delete process.env.TEAM_IDS;
 delete process.env.PRIMARY_COLOR; delete process.env.SECONDARY_COLOR; delete process.env.ACCENT_COLOR;
-delete process.env.SITE_URL; delete process.env.SITE_PLAYERS; delete process.env.SITE_ENABLED;
+delete process.env.SITE_URL; delete process.env.SITE_ENABLED;
 delete process.env.SITE_OPERATOR; delete process.env.SITE_FEEDBACK_MAIL;
 
 const TEAM = '96254';

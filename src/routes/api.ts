@@ -88,7 +88,8 @@ export async function apiRoutes(fastify: FastifyInstance) {
     const sicht = handballOverview();
     const site = sicht.teams.map(t => {
       const cfg = siteConfig(t.team_id);
-      return { team_id: t.team_id, enabled: cfg.enabled, url: cfg.baseUrl, players: cfg.players, subscribers: countSiteSubscribers(t.team_id) };
+      // `players` bleibt für Todoteck im Vertrag; seit dem Wegfall von SITE_PLAYERS (2026-10-23) zeigt die Seite Namen immer.
+      return { team_id: t.team_id, enabled: cfg.enabled, url: cfg.baseUrl, players: true, subscribers: countSiteSubscribers(t.team_id) };
     });
     return reply.header('Cache-Control', 'no-store').send({ ...sicht, bot, site });
   });

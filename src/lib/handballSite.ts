@@ -26,9 +26,10 @@
  * — das Skript der Seite kommt deshalb als eigene Route (`./app.js`), Stile
  * dürfen inline stehen (`'unsafe-inline'` für `style-src` ist gesetzt).
  *
- * **Spielernamen nur auf Wunsch.** Torjäger, Kader und Saisonkarte nennen
- * Namen von Jugendspielern; sie erscheinen nur mit dem zweiten Schalter der
- * Dienste-Zeile (`site_players`). Die Seite trägt `noindex` — sie ist zum
+ * **Spielernamen immer.** Torjäger, Kader, Saisonkarte und Live-Ticker nennen
+ * Namen, auch von Jugendspielern — der Verein hat das so entschieden
+ * (2026-10-23; vorher ein Schalter `SITE_PLAYERS`). Fotos bleiben an die
+ * Freigabe je Mannschaft gebunden. Die Seite trägt `noindex` — sie ist zum
  * Weitergeben gedacht, nicht zum Finden.
  *
  * **Die Bilder werden zwischengespeichert.** Ein PNG kostet ein paar hundert
@@ -40,9 +41,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
-import { siteEnabled, sitePlayers, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
+import { siteEnabled, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
 import {
-  handballOverview, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
+  handballOverview, mitLabelsInSpielen, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, renderWeekendSvg, type FullPalette } from './handballTableImage';
@@ -54,7 +55,7 @@ import {
 import { paarungMitStand, ausgangWort } from './handballBotTexts';
 import type { HandballStandingRow } from './handballNetClient';
 import { siteCss, inhaltsHash, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS } from './handballSiteAssets';
-import { hatGruppenbild, portraits, istJugend } from './clubdesk';
+import { hatGruppenbild, portraits } from './clubdesk';
 
 export { SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS };
 
@@ -65,8 +66,6 @@ export { SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS };
 export interface HandballSiteConfig {
   /** Der Schalter „Microsite freigeben" der Dienste-Zeile. */
   enabled: boolean;
-  /** Der Schalter „Spielernamen auf der Microsite zeigen". */
-  players: boolean;
   /** Absolute Adresse der Seite mit Schrägstrich am Ende — aus der Dienste-Zeile, sonst der Pfad unter `PUBLIC_URL`. */
   baseUrl: string;
 }
@@ -87,7 +86,7 @@ export function siteDefaultUrl(teamId: string): string {
 }
 
 export function siteConfig(teamId: string): HandballSiteConfig {
-  return { enabled: siteEnabled(), players: sitePlayers(), baseUrl: siteDefaultUrl(teamId) };
+  return { enabled: siteEnabled(), baseUrl: siteDefaultUrl(teamId) };
 }
 
 // ---------------------------------------------------------------------------
@@ -169,15 +168,12 @@ function gespielt(team: HandballTeamView): HandballMatchView[] {
 // Bilder mit Cache
 // ---------------------------------------------------------------------------
 
-/** Bilder ohne Spielernamen — immer auf der Seite. */
-export const SITE_IMAGES_PUBLIC = ['spiel', 'endstand', 'tabelle', 'verlauf'] as const;
-/** Bilder mit Spielernamen — nur mit dem zweiten Schalter. */
-export const SITE_IMAGES_PLAYERS = ['torjaeger', 'kader', 'saison'] as const;
-export type SiteImageArt = typeof SITE_IMAGES_PUBLIC[number] | typeof SITE_IMAGES_PLAYERS[number];
+/** Die Bilder der Seite — mit und ohne Spielernamen. */
+export const SITE_IMAGES = ['spiel', 'endstand', 'tabelle', 'verlauf', 'torjaeger', 'kader', 'saison'] as const;
+export type SiteImageArt = typeof SITE_IMAGES[number];
 
-export function istBildArt(art: string, players: boolean): art is SiteImageArt {
-  return (SITE_IMAGES_PUBLIC as readonly string[]).includes(art)
-    || (players && (SITE_IMAGES_PLAYERS as readonly string[]).includes(art));
+export function istBildArt(art: string): art is SiteImageArt {
+  return (SITE_IMAGES as readonly string[]).includes(art);
 }
 
 // PRF-3-002: Platz für jede Bildart jeder Mannschaft samt Logo und einigen
@@ -367,7 +363,6 @@ export interface SiteTeamLink {
 }
 
 export interface SiteRenderOptions {
-  players: boolean;
   baseUrl: string;
   /**
    * Alle Mannschaften des Vereins für die Schaltflächen im Kopf — leer oder
@@ -650,7 +645,7 @@ function spielDetailsHtml(m: HandballMatchView): string {
 /**
  * Wer ein Tor geworfen hat: bei der eigenen Mannschaft der Name aus dem Kader
  * (die Spieler-ID ist die Brücke, die Torfolge selbst maskiert bei der
- * Jugend), sonst und ohne den Schalter „Spielernamen zeigen" die Rückennummer.
+ * Jugend), beim Gegner und ohne Kadereintrag die Rückennummer.
  */
 function werfer(e: { player_id?: string | null; number?: number | null }, eigenes: boolean, namen: Map<string, string>): string | null {
   const name = eigenes && e.player_id ? namen.get(e.player_id) : undefined;
@@ -678,7 +673,7 @@ function liveSpielHtml(team: HandballTeamView, m: HandballMatchView, now: Date):
   const uhr = [live?.minute ? `${live.minute} Min.` : null, live?.block ?? null].filter(Boolean).join(' · ');
   const hz = live?.halftime ? `Halbzeit ${live.halftime.home}:${live.halftime.away}` : '';
   const halle = [m.venue_name, m.venue_address].filter(Boolean).join(', ');
-  const namen = new Map(sitePlayers() ? rosterFor(team.team_id).map(r => [r.playerId, r.name] as const) : []);
+  const namen = new Map(rosterFor(team.team_id).map(r => [r.playerId, r.name] as const));
   // Wem das Tor gehört, sagt die Quelle (is_home); ältere Stände ohne das Feld verrät der Stand davor.
   let davor = { home: 0, away: 0 };
   const eintraege = live ? live.items.map(e => {
@@ -921,12 +916,12 @@ function kalenderHtml(team: HandballTeamView, now: Date): string {
 
 /**
  * Die Saison unter der Tabelle: Tabellenplatz je Spieltag, Bilanz in Zeilen
- * und (mit Spielernamen) die Saisonkarte — zugeklappt als „Saisonverlauf".
+ * und die Saisonkarte — zugeklappt als „Saisonverlauf".
  */
-function saisonTeilHtml(team: HandballTeamView, players: boolean): string {
+function saisonTeilHtml(team: HandballTeamView): string {
   const zeilen = alsKlartext(textSaison(team)).slice(1);
   const hatVerlauf = bildVerlauf(team) !== null;
-  const karte = players && bildSaison(team) !== null;
+  const karte = bildSaison(team) !== null;
   if (zeilen.length === 0 && !hatVerlauf && !karte) return '';
   return `<details class="more season" id="saison"><summary>Saisonverlauf</summary>
   <div class="body">
@@ -938,7 +933,7 @@ function saisonTeilHtml(team: HandballTeamView, players: boolean): string {
 }
 
 /** Die Saison als eigener Abschnitt — nur, wenn es (noch) keine Tabelle gibt, unter die sie gehört. */
-function saisonHtml(team: HandballTeamView, players: boolean): string {
+function saisonHtml(team: HandballTeamView): string {
   const zeilen = alsKlartext(textSaison(team)).slice(1);
   const hatVerlauf = bildVerlauf(team) !== null;
   if (zeilen.length === 0 && !hatVerlauf) return '';
@@ -950,7 +945,7 @@ function saisonHtml(team: HandballTeamView, players: boolean): string {
   ${hatVerlauf ? `<img class="bild" src="./bild/verlauf.png" alt="Tabellenplatz je Spieltag" loading="lazy" width="800">` : ''}
   ${zeilen.length > 0 ? `<ul class="lines">${zeilen.map(z => `<li>${h(z)}</li>`).join('')}</ul>` : ''}
   </div>
-  ${players && bildSaison(team) ? `<img class="bild" src="./bild/saison.png" alt="Saisonkarte" loading="lazy" width="800" height="450" style="margin-top:14px">` : ''}
+  ${bildSaison(team) ? `<img class="bild" src="./bild/saison.png" alt="Saisonkarte" loading="lazy" width="800" height="450" style="margin-top:14px">` : ''}
 </section>`;
 }
 
@@ -959,8 +954,8 @@ const TOR_FARBEN = ['var(--ad)', '#e0891a', '#8a63d2', '#c9403a', '#1f9d55'];
 
 /**
  * Die Tore der besten Torschützen über die Saison — je Spieler eine
- * Linie mit der Summe nach jedem gespielten Spiel. Nur mit Spielernamen
- * (die Legende nennt sie); null unter zwei Spielen oder ohne Tore.
+ * Linie mit der Summe nach jedem gespielten Spiel (die Legende nennt die
+ * Namen); null unter zwei Spielen oder ohne Tore.
  */
 export function torverlaufHtml(team: HandballTeamView): string | null {
   const top = playerStats(team.team_id).filter(p => p.goals > 0).slice(0, 5);
@@ -987,29 +982,28 @@ export function torverlaufHtml(team: HandballTeamView): string | null {
 
 /**
  * Ob ein Foto der Vereinsseite gezeigt werden darf — `gruppe` oder die
- * Kontakt-ID eines Porträts. In der Vorschau: Jugend-Gruppenbild und
- * Porträts nur mit Spielernamen (Jugend-Porträts holt der Abruf ohnehin nur
- * mit Freigabe). Öffentlich: nur, was die Einstellungsseite je Mannschaft
- * freigegeben hat (`SITE_PHOTOS`) — auch bei der Jugend.
+ * Kontakt-ID eines Porträts. In der Vorschau: alles, was der Abruf vorhält —
+ * Jugendbilder holt er ohnehin nur mit Freigabe (`clubdeskHolen`).
+ * Öffentlich: nur, was die Einstellungsseite je Mannschaft freigegeben hat
+ * (`SITE_PHOTOS`) — auch bei der Jugend.
  */
-export function fotoFreigegeben(team: HandballTeamView, wer: string, players: boolean, vorschau: boolean): boolean {
-  const jugend = istJugend(team.label, team.championship_name);
+export function fotoFreigegeben(team: HandballTeamView, wer: string, vorschau: boolean): boolean {
   const portraet = wer !== 'gruppe';
   if (portraet && !portraits(team.team_id).some(p => p.contactId === wer)) return false;
-  if (vorschau) return portraet ? players : (!jugend || players);
+  if (vorschau) return true;
   const frei = sitePhotos().get(team.team_id);
   return !!frei && (portraet ? frei.spieler : frei.gruppe);
 }
 
 /**
- * „Team": wer spielt — Gruppenbild, Kadergrafik (nur mit Spielernamen) und
+ * „Team": wer spielt — Gruppenbild, Kadergrafik und
  * die Porträts der Vereinsseite. Fotos in der Vorschau alle, öffentlich nach
  * Freigabe. Leer, wenn nichts davon da ist.
  */
-function teamHtml(team: HandballTeamView, players: boolean, anhang: string, vorschau: boolean): string {
-  const gruppe = hatGruppenbild(team.team_id) && fotoFreigegeben(team, 'gruppe', players, vorschau);
-  const personen = portraits(team.team_id).filter(p => fotoFreigegeben(team, p.contactId, players, vorschau));
-  const kader = players && bildKader(team) !== null;
+function teamHtml(team: HandballTeamView, anhang: string, vorschau: boolean): string {
+  const gruppe = hatGruppenbild(team.team_id) && fotoFreigegeben(team, 'gruppe', vorschau);
+  const personen = portraits(team.team_id).filter(p => fotoFreigegeben(team, p.contactId, vorschau));
+  const kader = bildKader(team) !== null;
   if (!gruppe && !kader && personen.length === 0) return '';
   const abschnitte = new Map<string, typeof personen>();
   for (const p of personen) abschnitte.set(p.section, [...(abschnitte.get(p.section) ?? []), p]);
@@ -1027,7 +1021,7 @@ function teamHtml(team: HandballTeamView, players: boolean, anhang: string, vors
 </section>`;
 }
 
-/** „Statistiken": Torverlauf und Torjäger der Saison — nur mit Spielernamen. */
+/** „Statistiken": Torverlauf und Torjäger der Saison. */
 function statistikenHtml(team: HandballTeamView): string {
   const stats = playerStats(team.team_id);
   const bester = stats.filter(p => p.goals > 0)[0];
@@ -1151,14 +1145,14 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   const abschnitte = {
     naechstes: naechstesSpielHtml(team, now, opts.baseUrl),
     letztes: letztesSpielHtml(team, opts.baseUrl),
-    tabelle: tabelleHtml(team, now, saisonTeilHtml(team, opts.players)),
+    tabelle: tabelleHtml(team, now, saisonTeilHtml(team)),
     saison: '',
-    team: teamHtml(team, opts.players, anhang, !!opts.vorschau),
-    statistiken: opts.players ? statistikenHtml(team) : '',
+    team: teamHtml(team, anhang, !!opts.vorschau),
+    statistiken: statistikenHtml(team),
     spielplan: spielplanHtml(team, now),
   };
   // Die Saison steht unter der Tabelle; nur ohne Tabelle (Saisonbeginn, Freundschaftsspiele) für sich.
-  if (!abschnitte.tabelle) abschnitte.saison = saisonHtml(team, opts.players);
+  if (!abschnitte.tabelle) abschnitte.saison = saisonHtml(team);
   return `<!doctype html>
 <html lang="de">
 <head>
@@ -1308,8 +1302,7 @@ function teamsEineEbeneTiefer(teams: SiteTeamLink[]): SiteTeamLink[] {
 /**
  * Die Spielseite: ein einzelnes Spiel mit allem, was die Seite dazu weiß —
  * Spielstand und Halbzeit, Endstandbild, Spielverlauf mit Torfolge, Halle samt
- * Route. Mit Spielernamen (zweiter Schalter) außerdem die Torschützen; ohne
- * bleibt die Seite namenlos wie der Rest. Der Spielbericht der Quelle steht
+ * Route und die Torschützen. Der Spielbericht der Quelle steht
  * nicht auf der Seite, nur der Verweis auf den Bogen (PDF). Null, wenn die
  * Mannschaft dieses Spiel nicht hat.
  */
@@ -1331,7 +1324,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   const beschreibung = `${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr · ${wettbewerb}${ausgang ? ` · ${ausgang}` : ''}`;
   const logo = logoDataUri(team.team_id);
   const verlauf = fertig ? spielverlaufSvg(m) : null;
-  const schuetzen = opts.players && fertig ? playerGames(team.team_id).filter(g => g.matchId === m.match_id && g.goals > 0) : [];
+  const schuetzen = fertig ? playerGames(team.team_id).filter(g => g.matchId === m.match_id && g.goals > 0) : [];
   const bild = fertig ? `../bild/endstand.png?match=${encodeURIComponent(m.match_id)}` : null;
   const kopf = heroHtml(team, logo, now, teamsEineEbeneTiefer(opts.teams ?? []), '', '../../');
   const inhalt = `<p><a class="zurueck" href="../">← Zur Mannschaftsseite</a></p>
@@ -1794,7 +1787,7 @@ export function renderSiteIcs(team: HandballTeamView): string {
 
 /** Die Mannschaft aus der Übersicht, oder null, wenn sie nicht eingetragen ist. */
 export function siteTeam(teamId: string): { team: HandballTeamView; stand: string | null } | null {
-  const sicht = handballOverview();
+  const sicht = mitLabelsInSpielen(handballOverview());
   if (!sicht.configured) return null;
   const team = sicht.teams.find(t => t.team_id === teamId);
   return team ? { team, stand: sicht.updated_at } : null;

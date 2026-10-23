@@ -17,7 +17,7 @@ delete process.env.TELEGRAM_INVITE_CODE;
 delete process.env.TELEGRAM_ADMIN_CHAT_IDS;
 delete process.env.TEAM_IDS;
 delete process.env.PRIMARY_COLOR; delete process.env.SECONDARY_COLOR; delete process.env.ACCENT_COLOR;
-delete process.env.SITE_URL; delete process.env.SITE_PLAYERS; delete process.env.SITE_ENABLED;
+delete process.env.SITE_URL; delete process.env.SITE_ENABLED;
 delete process.env.SITE_OPERATOR; delete process.env.SITE_FEEDBACK_MAIL;
 process.env.TEAM_IDS = '96254';
 process.env.API_TOKEN = 'geheim-geheim-geheim';
@@ -93,7 +93,7 @@ describe('API für das Cockpit: Bilder und Details', () => {
     expect(overview.statusCode).toBe(200);
     expect(overview.json()).toMatchObject({ configured: true, bot: { enabled: false, subscribers: 0 } });
     expect(overview.json().teams[0]).toMatchObject({ team_id: TEAM, name: 'HSG Wölfe Voreifel', label: 'mB-Jugend' });
-    expect(overview.json().site[0]).toMatchObject({ team_id: TEAM, enabled: true, url: `https://todo.test.local/${TEAM}/`, players: false, subscribers: 0 });
+    expect(overview.json().site[0]).toMatchObject({ team_id: TEAM, enabled: true, url: `https://todo.test.local/${TEAM}/`, players: true, subscribers: 0 });
     const health = await get('/api/health');
     expect(health.statusCode).toBe(200);
     expect(health.json()).toMatchObject({ ok: true, teams: 1, sync: { last_error: null, consecutive_failures: 0 }, bot: { enabled: false }, site: { enabled: true } });
