@@ -70,11 +70,11 @@ import {
   handball_site_subscription,
 } from '../db/schema';
 import {
-  sendMessage, sendPhotoBytes, sendAnimationBytes, sendDocument, setMessageReaction, answerCallbackQuery, setWebhook, setMyCommands,
+  sendMessage, sendPhotoBytes, sendAnimationBytes, sendFileIdAgain, sendDocument, setMessageReaction, answerCallbackQuery, setWebhook, setMyCommands,
   deleteMyCommands, getMe, escapeHtml, TelegramApiError, sendChatAction, sendVenue, answerInlineQuery, sendMediaGroupPhotos,
   getWebhookInfo, type TelegramWebhookInfo, setMyDescription, setMyShortDescription, BOT_DESCRIPTION_MAX, BOT_SHORT_DESCRIPTION_MAX,
   type TelegramUpdate, type TelegramInlineQuery, type BotCommand, type InlineKeyboard, type ChatAction, type InlineQueryResultPhoto,
-  type AnswerInlineQueryOptions,
+  type AnswerInlineQueryOptions, type TelegramMessage,
 } from './telegramClient';
 import { svgAlsPng } from './bildCache';
 import {
@@ -1129,19 +1129,46 @@ async function defaultSend(chatId: string, text: string, keyboard: InlineKeyboar
   return letzte;
 }
 
-async function defaultSendPhoto(chatId: string, png: Buffer, caption: string, filename = 'bild.png', keyboard: InlineKeyboard | null = null, extras: SendExtras = {}): Promise<number | void> {
+/**
+ * PRF-2-004: Die `file_id` je hochgeladenem Bild. Ein Rundruf schickte
+ * dasselbe PNG oder GIF (100 KB bis 1 MB) an jeden Chat neu hoch — bei 300
+ * Chats bis zu 300 MB je Endstand. Jetzt geht es einmal hoch, danach nur die
+ * `file_id`. Schlüssel ist das Buffer-Objekt: Der Bild-Zwischenspeicher gibt
+ * für dasselbe Bild dasselbe zurück, und mit ihm fällt der Eintrag weg.
+ */
+const hochgeladen = new WeakMap<Buffer, string>();
+
+async function mitWiederverwendung(art: 'photo' | 'animation', bild: Buffer, chatId: string, caption: string, keyboard: InlineKeyboard | null, extras: SendExtras, hochladen: () => Promise<TelegramMessage>): Promise<number | void> {
   const token = getHandballBotToken();
   if (!token) return;
-  const msg = await sendPhotoBytes(token, { chatId, data: png, filename, contentType: 'image/png', caption, keyboard, messageEffectId: extras.effectId });
+  const fileId = hochgeladen.get(bild);
+  if (fileId) {
+    try {
+      return (await sendFileIdAgain(token, art, fileId, { chatId, caption, keyboard, messageEffectId: extras.effectId })).message_id;
+    } catch (err) {
+      // Eine abgelehnte `file_id` heißt: neu hochladen. Alles andere (403, Chat weg) gilt wie beim Hochladen.
+      if (!(err instanceof TelegramApiError) || err.status !== 400 || CHAT_WEG.test(err.message)) throw err;
+      hochgeladen.delete(bild);
+    }
+  }
+  const msg = await hochladen();
+  const neu = art === 'photo' ? msg?.photo?.at(-1)?.file_id : msg?.animation?.file_id ?? msg?.document?.file_id;
+  if (neu) hochgeladen.set(bild, neu);
   return msg?.message_id;
 }
 
-async function defaultSendAnimation(chatId: string, gif: Buffer, caption: string, filename = 'bild.gif', keyboard: InlineKeyboard | null = null, extras: SendExtras = {}): Promise<number | void> {
-  const token = getHandballBotToken();
-  if (!token) return;
-  const msg = await sendAnimationBytes(token, { chatId, data: gif, filename, contentType: 'image/gif', caption, keyboard, messageEffectId: extras.effectId });
-  return msg?.message_id;
+async function defaultSendPhoto(chatId: string, png: Buffer, caption: string, filename = 'bild.png', keyboard: InlineKeyboard | null = null, extras: SendExtras = {}): Promise<number | void> {
+  return mitWiederverwendung('photo', png, chatId, caption, keyboard, extras,
+    () => sendPhotoBytes(getHandballBotToken()!, { chatId, data: png, filename, contentType: 'image/png', caption, keyboard, messageEffectId: extras.effectId }));
 }
+
+async function defaultSendAnimation(chatId: string, gif: Buffer, caption: string, filename = 'bild.gif', keyboard: InlineKeyboard | null = null, extras: SendExtras = {}): Promise<number | void> {
+  return mitWiederverwendung('animation', gif, chatId, caption, keyboard, extras,
+    () => sendAnimationBytes(getHandballBotToken()!, { chatId, data: gif, filename, contentType: 'image/gif', caption, keyboard, messageEffectId: extras.effectId }));
+}
+
+/** Nur für Tests: die Standard-Sender für Foto und Animation. */
+export const __defaultSendersForTests = { sendPhoto: defaultSendPhoto, sendAnimation: defaultSendAnimation };
 
 async function defaultSendMediaGroup(chatId: string, photos: Array<{ png: Buffer; filename: string; caption?: string }>): Promise<void> {
   const token = getHandballBotToken();
