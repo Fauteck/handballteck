@@ -33,6 +33,14 @@
  */
 
 import sharp from 'sharp';
+
+// PRF-3-005: libvips hält von sich aus bis 50 MB und 100 Operationen im Cache und
+// rastert mit so vielen Threads, wie der Rechner Kerne hat. Die Bilder liegen
+// schon im eigenen Zwischenspeicher (`bildCache.ts`, 24 MB); der Container hat
+// 512 MB. Klein halten — sharp ist ein Modul, die Einstellung gilt für alle,
+// die es laden (Vereinsseite, Logos, Bilder).
+sharp.cache({ memory: 16, items: 20, files: 0 });
+sharp.concurrency(2);
 import { escapeXml, estimateTextWidth, truncateToWidth } from './textMeasure';
 import type { HandballStandingRow } from './handballNetClient';
 
