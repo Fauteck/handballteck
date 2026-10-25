@@ -11,7 +11,7 @@
 
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { handballOverview } from '../lib/handballTeam';
+import { handballOverview } from '../lib/handballSicht';
 import { ensureHandballBotSecrets, handleHandballUpdate, isHandballBotEnabled, pruefeInlineSignatur, inlineBildSvg, type InlineArt } from '../lib/handballBot';
 import { bildMitKurzweg, standVon } from '../lib/bildCache';
 import { serviceLog } from '../lib/serviceLogger';

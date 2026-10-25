@@ -14,7 +14,9 @@ import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { apiToken, version, teamIds } from '../config';
 import { getHandballNetStats } from '../lib/handballNetClient';
-import { handballOverview, syncHandballTeams, playerStats, playerGames, getHandballHealth, type HandballTeamView } from '../lib/handballTeam';
+import { syncHandballTeams, playerStats, playerGames, getHandballHealth } from '../lib/handballTeam';
+import { type HandballTeamView } from '../lib/handballSicht';
+import { handballOverview } from '../lib/handballSicht';
 import {
   getHandballBotUsername, isHandballBotEnabled, listSubscribers, pushHandballBot, getHandballBotHealth, refreshHandballWebhookInfo,
   bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSpieler, bildSaison, endstandBild,

@@ -399,7 +399,7 @@ describe('Handball-Microsite', () => {
   });
 
   it('baut Übersicht und Seite nur neu, wenn sich etwas ändert — sonst 304 für den Live-Poll (PRF-1-002)', async () => {
-    const { handballOverview, seitenUebersicht } = await import('../lib/handballTeam');
+    const { handballOverview, seitenUebersicht } = await import('../lib/handballSicht');
     // Ohne Schreiben und ohne neue Konfiguration: dasselbe, eingefrorene Objekt.
     const a = handballOverview();
     expect(handballOverview()).toBe(a);
@@ -779,7 +779,7 @@ describe('Handball-Microsite', () => {
 
   it('springt in den Ferien zum nächsten Spieltag und zeigt danach das letzte gespielte Wochenende', async () => {
     const { spielWochenende, letztesSpielWochenende } = await import('../lib/handballSite');
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { handballOverview } = await import('../lib/handballSicht');
     const vorlage = handballOverview().teams[0].matches[0];
     const spiel = (start: string, status: string, a: number | null = null, b: number | null = null) =>
       ({ ...vorlage, starts_at: start, status, score_home: a, score_away: b, rated: false });
@@ -796,8 +796,8 @@ describe('Handball-Microsite', () => {
   });
 
   it('zeigt auf der Startseite Heim- und Auswärtsspiele von Freitag bis Sonntag in sortierbaren Tabellen mit Halle', async () => {
-    const { renderStartHtml } = await import('../lib/handballSite');
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { renderStartHtml } = await import('../lib/handballSitePages');
+    const { handballOverview } = await import('../lib/handballSicht');
     const t = handballOverview().teams[0];
     const vorlage = t.matches[0];
     const spiel = (id: string, start: string, heim: boolean, halle: string | null, adresse: string | null) => ({
@@ -857,7 +857,7 @@ describe('Handball-Microsite', () => {
   });
 
   it('ordnet E- und F-Jugend und Minis den Kindern zu, A–D den Jugendgruppen', async () => {
-    const { gruppeVon } = await import('../lib/handballTeam');
+    const { gruppeVon } = await import('../lib/handballSicht');
     const g = (wettbewerb: string, name = 'HSG') => gruppeVon(name, [{ competition_name: wettbewerb, championship_name: null }], null);
     expect(g('Kreisliga mE')).toBe('kinder');
     expect(g('Kreisliga wE-Jugend')).toBe('kinder');

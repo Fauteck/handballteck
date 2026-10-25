@@ -25,17 +25,16 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import fs from 'node:fs';
 import { z } from 'zod';
-import {
-  siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderSpielHtml, renderStartHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest,
-  siteImagePng, wochenendePng, istLiveFenster, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink,
-} from '../lib/handballSite';
+import { siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest, siteImagePng, wochenendePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, istLiveFenster, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink } from '../lib/handballSite';
+import { renderSpielHtml, renderStartHtml } from '../lib/handballSitePages';
 import { fotoJpeg } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
 import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
   sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode, bereinigeThemen, CLUB, type SiteSubscriber,
 } from '../lib/handballSitePush';
-import { readPalette, readTeamIds, handballOverview, seitenUebersicht } from '../lib/handballTeam';
+import { readPalette, readTeamIds } from '../lib/handballTeam';
+import { handballOverview, seitenUebersicht } from '../lib/handballSicht';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
 import { isPushServiceUrl } from '../lib/ssrf';

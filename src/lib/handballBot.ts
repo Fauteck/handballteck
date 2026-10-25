@@ -80,11 +80,9 @@ import { svgAlsPng } from './bildCache';
 import {
   fetchLineups, fetchMatchEvents, fetchMatchReport, fetchTeamMatches, sourceTimeToUtc, type HandballLineupSide, type HandballMatch,
 } from './handballNetClient';
-import {
-  handballOverview, aktuellesSpiel, rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, backlogFor,
-  getHandballHealth, playerGames, opponentFormFor, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei, type HandballMatchView,
-  type HandballTeamView, type HandballStandingsView,
-} from './handballTeam';
+import { rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, backlogFor, getHandballHealth, playerGames, opponentFormFor, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei } from './handballTeam';
+import { type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
+import { handballOverview, aktuellesSpiel } from './handballSicht';
 import {
   botToken as configBotToken, inviteCode as configInviteCode, adminChatIds as configAdminChatIds, botAutoDescription,
   publicUrl as configPublicUrl,

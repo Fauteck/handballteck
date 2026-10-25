@@ -10,10 +10,9 @@ import {
   renderSeasonSummarySvg, renderGif, logoAccentColor, type ImageBrand,
 } from './handballTableImage';
 import { siteUrl, publicUrl } from '../config';
-import {
-  aktuellesSpiel, rosterFor, playerStats, logoDataUri, playerMatchLog, playerGames, positionHistory, tendenzReferenz, readPalette, saisonVorbei,
-  type HandballMatchView, type HandballTeamView, type HandballStandingsView, type HandballPlayerStats,
-} from './handballTeam';
+import { rosterFor, playerStats, logoDataUri, playerMatchLog, playerGames, positionHistory, tendenzReferenz, readPalette, saisonVorbei, type HandballPlayerStats } from './handballTeam';
+import { type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
+import { aktuellesSpiel } from './handballSicht';
 import { DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballBotTexts';
 
 /**

@@ -27,7 +27,7 @@ const TEAM = '96254';
 
 let dbRef: typeof import('../db')['db'];
 let schemaRef: typeof import('../db/schema');
-let mod: typeof import('../lib/handballTeam');
+let mod: typeof import('../lib/handballTeam') & typeof import('../lib/handballSicht');
 let alerts: typeof import('../lib/alerts');
 let resetToken: () => void;
 const ORIGINAL_FETCH = global.fetch;
@@ -121,7 +121,7 @@ beforeAll(async () => {
   const { db } = await import('../db');
   const schema = await import('../db/schema');
   const { __resetHandballTokenForTests } = await import('../lib/handballNetClient');
-  mod = await import('../lib/handballTeam');
+  mod = { ...(await import('../lib/handballTeam')), ...(await import('../lib/handballSicht')) };
   alerts = await import('../lib/alerts');
   runMigrations();
   dbRef = db;

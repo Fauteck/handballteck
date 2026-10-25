@@ -553,7 +553,7 @@ describe('Zweite Runde: Halbzeit, Bericht, Verlegung, Route, Steckbrief', () => 
     expect(kb.inline_keyboard[0][0].url).toContain('google.com/maps/dir/?api=1&destination=50.6464842%2C6.831915');
     expect(kb.inline_keyboard[0][1].url).toContain('openstreetmap.org');
     // Ohne Koordinaten: die Anschrift als Ziel.
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { handballOverview } = await import('../lib/handballSicht');
     const m = { ...handballOverview().teams[0].matches.find(x => x.match_id === 'm1')!, venue_lat: null, venue_lon: null };
     expect(bot.routenTastatur(m)!.inline_keyboard[0]).toHaveLength(1);
     expect(bot.routenTastatur({ ...m, venue_address: null })).toBeNull();
@@ -844,7 +844,8 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
       ]),
       previous_fetched_at: now,
     }).run();
-    const { handballOverview, playerStats } = await import('../lib/handballTeam');
+    const { playerStats } = await import('../lib/handballTeam');
+    const { handballOverview } = await import('../lib/handballSicht');
     const team = handballOverview().teams[0];
     const m = team.matches.find(x => x.match_id === 'm1')!;
     const seite = { teamId: TEAM, teamName: 'HSG Wölfe Voreifel', staffCount: 0, players: [
@@ -902,7 +903,7 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
     expect(fotos[0].caption).toContain('Schnitt 27,7 : 23,3');
     expect(gesendet).toHaveLength(0);
     // Der Verlauf aus der Historie: Platz 2, 1, 1.
-    const teamMod = await import('../lib/handballTeam');
+    const teamMod = { ...(await import('../lib/handballTeam')), ...(await import('../lib/handballSicht')) };
     const verlauf = teamMod.positionHistory(teamMod.handballOverview().teams[0].standings[0], TEAM);
     expect(verlauf.map(p => `${p.round}:${p.position}:${p.points}:${p.teams}`)).toEqual(['1:2:2:2', '2:1:4:2', '3:1:6:2']);
     // Mitten in der Saison (Spiel d steht noch aus): kein Album und keine Karte
@@ -1159,7 +1160,7 @@ describe('Tabellenbewegung am Spieltag', () => {
       previous_fetched_at: now,
       history_payload: JSON.stringify([z(1, 1, 'gtv', 2), z(1, 2, TEAM, 2), z(2, 1, 'gtv', 4), z(2, 2, TEAM, 4), z(3, 1, 'gtv', 6), z(3, 2, TEAM, 6)]),
     }).run();
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { handballOverview } = await import('../lib/handballSicht');
     const team = handballOverview().teams[0];
     expect(bot.tabellenBewegung(team)).toBe('Weiter Platz 2, 0 Punkte hinter Platz 1');
     // Das Tabellenbild trägt dann keinen Pfeil an der eigenen Zeile.
@@ -1242,7 +1243,7 @@ describe('Matchday-Optik', () => {
     expect(fotos).toEqual([{ chatId: '4712', filename: 'endstand.png' }]);
     expect(dbRef.select().from(schemaRef.handball_bot_delivery).all().filter(z => z.kind === 'endstand' && z.ok === 1)).toHaveLength(2);
     // Der Kapitän aus der Aufstellung steht im Kader.
-    const teamMod = await import('../lib/handballTeam');
+    const teamMod = { ...(await import('../lib/handballTeam')), ...(await import('../lib/handballSicht')) };
     expect(teamMod.rosterFor(TEAM).find(r => r.playerId === 'p-lieck')?.captain).toBe(true);
     expect(teamMod.rosterFor(TEAM).find(r => r.playerId === 'p-raab')?.captain).toBe(false);
   });
@@ -1329,7 +1330,7 @@ describe('Wertung, Saisonkarte, Zeitzone im Betriebsstand', () => {
     const mitBild = { ...deps, sendPhoto: vi.fn(async (_c: string, _p: Buffer, _caption: string, filename?: string) => { fotos.push({ filename }); }) };
     await bot.handleHandballUpdate(update('/saisonkarte'), mitBild);
     expect(fotos).toEqual([{ filename: 'saison.png' }]);
-    const svg = bot.bildSaison(await import('../lib/handballTeam').then(m => m.handballOverview().teams[0]))!;
+    const svg = bot.bildSaison(await import('../lib/handballSicht').then(m => m.handballOverview().teams[0]))!;
     expect(svg).toContain('SAISONBILANZ');
     expect(svg).toContain('1-0-0');
     expect(svg).toContain('30:22');
@@ -1352,7 +1353,7 @@ describe('Wertung, Saisonkarte, Zeitzone im Betriebsstand', () => {
     trageTeamEin({ primary_color: '#8B0000', secondary_color: '#a52a2a', accent_color: '#ffd700' });
     legeTabelle();
     legeSpiel({ match_id: 'a', status: 'finished', score_home: 30, score_away: 22, starts_at: vorTagen(20) });
-    const team = (await import('../lib/handballTeam')).handballOverview().teams[0];
+    const team = (await import('../lib/handballSicht')).handballOverview().teams[0];
     const tabelle = bot.bildTabelle(team, team.standings[0]);
     expect(tabelle).toContain('#8b0000');
     expect(tabelle).toContain('#ffd700');
@@ -1454,7 +1455,7 @@ describe('Sechste Runde: Telegram-Funktionen', () => {
     await bot.handleHandballUpdate({ update_id: 77, callback_query: { id: 'cb', from: { id: 4711 }, data: 'cmd:halle:m1', message: { message_id: 1, chat: { id: 4711, type: 'private' } } } }, mitOrt);
     expect(orte).toHaveLength(2);
     // Ohne Koordinaten kein Knopf und kein Ort; /halle nennt dann die Anschrift.
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { handballOverview } = await import('../lib/handballSicht');
     const m = { ...handballOverview().teams[0].matches[0], venue_lat: null, venue_lon: null };
     expect(JSON.stringify(bot.ankuendigungTastatur(m))).not.toContain('cmd:halle');
     dbRef.update(schemaRef.handball_team_match).set({ venue_lat: null, venue_lon: null }).run();
@@ -1595,7 +1596,7 @@ describe('Sechste Runde: Telegram-Funktionen', () => {
       expect((await bot.pflegeHandballBotBeschreibung()).status).toBe('aus');
       expect(aufrufe).toEqual([]);
       // Lange Namen: hart begrenzt.
-      const { handballOverview } = await import('../lib/handballTeam');
+      const { handballOverview } = await import('../lib/handballSicht');
       const team = handballOverview().teams[0];
       const lange = [{ ...team, name: 'Handballspielgemeinschaft '.repeat(8) }, { ...team, team_id: 'x', name: 'Zweite Mannschaft '.repeat(10) }];
       expect(bot.textKurzbeschreibung(lange).length).toBeLessThanOrEqual(120);

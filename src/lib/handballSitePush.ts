@@ -31,12 +31,14 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_site_subscription, handball_bot_sent } from '../db/schema';
 import { sendPush as sendWebPush, isPushConfigured, getVapidPublicKey, type PushPayload, type PushResult, type PushTarget } from './webPush';
-import { handballOverview, changesFor, vereinsName, type HandballTeamView, type HandballMatchView } from './handballTeam';
+import { changesFor, vereinsName } from './handballTeam';
+import { type HandballTeamView, type HandballMatchView } from './handballSicht';
+import { handballOverview } from './handballSicht';
 import {
   textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung,
   LEADS, type Lead, type Mode,
 } from './handballBot';
-import { siteConfig, naechstesWochenende, SITE_TITEL } from './handballSite';
+import { siteConfig, SITE_TITEL, naechstesWochenende } from './handballSite';
 import { serviceLog } from './serviceLogger';
 
 /** Ein Endstand, der älter ist, wird nur gemerkt — beim ersten Lauf nicht die ganze Saison nachliefern. */
