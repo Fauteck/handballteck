@@ -33,7 +33,9 @@ import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
   sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode, bereinigeThemen, CLUB, type SiteSubscriber,
 } from '../lib/handballSitePush';
-import { readPalette, readTeamIds } from '../lib/handballTeam';
+import { readPalette, readTeamIds, logoDataUri, logoVersion } from '../lib/handballTeam';
+import { zwischengespeichert } from '../lib/bildCache';
+import sharp from 'sharp';
 import { handballOverview, seitenUebersicht } from '../lib/handballSicht';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
@@ -300,6 +302,31 @@ export async function siteRoutes(fastify: FastifyInstance) {
     if (!t) return nichtDa(reply);
     const png = await siteLogoPng(t.team, vervollstaendigePalette(readPalette()));
     return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=86400').send(png);
+  });
+
+  /**
+   * PRF-1-001: Die Logos, auf die die Seiten verweisen — das eigene und die der
+   * Gegner aus der Tabelle, auf 240 px verkleinert (größer zeigt die Seite
+   * keins, auch nicht doppelt aufgelöst). Mit passendem `?v=` dauerhaft
+   * zwischenspeicherbar. Nur unter einer freigegebenen Mannschaft, und nur,
+   * was der Abruf von handball.net gespeichert hat.
+   */
+  fastify.get<{ Params: { teamId: string; datei: string }; Querystring: { v?: string } }>('/:teamId/logo/:datei', limit(120), async (request, reply) => {
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
+    const id = /^(\d{1,12})\.png$/.exec(request.params.datei)?.[1];
+    const version = id ? logoVersion(id) : null;
+    if (!id || !version) return nichtDa(reply);
+    const png = await zwischengespeichert(`logo:seite:${id}:${version}`, async () => {
+      const uri = logoDataUri(id);
+      if (!uri) return null;
+      const roh = Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64');
+      return sharp(roh).resize(240, 240, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+    }, 6 * 60 * 60 * 1000);
+    if (!png) return nichtDa(reply);
+    const fest = request.query.v === version;
+    return reply.header('Content-Type', 'image/png')
+      .header('Cache-Control', fest ? 'public, max-age=31536000, immutable' : 'public, max-age=3600')
+      .header('X-Robots-Tag', 'noindex').send(png);
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/logo-192.png', limit(120), async (request, reply) => {

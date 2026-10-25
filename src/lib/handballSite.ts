@@ -42,7 +42,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { siteEnabled, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
-import { vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor } from './handballTeam';
+import { vereinsName, logoDataUri, logoVersion, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor } from './handballTeam';
 import { seitenUebersicht, aktuellesSpiel, HANDBALL_GROUPS, type HandballGroup, type HandballTeamView, type HandballMatchView } from './handballSicht';
 import { vervollstaendigePalette, renderWeekendSvg, type FullPalette } from './handballTableImage';
 import { bildMitKurzweg, zwischengespeichert, standVon, leereBildCache } from './bildCache';
@@ -89,6 +89,19 @@ export function siteConfig(teamId: string): HandballSiteConfig {
 // ---------------------------------------------------------------------------
 // Helfer
 // ---------------------------------------------------------------------------
+
+/**
+ * PRF-1-001: Ein Logo für die Seite als Verweis auf `<Mannschaft>/logo/<id>.png`
+ * statt als Data-URI. Mit den Logos der Tabelle trug eine Seite bis zu 13
+ * davon im Original (bis 3 MB HTML), und der Live-Poll lud sie bei jedem neuen
+ * Stand mit. `basis` ist der Weg zur Mannschaftsseite (`./`, `../`,
+ * `./<Team-ID>/`); `?v=` wechselt mit dem Logo, deshalb darf es dauerhaft
+ * zwischengespeichert werden. Null ohne Logo.
+ */
+export function logoPfad(teamId: string, basis: string): string | null {
+  const v = logoVersion(teamId);
+  return v ? `${basis}logo/${encodeURIComponent(teamId)}.png?v=${v}` : null;
+}
 
 /** HTML-Escaping — die Namen kommen aus einer fremden Quelle. */
 export function h(text: string | number | null | undefined): string {
@@ -625,7 +638,7 @@ function steckbriefHtml(team: HandballTeamView, gid: string, name: string, ausse
   const duelle = team.matches.filter(h => h.match_id !== ausser && (h.status === 'finished' || h.rated) && (h.is_home ? h.away_id : h.home_id) === gid
     && h.score_home !== null && h.score_away !== null);
   if (!zeile && letzte.length === 0 && duelle.length === 0) return '';
-  const logo = logoDataUri(gid);
+  const logo = logoPfad(gid, './');
   const initialen = name.split(/\s+/).filter(w => /^[A-ZÄÖÜ]/.test(w)).map(w => w[0]).join('').slice(0, 3) || '?';
   const zeilen: string[] = [];
   if (letzte.length > 0) {
@@ -1194,7 +1207,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   // In der Vorschau trägt jeder Verweis innerhalb der Seite den Schlüssel weiter.
   const anhang = opts.vorschau ? `?vorab=${encodeURIComponent(opts.vorschau)}` : '';
   const palette = vervollstaendigePalette(readPalette());
-  const logo = logoDataUri(team.team_id);
+  const logo = logoPfad(team.team_id, './');
   const naechstes = team.next_match;
   const letztes = team.last_match;
   const beschreibung = naechstes

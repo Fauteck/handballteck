@@ -466,6 +466,39 @@ describe('Handball-Microsite', () => {
     }
   });
 
+  it('verweist auf Logos statt sie einzubetten, und liefert sie verkleinert und dauerhaft zwischenspeicherbar (PRF-1-001)', async () => {
+    const sharp = (await import('sharp')).default;
+    const { logoVerkleinern } = await import('../lib/handballTeam');
+    // Ein Logo in Originalgröße, wie es die Quelle liefert: 1000 px.
+    const gross = await sharp({ create: { width: 1000, height: 800, channels: 4, background: { r: 200, g: 20, b: 20, alpha: 1 } } }).png().toBuffer();
+    const gespeichert = await logoVerkleinern(gross, 'image/png');
+    expect((await sharp(gespeichert.buffer).metadata()).width).toBe(512);
+    const jetzt = new Date().toISOString();
+    for (const id of [TEAM, '96300']) {
+      db.insert(schema.handball_team_logo).values({ team_id: id, source_url: `https://logo.test/${id}.png`, mime_type: gespeichert.mimeType, image: gespeichert.buffer, fetched_at: jetzt })
+        .onConflictDoUpdate({ target: schema.handball_team_logo.team_id, set: { image: gespeichert.buffer, fetched_at: jetzt } }).run();
+    }
+    try {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).not.toContain('data:image');
+      const verweis = new RegExp(`src="\\./logo/96300\\.png\\?v=([0-9a-z]+)"`).exec(html);
+      expect(verweis).not.toBeNull();
+      expect(html).toMatch(new RegExp(`src="\\./logo/${TEAM}\\.png\\?v=`));
+      const res = await get(`/${TEAM}/logo/96300.png?v=${verweis![1]}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      expect(res.headers['cache-control']).toContain('immutable');
+      expect((await sharp(res.rawPayload).metadata()).width).toBe(240);
+      // Ohne passende Fassung kurz, Unbekanntes und fremde Mannschaften 404.
+      expect((await get(`/${TEAM}/logo/96300.png`)).headers['cache-control']).not.toContain('immutable');
+      expect((await get(`/${TEAM}/logo/12345.png`)).statusCode).toBe(404);
+      expect((await get(`/${TEAM}/logo/abc.png`)).statusCode).toBe(404);
+      expect((await get('/12345/logo/96300.png')).statusCode).toBe(404);
+    } finally {
+      db.delete(schema.handball_team_logo).run();
+    }
+  });
+
   it('liefert Skript, Stil und Schriften ohne die Übersicht — und nur für eingetragene Mannschaften', async () => {
     expect((await get(`/${TEAM}/app.js`)).statusCode).toBe(200);
     expect((await get('/12345/app.js')).statusCode).toBe(404);

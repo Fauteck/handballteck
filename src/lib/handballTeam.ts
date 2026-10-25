@@ -28,7 +28,8 @@
  * nicht mehr.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
+import sharp from 'sharp';
 import { db } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
@@ -885,6 +886,51 @@ function logoFehlt(teamId: string, url: string): boolean {
   return !vorhanden || vorhanden.source_url !== url || Date.now() - Date.parse(vorhanden.fetched_at) >= LOGO_TTL_MS;
 }
 
+/**
+ * PRF-1-001: Die Quelle liefert Logos bis 2 MB; gespeichert wurden sie
+ * unverändert, und jede Seite trug bis zu 13 davon als Data-URI. Größer als
+ * LOGO_MAX_PX wird kein Logo gezeichnet (die Bilder setzen es höchstens so
+ * groß, die Seite holt eigene 240-px-Fassungen über `/logo/`). Was sharp
+ * nicht lesen kann, bleibt, wie es kam.
+ */
+const LOGO_MAX_PX = 512;
+/** Logos über dieser Größe verkleinert der Takt nachträglich, je Lauf ein paar. */
+const LOGO_ALT_BYTES = 96 * 1024;
+const LOGOS_VERKLEINERN_JE_LAUF = 20;
+
+export async function logoVerkleinern(buffer: Buffer, mimeType: string): Promise<{ buffer: Buffer; mimeType: string }> {
+  try {
+    const meta = await sharp(buffer).metadata();
+    if ((meta.width ?? 0) <= LOGO_MAX_PX && (meta.height ?? 0) <= LOGO_MAX_PX) return { buffer, mimeType };
+    const klein = await sharp(buffer).resize(LOGO_MAX_PX, LOGO_MAX_PX, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+    return klein.length < buffer.length ? { buffer: klein, mimeType: 'image/png' } : { buffer, mimeType };
+  } catch {
+    return { buffer, mimeType };
+  }
+}
+
+/** Den Altbestand nachziehen: Logos, die vor der Verkleinerung gespeichert wurden. */
+async function alteLogosVerkleinern(): Promise<void> {
+  const gross = db.select({ id: handball_team_logo.team_id, mime: handball_team_logo.mime_type, image: handball_team_logo.image })
+    .from(handball_team_logo).where(gt(sql`length(${handball_team_logo.image})`, LOGO_ALT_BYTES)).limit(LOGOS_VERKLEINERN_JE_LAUF).all();
+  for (const r of gross) {
+    const klein = await logoVerkleinern(Buffer.from(r.image), r.mime);
+    if (klein.buffer.length < r.image.length) {
+      db.update(handball_team_logo).set({ image: klein.buffer, mime_type: klein.mimeType }).where(eq(handball_team_logo.team_id, r.id)).run();
+    }
+  }
+}
+
+/**
+ * Die Fassung eines Logos für Verweise (`?v=`): ändert sich, wenn ein neues
+ * Logo gespeichert oder das alte verkleinert wird. Null ohne Logo.
+ */
+export function logoVersion(teamId: string): string | null {
+  const row = db.select({ at: handball_team_logo.fetched_at, laenge: sql<number>`length(${handball_team_logo.image})` })
+    .from(handball_team_logo).where(eq(handball_team_logo.team_id, teamId)).get();
+  return row ? `${Date.parse(row.at).toString(36)}${Number(row.laenge).toString(36)}` : null;
+}
+
 async function logoHolen(teamId: string, url: string | null): Promise<number> {
   if (!url || !logoFehlt(teamId, url)) return 0;
   try {
@@ -893,9 +939,10 @@ async function logoHolen(teamId: string, url: string | null): Promise<number> {
       maxBytes: 2 * 1024 * 1024,
     });
     const now = new Date().toISOString();
+    const klein = await logoVerkleinern(bild.buffer, bild.mimeType);
     db.insert(handball_team_logo)
-      .values({ team_id: teamId, source_url: url, mime_type: bild.mimeType, image: bild.buffer, fetched_at: now })
-      .onConflictDoUpdate({ target: handball_team_logo.team_id, set: { source_url: url, mime_type: bild.mimeType, image: bild.buffer, fetched_at: now } })
+      .values({ team_id: teamId, source_url: url, mime_type: klein.mimeType, image: klein.buffer, fetched_at: now })
+      .onConflictDoUpdate({ target: handball_team_logo.team_id, set: { source_url: url, mime_type: klein.mimeType, image: klein.buffer, fetched_at: now } })
       .run();
   } catch (err) {
     serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, `[handball] Logo für Team ${teamId} nicht abrufbar`);
@@ -1185,6 +1232,9 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
       fetched += await aufstellungenNachholen(teamId);
       fetched += await logosNachholen(teamId);
       fetched += await torfolgenNachholen(teamId);
+    }
+    try { await alteLogosVerkleinern(); } catch (err) {
+      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball] Logos nicht verkleinert');
     }
 
     // --- Teil 2: am Spieltag nachfassen ---------------------------------------
