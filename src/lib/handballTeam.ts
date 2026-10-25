@@ -1168,19 +1168,20 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
     // --- Teil 2: am Spieltag nachfassen ---------------------------------------
     // Nur für Mannschaften, deren Spiel läuft oder durch sein müsste. An
     // einem Tag ohne Spiel passiert hier nichts.
-    const nachzufassen = [...new Set(
-      db.select().from(handball_team_match).all()
-        .filter(r => (r.status === 'scheduled' || r.status === 'live' || r.status === 'other')
-          && jetzt - Date.parse(r.starts_at) >= nachfassenAb()
-          && jetzt - Date.parse(r.starts_at) < NACHFASSEN_BIS_MS)
-        .map(r => r.team_id),
-    )].filter(teamId => teams.includes(teamId));
+    // ARC-2-002: Die Saison kommt vom Spiel, das nachgefasst wird — nicht von
+    // irgendeiner Zeile der Mannschaft. Nach einem Saisonwechsel lieferte die
+    // erste Zeile die alte Saison, und das Nachfassen holte deren Spielplan.
+    const nachzufassen = new Map<string, number>();
+    for (const r of db.select().from(handball_team_match).all()) {
+      if (!teams.includes(r.team_id)) continue;
+      if (r.status !== 'scheduled' && r.status !== 'live' && r.status !== 'other') continue;
+      const seit = jetzt - Date.parse(r.starts_at);
+      if (seit < nachfassenAb() || seit >= NACHFASSEN_BIS_MS) continue;
+      nachzufassen.set(r.team_id, Math.max(nachzufassen.get(r.team_id) ?? 0, r.season_id));
+    }
 
     const nachSchon = new Set<number>();
-    for (const teamId of nachzufassen) {
-      const saisonId = db.select({ s: handball_team_match.season_id }).from(handball_team_match)
-        .where(eq(handball_team_match.team_id, teamId)).get()?.s;
-      if (!saisonId) continue;
+    for (const [teamId, saisonId] of nachzufassen) {
       const vorher = db.select().from(handball_team_match)
         .where(and(eq(handball_team_match.team_id, teamId), eq(handball_team_match.status, 'finished'))).all().length;
       const spiele = await fetchTeamMatches(teamId, saisonId);
@@ -1522,6 +1523,15 @@ export function mitLabelsInSpielen(sicht: HandballOverview): HandballOverview {
  * Der Tab liest ausschließlich die Datenbank — **kein** Aufruf nach draußen.
  * Gefüllt hat sie der Job; steht dort nichts, sagt der Tab das.
  */
+/**
+ * Die Saison einer Mannschaft, wie sie gerade läuft: die des jüngsten Spiels.
+ * `matches` ist aufsteigend nach Anwurf sortiert — `[0]` wäre nach einem
+ * Saisonwechsel die alte Saison (ARC-2-002).
+ */
+export function aktuellesSpiel<T extends { season_id: number }>(matches: readonly T[]): T | undefined {
+  return matches.at(-1);
+}
+
 export function handballOverview(): HandballOverview {
   const teams = readTeamIds();
   if (teams.length === 0) return { configured: false, teams: [], updated_at: null };

@@ -11,7 +11,7 @@ import {
 } from './handballTableImage';
 import { siteUrl, publicUrl } from '../config';
 import {
-  rosterFor, playerStats, logoDataUri, playerMatchLog, playerGames, positionHistory, tendenzReferenz, readPalette, saisonVorbei,
+  aktuellesSpiel, rosterFor, playerStats, logoDataUri, playerMatchLog, playerGames, positionHistory, tendenzReferenz, readPalette, saisonVorbei,
   type HandballMatchView, type HandballTeamView, type HandballStandingsView, type HandballPlayerStats,
 } from './handballTeam';
 import { DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballBotTexts';
@@ -36,7 +36,7 @@ function seitenAdresse(): string | null {
 
 /** Der Wettbewerb einer Mannschaft — aus der Tabelle, sonst aus dem ersten Spiel. */
 export function wettbewerbVon(team: HandballTeamView): string | null {
-  return team.standings[0]?.competition_name ?? team.matches[0]?.competition_name ?? null;
+  return team.standings[0]?.competition_name ?? aktuellesSpiel(team.matches)?.competition_name ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +175,7 @@ export function bildSaison(team: HandballTeamView, now = new Date()): string | n
   return renderSeasonSummarySvg({
     teamName: team.name,
     competitionName: staffel?.competition_name ?? wettbewerbVon(team) ?? '',
-    subtitle: [team.championship_name, saisonName(team.matches[0]?.season_id) ? `Saison ${saisonName(team.matches[0]?.season_id)}` : null].filter(Boolean).join(' · ') || null,
+    subtitle: [team.championship_name, saisonName(aktuellesSpiel(team.matches)?.season_id) ? `Saison ${saisonName(aktuellesSpiel(team.matches)?.season_id)}` : null].filter(Boolean).join(' · ') || null,
     position: zeile?.position ?? null,
     teams: staffel ? staffel.rows.length : null,
     won: s, drawn: u, lost: n,

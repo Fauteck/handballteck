@@ -43,7 +43,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { siteEnabled, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
 import {
-  handballOverview, mitLabelsInSpielen, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
+  handballOverview, aktuellesSpiel, mitLabelsInSpielen, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, renderWeekendSvg, type FullPalette } from './handballTableImage';
@@ -492,8 +492,9 @@ function gruppenKaesten(teams: SiteTeamLink[], aktuell: string | null, anhang = 
  */
 function heroHtml(team: HandballTeamView, logo: string | null, now: Date, mannschaften: SiteTeamLink[], anhang = '', startUrl = '../', verpassen = ''): string {
   const zeile = eigeneZeile(team);
-  const saison = saisonLabel(team.matches[0]?.season_id);
-  const wettbewerb = [team.championship_name, team.standings[0]?.competition_name ?? team.matches[0]?.competition_name].filter(Boolean).join(' · ');
+  const aktuell = aktuellesSpiel(team.matches);
+  const saison = saisonLabel(aktuell?.season_id);
+  const wettbewerb = [team.championship_name, team.standings[0]?.competition_name ?? aktuell?.competition_name].filter(Boolean).join(' · ');
   const initialen = team.name.split(/\s+/).filter(w => /^[A-ZÄÖÜ]/.test(w)).map(w => w[0]).join('').slice(0, 3) || 'HB';
   const naechstes = team.next_match;
   const teams = team.standings[0]?.rows.length ?? 0;
@@ -1136,7 +1137,7 @@ export function renderSiteHtml(team: HandballTeamView, opts: SiteRenderOptions):
   const ogBild = naechstes && !naechstes.is_live
     ? `${opts.baseUrl}bild/spiel.png`
     : letztes && letztes.score_home !== null ? `${opts.baseUrl}bild/endstand.png?match=${encodeURIComponent(letztes.match_id)}` : null;
-  const wettbewerb = team.standings[0]?.competition_name ?? team.matches[0]?.competition_name ?? '';
+  const wettbewerb = team.standings[0]?.competition_name ?? aktuellesSpiel(team.matches)?.competition_name ?? '';
   const titel = `${vereinsName(team.name)}${team.championship_name ? ` · ${team.championship_name}` : ''}`;
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();

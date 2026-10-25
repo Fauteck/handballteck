@@ -246,6 +246,23 @@ describe('Tageslauf', () => {
     expect(zeile.score_home).toBe(31);
   });
 
+  it('fasst nach einem Saisonwechsel in der Saison des laufenden Spiels nach, nicht in der alten', async () => {
+    trageTeamEin();
+    // ARC-2-002: Die Zeile der Vorsaison liegt im Index vorn — sie darf die Saison nicht bestimmen.
+    legeSpiel({ id: `${TEAM}:alt`, match_id: 'alt', season_id: 2526, starts_at: new Date(Date.now() - 300 * 24 * 3600 * 1000).toISOString(), status: 'finished', status_name: 'Finalizado' });
+    legeSpiel({ starts_at: new Date(Date.now() - 60 * 60 * 1000).toISOString() });
+    const f = quelle([spiel({
+      id: 'm1',
+      date: quellzeit(Date.now() - 60 * 60 * 1000),
+      status: { id: 1, name: 'Finalizado', is_live: false, is_finished: true },
+      result: { local: 31, visitor: 25 },
+    })]);
+    await mod.syncHandballTeams();
+    const spielplaene = f.mock.calls.map(c => String(c[0])).filter(u => u.includes('/matches?'));
+    expect(spielplaene).toHaveLength(1);
+    expect(spielplaene[0]).toContain('season_id=2627');
+  });
+
   it('fragt während des Spiels erst im Live-Takt nach — sonst erst 45 Minuten nach Anwurf', async () => {
     trageTeamEin();
     legeSpiel({ starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() });

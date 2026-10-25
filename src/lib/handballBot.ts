@@ -81,7 +81,7 @@ import {
   fetchLineups, fetchMatchEvents, fetchMatchReport, fetchTeamMatches, sourceTimeToUtc, type HandballLineupSide, type HandballMatch,
 } from './handballNetClient';
 import {
-  handballOverview, rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, backlogFor,
+  handballOverview, aktuellesSpiel, rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, backlogFor,
   getHandballHealth, playerGames, opponentFormFor, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei, type HandballMatchView,
   type HandballTeamView, type HandballStandingsView,
 } from './handballTeam';
@@ -1770,7 +1770,7 @@ export function textBeschreibung(teams: HandballTeamView[]): string {
   const bloecke: string[] = [];
   for (const team of teams) {
     const zeilen = [`🤾 ${team.name}`];
-    const liga = [wettbewerbVon(team), saisonName(team.matches[0]?.season_id)].filter(Boolean).join(', Saison ');
+    const liga = [wettbewerbVon(team), saisonName(aktuellesSpiel(team.matches)?.season_id)].filter(Boolean).join(', Saison ');
     if (liga) zeilen.push(liga);
     const platz = eigenerPlatz(team);
     if (platz) zeilen.push(`Tabelle: ${platz.position}. Platz, ${platz.points} Punkte nach ${platz.played} Spiel${platz.played === 1 ? '' : 'en'}`);
@@ -2223,7 +2223,7 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
     // Dazu eine Tabelle, die alle gespielten Spiele schon zählt: Der Endplatz
     // kommt aus ihr, und eine Tabelle vom Vortag nennte den falschen.
     const ende = saisonVorbei(team, now);
-    const saisonKey = `${team.team_id}:${team.matches[0]?.season_id ?? 0}:saison`;
+    const saisonKey = `${team.team_id}:${aktuellesSpiel(team.matches)?.season_id ?? 0}:saison`;
     const eigeneZeile = team.standings[0]?.rows.find(r => r.teamId === team.team_id);
     const gespieltZahl = team.matches.filter(m => m.status === 'finished' || m.rated).length;
     const tabelleAktuell = !!eigeneZeile && eigeneZeile.played >= gespieltZahl;
