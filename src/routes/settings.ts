@@ -25,7 +25,7 @@ import { getBackoffSnapshot } from '../lib/pollerBackoff';
 import { getHandballNetStats, fetchActiveSeason, fetchTeamMatches, HandballEmptyError } from '../lib/handballNetClient';
 import { getHandballHealth } from '../lib/handballTeam';
 import { automatischeBereiche, HANDBALL_GROUPS } from '../lib/handballSicht';
-import { isHandballBotEnabled, getHandballBotUsername, getHandballWebhookState, listSubscribers, handballBotLink, adminChatIds } from '../lib/handballBot';
+import { isHandballBotEnabled, getHandballBotUsername, getHandballWebhookState, listSubscribers, handballBotLink, adminChatIds } from '../lib/handballBotBasis';
 import { sendMessage } from '../lib/telegramClient';
 import { countSiteSubscribers } from '../lib/handballSitePush';
 import { getVapidPublicKey, sendPush, SETTING_PRIVATE_KEY } from '../lib/webPush';

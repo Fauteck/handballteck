@@ -17,11 +17,10 @@ import { getHandballNetStats } from '../lib/handballNetClient';
 import { syncHandballTeams, playerStats, playerGames, getHandballHealth } from '../lib/handballTeam';
 import { type HandballTeamView } from '../lib/handballSicht';
 import { handballOverview } from '../lib/handballSicht';
-import {
-  getHandballBotUsername, isHandballBotEnabled, listSubscribers, pushHandballBot, getHandballBotHealth, refreshHandballWebhookInfo,
-  bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSpieler, bildSaison, endstandBild,
-  textSaison, textRekorde, alsKlartext, pflegeHandballBotBeschreibung,
-} from '../lib/handballBot';
+import { bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSpieler, bildSaison, endstandBild, textSaison, textRekorde, alsKlartext } from '../lib/handballBot';
+import { getHandballBotUsername, isHandballBotEnabled, listSubscribers, getHandballBotHealth, refreshHandballWebhookInfo } from '../lib/handballBotBasis';
+import { pflegeHandballBotBeschreibung } from '../lib/handballBotBeschreibung';
+import { pushHandballBot } from '../lib/handballBotPush';
 import { svgAlsPng } from '../lib/bildCache';
 import { siteConfig } from '../lib/handballSite';
 import { pushHandballSite, countSiteSubscribers, sitePushConfig } from '../lib/handballSitePush';

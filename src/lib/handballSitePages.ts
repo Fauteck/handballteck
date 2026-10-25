@@ -9,7 +9,7 @@ import { readPalette, vereinsName, logoDataUri, playerGames } from './handballTe
 import { h, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml } from './handballSite';
 import { inhaltsHash, SITE_THEME_JS, SITE_APP_JS } from './handballSiteAssets';
 import { type HandballTeamView, HANDBALL_GROUPS } from './handballSicht';
-import { handballBotLink, getHandballBotUsername } from './handballBot';
+import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
 import { clubName } from '../config';
 
 // ---------------------------------------------------------------------------

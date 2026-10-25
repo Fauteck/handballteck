@@ -13,7 +13,9 @@ import { importTodoteck } from './import/todoteck';
 import { syncHandballTeams, naechsterAbstandMs } from './lib/handballTeam';
 import { handballOverview } from './lib/handballSicht';
 import { clubdeskHolen, clubdeskFaelligMachen } from './lib/clubdesk';
-import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
+import { registerHandballBotAtBoot, refreshHandballWebhookInfo } from './lib/handballBotBasis';
+import { pflegeHandballBotBeschreibung } from './lib/handballBotBeschreibung';
+import { pushHandballBot } from './lib/handballBotPush';
 import { pushHandballSite } from './lib/handballSitePush';
 import { serviceLog } from './lib/serviceLogger';
 

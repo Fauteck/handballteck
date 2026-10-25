@@ -34,10 +34,8 @@ import { sendPush as sendWebPush, isPushConfigured, getVapidPublicKey, type Push
 import { changesFor, vereinsName } from './handballTeam';
 import { type HandballTeamView, type HandballMatchView } from './handballSicht';
 import { handballOverview } from './handballSicht';
-import {
-  textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung,
-  LEADS, type Lead, type Mode,
-} from './handballBot';
+import { textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung } from './handballBot';
+import { LEADS, type Lead, type Mode } from './handballBotBasis';
 import { siteConfig, SITE_TITEL, naechstesWochenende } from './handballSite';
 import { serviceLog } from './serviceLogger';
 

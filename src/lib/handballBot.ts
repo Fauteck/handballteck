@@ -63,431 +63,32 @@
  */
 
 import crypto from 'node:crypto';
-import { eq, gte, isNull, lt } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 import { db } from '../db';
+import { handball_bot_sent, handball_bot_feedback, handball_bot_delivery, handball_site_subscription } from '../db/schema';
 import {
-  handball_bot_instance, handball_bot_subscriber, handball_bot_sent, handball_bot_feedback, handball_bot_delivery,
-  handball_site_subscription,
-} from '../db/schema';
-import {
-  sendMessage, sendPhotoBytes, sendAnimationBytes, sendFileIdAgain, sendDocument, setMessageReaction, answerCallbackQuery, setWebhook, setMyCommands,
-  deleteMyCommands, getMe, escapeHtml, TelegramApiError, sendChatAction, sendVenue, answerInlineQuery, sendMediaGroupPhotos,
-  getWebhookInfo, type TelegramWebhookInfo, setMyDescription, setMyShortDescription, BOT_DESCRIPTION_MAX, BOT_SHORT_DESCRIPTION_MAX,
-  type TelegramUpdate, type TelegramInlineQuery, type BotCommand, type InlineKeyboard, type ChatAction, type InlineQueryResultPhoto,
-  type AnswerInlineQueryOptions, type TelegramMessage,
+  sendMessage, sendPhotoBytes, sendAnimationBytes, sendFileIdAgain, sendDocument, setMessageReaction, answerCallbackQuery, getMe,
+  escapeHtml, TelegramApiError, sendChatAction, sendVenue, answerInlineQuery, sendMediaGroupPhotos, type TelegramUpdate,
+  type TelegramInlineQuery, type InlineKeyboard, type ChatAction, type InlineQueryResultPhoto, type AnswerInlineQueryOptions,
+  type TelegramMessage,
 } from './telegramClient';
 import { svgAlsPng } from './bildCache';
-import {
-  fetchLineups, fetchMatchEvents, fetchMatchReport, fetchTeamMatches, sourceTimeToUtc, type HandballLineupSide, type HandballMatch,
-} from './handballNetClient';
-import { rosterFor, changesFor, storeLineup, playerStats, setzeHalbzeit, setzeBericht, ensureMatchReport, backlogFor, getHandballHealth, playerGames, opponentFormFor, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei } from './handballTeam';
+import { fetchMatchEvents, sourceTimeToUtc } from './handballNetClient';
+import { rosterFor, playerStats, ensureMatchReport, backlogFor, getHandballHealth, playerGames, merkeAnwurfSchaetzung, zeitzonenStand, saisonVorbei } from './handballTeam';
 import { type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
-import { handballOverview, aktuellesSpiel } from './handballSicht';
-import {
-  botToken as configBotToken, inviteCode as configInviteCode, adminChatIds as configAdminChatIds, botAutoDescription,
-  publicUrl as configPublicUrl,
-} from '../config';
+import { handballOverview } from './handballSicht';
 import { serviceLog } from './serviceLogger';
-import { spieltagsGrussFaellig, textSpieltag } from './handballBotTexts';
 import {
-  DATUM, ZEIT, ankuendigungTastatur, berichtTastatur, botIdentity, datum, eigeneSeite, endstandTastatur, erinnerungTastatur, gegnerId,
-  gegnerVon, halleAlsOrt, hilfeTastatur, icsKalender, knopf, modusTastatur, namenAus, routenTastatur, spielTastatur, spielerTastatur,
-  spielerTreffer, statusTastatur, tabellenBewegung, teamsTastatur, textAenderung, textAnkuendigung, textAufstellung, textBericht,
-  textEndstand, textErgebnisse, textHalbzeit, textKader, textLive, textRekorde, textSaison, textSpiele, textSpieler, textTabelle,
-  textTeams,
+  DATUM, ZEIT, berichtTastatur, botIdentity, datum, erinnerungTastatur, gegnerVon, halleAlsOrt, hilfeTastatur, icsKalender, knopf,
+  modusTastatur, routenTastatur, spielTastatur, spielerTastatur, spielerTreffer, statusTastatur, teamsTastatur, textBericht,
+  textErgebnisse, textKader, textLive, textRekorde, textSaison, textSpiele, textSpieler, textTabelle, textTeams,
 } from './handballBotTexts';
 import {
-  type EndstandKarteExtras, bildKader, bildSaison, bildSpiel, bildSpieler, bildTabelle, bildTorjaeger, bildVerlauf, endstandAnimation,
-  endstandBild, saisonName, wettbewerbVon,
+  bildKader, bildSaison, bildSpiel, bildSpieler, bildTabelle, bildTorjaeger, bildVerlauf, endstandBild, wettbewerbVon,
 } from './handballBotImages';
+import { listSubscribers, offeneRueckmeldungen, zustellBilanz, inlineAn, botRegistrationState, webhookZustand, handballWebhookBefund, getHandballBotToken, inviteCode, subscribe, setTeams, istAbonnent, touch, unsubscribe, abonnent, DEFAULT_LEAD, LEADS, type Lead, setLead, setMode, adminChatIds, istAdmin, refreshHandballWebhookInfo, meineTeams, LIVE_WINDOW_MS, ensureHandballBotSecrets, publicUrl, type HandballSubscriber, verfolgt, type Zustellung, type Mode, setzeInlineAn, __resetHandballBotBasisForTests } from './handballBotBasis';
 export * from './handballBotTexts';
 export * from './handballBotImages';
-
-/** Wie lange nach dem Anwurf `/live` ein angesetztes Spiel noch als laufend nimmt. */
-const LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
-/** Fenster, in dem nach der Aufstellung gesehen wird. */
-const LINEUP_FROM_MS = -5 * 60 * 1000;
-const LINEUP_UNTIL_MS = 30 * 60 * 1000;
-/** Ein Endstand, der älter ist, gilt als Vergangenheit und wird nur gemerkt. */
-const RESULT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-/**
- * Eine Wertung kommt Tage nach dem Spiel (die Spielleitung entscheidet über
- * Abbruch und Nichtantreten) — sie darf deshalb älter sein als ein Endstand.
- * Zwei Wochen: Beim ersten Lauf nach dem Einrichten kommen keine Wertungen
- * aus der Hinrunde.
- */
-const RATED_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-/**
- * Fenster für den Halbzeitstand: 2 × 25 Minuten Jugendspiel, die erste Hälfte
- * ist mit Unterbrechungen nach 27 bis 30 Minuten vorbei. Bei einem Takt von
- * 15 Minuten sind das zwei Blicke in die Torfolge; danach gibt der Bot auf.
- */
-const HALFTIME_FROM_MS = 27 * 60 * 1000;
-const HALFTIME_UNTIL_MS = 60 * 60 * 1000;
-/**
- * Fenster für den Spielbericht: Die Quelle schreibt ihn irgendwann nach dem
- * Abpfiff (am 26.09.2026 stand er zwei Stunden nach Anwurf). Gesehen wird ab
- * 75 Minuten nach Anwurf je Takt, bis acht Stunden danach — höchstens 27
- * Blicke für ein Spiel am Samstagnachmittag.
- */
-const REPORT_FROM_MS = 75 * 60 * 1000;
-const REPORT_UNTIL_MS = 8 * 60 * 60 * 1000;
-/** Eine Verlegung, die der Abruf vor mehr als einem Tag gesehen hat, wird nur gemerkt (erster Lauf mit Abonnenten). */
-const CHANGE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-/** So viel Abstand muss zwischen Spieltagsgruß und Ankündigung liegen, sonst entfällt der Gruß. */
-const GRUSS_ABSTAND_ZUR_ANKUENDIGUNG_MS = 2 * 60 * 60 * 1000;
-
-const BOT_COMMANDS: BotCommand[] = [
-  { command: 'spiele', description: 'Die nächsten Spiele' },
-  { command: 'ergebnisse', description: 'Die letzten Ergebnisse' },
-  { command: 'tabelle', description: 'Die aktuelle Tabelle' },
-  { command: 'kader', description: 'Der Kader mit Rückennummern' },
-  { command: 'spieler', description: 'Die Bilanz eines Spielers, zum Antippen' },
-  { command: 'torjaeger', description: 'Die Torjäger als Grafik' },
-  { command: 'saison', description: 'Die Saisonbilanz mit Tabellenplatz-Verlauf' },
-  { command: 'saisonkarte', description: 'Die Saisonbilanz als Karte' },
-  { command: 'rekorde', description: 'Die Rekorde der Saison' },
-  { command: 'bericht', description: 'Der Spielbericht zum letzten Spiel' },
-  { command: 'live', description: 'Zwischenstand, wenn ein Spiel läuft' },
-  { command: 'kalender', description: 'Alle Spiele als Kalenderdatei' },
-  { command: 'halle', description: 'Die Halle des nächsten Spiels als Ort' },
-  { command: 'teams', description: 'Welche Mannschaften du verfolgst' },
-  { command: 'erinnerung', description: 'Wann vor dem Anwurf erinnern' },
-  { command: 'modus', description: 'Alles oder nur Ergebnisse' },
-  { command: 'feedback', description: 'Ein Wort an den Betreiber' },
-  { command: 'hilfe', description: 'Was der Bot kann' },
-  { command: 'stop', description: 'Keine Meldungen mehr' },
-];
-
-/**
- * Die Befehle des Betreibers — nur im Menü der Admin-Chats aus der
- * Dienste-Zeile (Chat-Scope, siehe `adminMenueSetzen`). Das Menü ist
- * Komfort: Berechtigt ist, wer in `bot_admin_chat_id` steht, geprüft bei
- * jedem Befehl (`istAdmin`), egal was im Menü steht.
- */
-const ADMIN_COMMANDS: BotCommand[] = [
-  { command: 'status', description: 'Betriebsstand (nur Betreiber)' },
-  { command: 'rundruf', description: 'Nachricht an alle Abonnenten (nur Betreiber)' },
-  { command: 'erledigt', description: 'Rückmeldung als erledigt markieren (nur Betreiber)' },
-];
-
-/**
- * Was der Webhook zustellt. `my_chat_member` für den Austritt aus Gruppen,
- * `inline_query` für den Inline-Modus — ohne beide in der Liste kämen sie
- * nie an (Telegram stellt nur zu, was hier steht).
- */
-export const HANDBALL_ALLOWED_UPDATES = ['message', 'callback_query', 'my_chat_member', 'inline_query'];
-
-/** Vorlauf der Ankündigung je Chat — die Werte, die `/erinnerung` kennt. */
-export const LEADS = ['1h', '3h', 'abend', 'aus'] as const;
-export type Lead = typeof LEADS[number];
-export type Mode = 'all' | 'results';
-const DEFAULT_LEAD: Lead = '1h';
-
-// ---------------------------------------------------------------------------
-// Konfiguration
-// ---------------------------------------------------------------------------
-
-/**
- * Der Token kommt aus `TELEGRAM_BOT_TOKEN`, der Einladungscode aus
- * `TELEGRAM_INVITE_CODE`, die Admin-Chats aus `TELEGRAM_ADMIN_CHAT_IDS` —
- * alles ENV, siehe `config.ts`. In Todoteck stand der Token in der
- * Dienste-Zeile, samt einer Prüfung, für welche Instanz er gespeichert
- * wurde (ein eingespieltes Backup durfte den Prod-Bot nicht umbiegen).
- * Eine ENV wandert mit keinem Backup — die Prüfung ist hier gegenstandslos,
- * `botRegistrationState` sagt deshalb immer „für diese Instanz".
- */
-export function getHandballBotToken(): string | null {
-  return configBotToken();
-}
-
-export function isHandballBotEnabled(): boolean {
-  return getHandballBotToken() !== null;
-}
-
-function inviteCode(): string | null {
-  return configInviteCode();
-}
-
-/** Die Admin-Chats aus der Konfiguration — leer, wenn keiner eingetragen ist. */
-export function adminChatIds(): Set<string> {
-  return configAdminChatIds();
-}
-
-function istAdmin(chatId: string): boolean {
-  return adminChatIds().has(chatId);
-}
-
-function publicUrl(): string {
-  return configPublicUrl();
-}
-
-export interface HandballBotRegistrationState {
-  source: 'env' | null;
-  /** Ein Token aus der ENV gilt immer für diese Instanz. */
-  registeredHere: boolean;
-  /** Bleibt aus Todoteck-Zeiten: für welche Instanz ein gespeicherter Token galt — hier immer null. */
-  storedFor: string | null;
-}
-
-export function botRegistrationState(): HandballBotRegistrationState {
-  return getHandballBotToken() ? { source: 'env', registeredHere: true, storedFor: null } : { source: null, registeredHere: false, storedFor: null };
-}
-
-export interface HandballBotSecrets {
-  webhookPathSecret: string;
-  webhookHeaderSecret: string;
-}
-
-export function ensureHandballBotSecrets(): HandballBotSecrets {
-  const existing = db.select().from(handball_bot_instance).where(eq(handball_bot_instance.id, 1)).get();
-  if (existing) {
-    return { webhookPathSecret: existing.webhook_path_secret, webhookHeaderSecret: existing.webhook_header_secret };
-  }
-  const row = {
-    id: 1,
-    webhook_path_secret: crypto.randomBytes(24).toString('base64url'),
-    webhook_header_secret: crypto.randomBytes(32).toString('hex'),
-    created_at: new Date().toISOString(),
-  };
-  db.insert(handball_bot_instance).values(row).run();
-  return { webhookPathSecret: row.webhook_path_secret, webhookHeaderSecret: row.webhook_header_secret };
-}
-
-export function buildHandballWebhookUrl(pathSecret: string): string {
-  return `${publicUrl()}/telegram/webhook/${pathSecret}`;
-}
-
-
-/**
- * Wie die letzte Webhook-Registrierung in diesem Prozess ausging — für die
- * Dienste-Zeile (`handball_bot`). `null` heißt: in diesem Prozess noch nicht
- * versucht (Start übersprungen, Token nie gespeichert).
- */
-let webhookZustand: { ok: boolean; error: string | null; at: string } | null = null;
-
-/** Nur für Tests und die Gesundheitsübersicht. */
-export function getHandballWebhookState(): { ok: boolean; error: string | null; at: string } | null {
-  return webhookZustand;
-}
-
-/** Webhook und Befehlsmenü registrieren, Bot-Namen merken. */
-export async function registerHandballBot(): Promise<{ url: string; username: string | null }> {
-  const token = getHandballBotToken();
-  if (!token) throw new Error('Kein Bot-Token (TELEGRAM_BOT_TOKEN)');
-  const secrets = ensureHandballBotSecrets();
-  const url = buildHandballWebhookUrl(secrets.webhookPathSecret);
-  try {
-    await setWebhook(token, url, secrets.webhookHeaderSecret, HANDBALL_ALLOWED_UPDATES);
-  } catch (err) {
-    webhookZustand = { ok: false, error: err instanceof Error ? err.message : String(err), at: new Date().toISOString() };
-    throw err;
-  }
-  webhookZustand = { ok: true, error: null, at: new Date().toISOString() };
-  // Frisch registriert: Eine alte Auskunft „zeigt woanders hin" gilt nicht mehr.
-  webhookInfo = null;
-  await setMyCommands(token, BOT_COMMANDS);
-  try {
-    const ich = await getMe(token);
-    botIdentity.username = ich.username ?? null;
-    inlineAn = typeof ich.supports_inline_queries === 'boolean' ? ich.supports_inline_queries : null;
-  } catch {
-    botIdentity.username = null;
-    inlineAn = null;
-  }
-  await adminMenueSetzen(token);
-  return { url, username: botIdentity.username };
-}
-
-/** Ob der Inline-Modus im BotFather eingeschaltet ist (`getMe`) — null: in diesem Prozess nicht erfragt. */
-let inlineAn: boolean | null = null;
-
-function instanzZeile() {
-  ensureHandballBotSecrets();
-  return db.select().from(handball_bot_instance).where(eq(handball_bot_instance.id, 1)).get();
-}
-
-/**
- * Das Befehlsmenü der Admin-Chats: je Chat die Standardbefehle **plus** die
- * des Betreibers, weil eine Liste mit Chat-Scope die Standardliste dort
- * ersetzt statt ergänzt. Wer aus der Dienste-Zeile verschwindet, bekommt
- * sein Menü per `deleteMyCommands` zurückgesetzt — dafür merkt sich die
- * Instanz-Zeile, wem sie eins gegeben hat. Scheitert das Aufräumen, bleibt
- * der Chat in der Liste und kommt beim nächsten Mal wieder dran.
- *
- * Fehler je Chat sind folgenlos (ein Chat, der nie mit dem Bot geredet hat,
- * ist für Telegram „chat not found"): Das Menü ist Komfort, die Berechtigung
- * prüft `istAdmin` bei jedem Befehl.
- */
-async function adminMenueSetzen(token: string): Promise<void> {
-  const jetzt = [...adminChatIds()];
-  const zeile = instanzZeile();
-  const vorher = (zeile?.admin_menu_chats ?? '').split(',').map(t => t.trim()).filter(Boolean);
-  const behalten = new Set<string>();
-  for (const chatId of jetzt) {
-    try {
-      await setMyCommands(token, [...BOT_COMMANDS, ...ADMIN_COMMANDS], { type: 'chat', chat_id: chatId });
-      behalten.add(chatId);
-    } catch (err) {
-      serviceLog.warn({ chat: chatId, err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Admin-Menü nicht gesetzt');
-    }
-  }
-  for (const chatId of vorher) {
-    if (jetzt.includes(chatId)) continue;
-    try {
-      await deleteMyCommands(token, { type: 'chat', chat_id: chatId });
-    } catch (err) {
-      behalten.add(chatId);
-      serviceLog.warn({ chat: chatId, err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Admin-Menü nicht entfernt');
-    }
-  }
-  db.update(handball_bot_instance).set({ admin_menu_chats: [...behalten].join(',') || null }).where(eq(handball_bot_instance.id, 1)).run();
-}
-
-/** Das Admin-Menü neu setzen — nach einer Änderung der Admin-Chats. */
-export async function refreshHandballAdminMenu(): Promise<void> {
-  const token = getHandballBotToken();
-  if (!token) return;
-  await adminMenueSetzen(token);
-}
-
-/**
- * Webhook und Menü registrieren, die gemerkten Beschreibungen vergessen —
- * ein neuer Token kann ein anderer Bot sein, dessen Beschreibung der nächste
- * Lauf neu setzt statt „unverändert" anzunehmen. Ohne Token passiert nichts.
- */
-export async function activateHandballBot(): Promise<{ url: string; username: string | null } | null> {
-  if (!getHandballBotToken()) return null;
-  ensureHandballBotSecrets();
-  db.update(handball_bot_instance).set({ description_text: null, short_description_text: null }).where(eq(handball_bot_instance.id, 1)).run();
-  return registerHandballBot();
-}
-
-/** Beim Serverstart — mit der Instanz-Prüfung aus `botRegistrationState`. */
-export async function registerHandballBotAtBoot(): Promise<
-  | { status: 'registered'; url: string; username: string | null }
-  | { status: 'skipped'; reason: string }
-> {
-  const state = botRegistrationState();
-  if (state.source === null) return { status: 'skipped', reason: 'kein Bot-Token (TELEGRAM_BOT_TOKEN)' };
-  if (!state.registeredHere) return { status: 'skipped', reason: 'Token nicht für diese Instanz' };
-  const r = await registerHandballBot();
-  return { status: 'registered', ...r };
-}
-
-export function getHandballBotUsername(): string | null {
-  return botIdentity.username;
-}
-
-/**
- * Der Link, mit dem jemand den Bot abonniert — `t.me/<bot>`, mit dem
- * Einladungscode als `?start=<code>`, wenn einer gesetzt ist (ohne ihn
- * antwortet `/start` „nicht öffentlich"). Null, solange der Bot nicht
- * registriert ist: Der Benutzername kommt erst von `getMe`, und ein Link
- * auf einen unbekannten Bot wäre ein toter Knopf auf der Microsite.
- *
- * Der Code steht damit auf einer Seite, die jeder öffnen kann, dem man den
- * Link gab — das ist gewollt: Die Microsite ist selbst die Einladung
- * (Wiki „Handball-Verfolgung (handball.net)“ §7.2), und wer sie hat, darf auch den Bot.
- */
-export function handballBotLink(): string | null {
-  if (!botIdentity.username) return null;
-  const code = inviteCode();
-  return `https://t.me/${botIdentity.username}${code ? `?start=${encodeURIComponent(code)}` : ''}`;
-}
-
-// ---------------------------------------------------------------------------
-// Abonnenten
-// ---------------------------------------------------------------------------
-
-export interface HandballSubscriber {
-  chatId: string;
-  name: string | null;
-  lead: Lead;
-  mode: Mode;
-  /**
-   * Die verfolgten Mannschaften (`/teams`); null heißt alle, eine leere Liste
-   * noch keine — so steht ein neuer Chat da, bis er gewählt hat.
-   */
-  teamIds: string[] | null;
-}
-
-function alsLead(v: string | null): Lead {
-  return (LEADS as readonly string[]).includes(v ?? '') ? (v as Lead) : DEFAULT_LEAD;
-}
-
-export function listSubscribers(): HandballSubscriber[] {
-  return db.select().from(handball_bot_subscriber).all().map(r => ({
-    chatId: r.chat_id, name: r.name, lead: alsLead(r.lead), mode: r.mode === 'results' ? 'results' as const : 'all' as const,
-    teamIds: alsTeamIds(r.team_ids),
-  }));
-}
-
-function alsTeamIds(roh: string | null): string[] | null {
-  // Leerer Text (nicht NULL) ist die bewusst leere Auswahl eines neuen Chats.
-  if (roh === '') return [];
-  const ids = (roh ?? '').split(',').map(t => t.trim()).filter(t => /^\d{1,12}$/.test(t));
-  return ids.length > 0 ? ids : null;
-}
-
-function setTeams(chatId: string, teamIds: string[] | null): void {
-  db.update(handball_bot_subscriber).set({ team_ids: teamIds ? teamIds.join(',') : null }).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
-}
-
-/** Ob ein Abonnent diese Mannschaft verfolgt — ohne Auswahl (null) alle, mit leerer keine. */
-export function verfolgt(abo: Pick<HandballSubscriber, 'teamIds'>, teamId: string): boolean {
-  return !abo.teamIds || abo.teamIds.includes(teamId);
-}
-
-/**
- * Die Mannschaften, die ein Chat sehen will — seine Auswahl aus `/teams`,
- * ohne Auswahl alle. Eine Auswahl, die keine eingetragene Mannschaft mehr
- * trifft (ID aus der Konfiguration genommen), zählt wie keine.
- */
-export function meineTeams(chatId: string, teams: HandballTeamView[]): HandballTeamView[] {
-  const abo = abonnent(chatId);
-  if (!abo?.teamIds) return teams;
-  const eigene = teams.filter(t => abo.teamIds!.includes(t.team_id));
-  return eigene.length > 0 ? eigene : teams;
-}
-
-function setLead(chatId: string, lead: Lead): void {
-  db.update(handball_bot_subscriber).set({ lead }).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
-}
-
-function setMode(chatId: string, mode: Mode): void {
-  db.update(handball_bot_subscriber).set({ mode }).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
-}
-
-function abonnent(chatId: string): HandballSubscriber | null {
-  return listSubscribers().find(s => s.chatId === chatId) ?? null;
-}
-
-function subscribe(chatId: string, name: string | null): boolean {
-  const now = new Date().toISOString();
-  const existing = db.select().from(handball_bot_subscriber).where(eq(handball_bot_subscriber.chat_id, chatId)).get();
-  if (existing) {
-    db.update(handball_bot_subscriber).set({ name, last_seen_at: now }).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
-    return false;
-  }
-  db.insert(handball_bot_subscriber).values({ chat_id: chatId, name, subscribed_at: now, last_seen_at: now }).run();
-  return true;
-}
-
-function unsubscribe(chatId: string): boolean {
-  const r = db.delete(handball_bot_subscriber).where(eq(handball_bot_subscriber.chat_id, chatId)).run();
-  return r.changes > 0;
-}
-
-function touch(chatId: string): void {
-  db.update(handball_bot_subscriber).set({ last_seen_at: new Date().toISOString() })
-    .where(eq(handball_bot_subscriber.chat_id, chatId)).run();
-}
-
-function istAbonnent(chatId: string): boolean {
-  return !!db.select().from(handball_bot_subscriber).where(eq(handball_bot_subscriber.chat_id, chatId)).get();
-}
-
 
 /**
  * Die Tabelle als Bild — am Telefon bleibt sie so eine Tabelle, als
@@ -892,165 +493,6 @@ function webhookZeile(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Webhook bei Telegram nachsehen (getWebhookInfo)
-// ---------------------------------------------------------------------------
-
-/** Wie alt die Auskunft von Telegram höchstens sein darf, bevor sie neu geholt wird. */
-const WEBHOOK_INFO_MAX_ALTER_MS = 10 * 60 * 1000;
-/** Ab so vielen wartenden Updates ist der Bot gelb — Telegram kommt nicht durch. */
-const WEBHOOK_STAU = 50;
-
-let webhookInfo: { at: number; info: TelegramWebhookInfo | null; fehler: string | null } | null = null;
-let webhookInfoLaeuft: Promise<void> | null = null;
-
-/**
- * `getWebhookInfo` höchstens alle zehn Minuten, im Prozess vorgehalten und
- * von gleichzeitigen Aufrufern geteilt. Aufgerufen nach jedem Abruf-Takt
- * (damit die Auskunft meist schon da ist), vor `/status` und vor der
- * Dienste-Zeile. Ein Fehlschlag der Abfrage selbst heißt „unbekannt" — nie
- * rot allein deshalb.
- */
-export async function refreshHandballWebhookInfo(now = Date.now()): Promise<void> {
-  const token = getHandballBotToken();
-  if (!token || !botRegistrationState().registeredHere) return;
-  if (webhookInfo && now - webhookInfo.at < WEBHOOK_INFO_MAX_ALTER_MS) return;
-  if (webhookInfoLaeuft) return webhookInfoLaeuft;
-  webhookInfoLaeuft = (async () => {
-    try {
-      webhookInfo = { at: now, info: await getWebhookInfo(token), fehler: null };
-    } catch (err) {
-      webhookInfo = { at: now, info: null, fehler: err instanceof Error ? err.message : String(err) };
-    } finally {
-      webhookInfoLaeuft = null;
-    }
-  })();
-  return webhookInfoLaeuft;
-}
-
-export interface HandballWebhookBefund {
-  /** Rot: Telegram stellt nicht an diese Instanz zu. */
-  rot: string | null;
-  /** Gelb: Zustellfehler in den letzten 24 Stunden oder ein Stau. */
-  gelb: string | null;
-  /** Kurzform für `/status`. */
-  zeile: string;
-}
-
-/** Was die vorgehaltene Auskunft von Telegram sagt — ohne eigenen Aufruf. */
-export function handballWebhookBefund(now = Date.now()): HandballWebhookBefund {
-  if (!webhookInfo) return { rot: null, gelb: null, zeile: 'noch nicht nachgesehen' };
-  if (!webhookInfo.info) return { rot: null, gelb: null, zeile: `unbekannt (${webhookInfo.fehler ?? 'keine Antwort'})` };
-  const info = webhookInfo.info;
-  const erwartet = buildHandballWebhookUrl(ensureHandballBotSecrets().webhookPathSecret);
-  if (!info.url) {
-    return { rot: 'Telegram kennt keinen Webhook für diesen Bot — Dienst neu starten.', gelb: null, zeile: 'kein Webhook eingetragen' };
-  }
-  if (info.url !== erwartet) {
-    let host = 'eine andere Adresse';
-    try { host = new URL(info.url).host; } catch { /* bleibt allgemein */ }
-    return {
-      rot: `Der Webhook zeigt auf ${host}, nicht auf diese Instanz — ein anderer Server hat denselben Token registriert. Hier neu speichern holt ihn zurück.`,
-      gelb: null,
-      zeile: `zeigt auf ${host}`,
-    };
-  }
-  const warnungen: string[] = [];
-  if (info.last_error_date && now - info.last_error_date * 1000 < 24 * 60 * 60 * 1000) {
-    warnungen.push(`Telegram meldet einen Zustellfehler (${ZEIT.format(new Date(info.last_error_date * 1000))} Uhr): ${info.last_error_message ?? 'ohne Text'}`);
-  }
-  if (info.pending_update_count > WEBHOOK_STAU) warnungen.push(`${info.pending_update_count} Updates warten bei Telegram`);
-  const gelb = warnungen.length > 0 ? warnungen.join(' · ') : null;
-  return { rot: null, gelb, zeile: gelb ? `stimmt, aber: ${gelb}` : 'stimmt' };
-}
-
-export interface HandballBotHealth {
-  configured: boolean;
-  /** Rot: Webhook fehlt oder alle Zustellungen der letzten 24 Stunden scheiterten. */
-  error: string | null;
-  /** Gelb: mehr als 10 % der Zustellungen der letzten 7 Tage gescheitert — die Zahl der gescheiterten. */
-  failed7d: number;
-  delivered7d: number;
-  /** Jüngste gelungene Zustellung. */
-  lastOk: string | null;
-  detail: string | null;
-}
-
-/** Ab diesem Anteil gescheiterter Zustellungen in sieben Tagen ist der Bot gelb. */
-const BOT_WARN_ANTEIL = 0.1;
-
-/**
- * Die Dienste-Zeile des Bots (`handball_bot` in `GET /sync/health`):
- * - nicht eingerichtet ohne Token;
- * - rot, wenn der Webhook für diese Instanz nicht registriert ist oder die
- *   letzte Registrierung scheiterte, oder wenn **jede** Zustellung der
- *   letzten 24 Stunden scheiterte (mindestens eine);
- * - gelb, wenn in sieben Tagen mehr als 10 % der Zustellungen scheiterten;
- * - seit 27.09.2026 dazu, was Telegram über den Webhook sagt
- *   (`handballWebhookBefund`): rot, wenn er leer ist oder auf eine andere
- *   Adresse zeigt; gelb bei einem Zustellfehler in 24 Stunden oder einem
- *   Stau — der gelbe Text steht in `detail`;
- * - sonst grün.
- * Liest nur Datenbank und Prozesszustand; die Auskunft von Telegram holt
- * vorher `refreshHandballWebhookInfo` (höchstens alle zehn Minuten).
- */
-export function getHandballBotHealth(now = new Date()): HandballBotHealth {
-  if (!isHandballBotEnabled()) return { configured: false, error: null, failed7d: 0, delivered7d: 0, lastOk: null, detail: null };
-  const tag = 24 * 60 * 60 * 1000;
-  const zeilen = db.select().from(handball_bot_delivery)
-    .where(gte(handball_bot_delivery.sent_at, new Date(now.getTime() - 7 * tag).toISOString())).all();
-  const ok7 = zeilen.filter(z => z.ok === 1).length;
-  const fehl7 = zeilen.length - ok7;
-  const letzte24 = zeilen.filter(z => z.sent_at >= new Date(now.getTime() - tag).toISOString());
-  const lastOk = zeilen.filter(z => z.ok === 1).map(z => z.sent_at).sort().at(-1) ?? null;
-  const state = botRegistrationState();
-  let error: string | null = null;
-  if (!state.registeredHere) {
-    error = 'Webhook nicht für diese Instanz registriert.';
-  } else if (webhookZustand && !webhookZustand.ok) {
-    error = `Webhook-Registrierung gescheitert: ${webhookZustand.error ?? 'unbekannt'}`;
-  } else if (letzte24.length > 0 && letzte24.every(z => z.ok === 0)) {
-    error = `Alle ${letzte24.length} Zustellungen der letzten 24 Stunden gescheitert: ${letzte24.map(z => z.detail).filter(Boolean).at(-1) ?? 'unbekannt'}`;
-  }
-  const befund = state.registeredHere ? handballWebhookBefund(now.getTime()) : null;
-  if (!error && befund?.rot) error = befund.rot;
-  const warn = zeilen.length > 0 && fehl7 / zeilen.length > BOT_WARN_ANTEIL;
-  const gelb = befund?.gelb ?? null;
-  return {
-    configured: true,
-    error,
-    // Die Karte kennt Gelb nur als Zahl ohne Text — der Text steht in `detail`.
-    failed7d: warn ? fehl7 : gelb ? 1 : 0,
-    delivered7d: ok7,
-    lastOk,
-    detail: `${listSubscribers().length} Abonnent(en) · ${ok7} Zustellungen in 7 Tagen${fehl7 ? `, ${fehl7} gescheitert` : ''}${gelb ? ` · Webhook: ${gelb}` : ''}`,
-  };
-}
-
-function offeneRueckmeldungen() {
-  return db.select().from(handball_bot_feedback).where(isNull(handball_bot_feedback.done_at)).all()
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
-}
-
-/** Gelungen und gescheitert in den letzten 7 und 28 Tagen, dazu je Chat der jüngste Fehlschlag. */
-function zustellBilanz(now: Date) {
-  const tag = 24 * 60 * 60 * 1000;
-  const seitMonat = new Date(now.getTime() - 28 * tag).toISOString();
-  const seitWoche = new Date(now.getTime() - 7 * tag).toISOString();
-  const zeilen = db.select().from(handball_bot_delivery).where(gte(handball_bot_delivery.sent_at, seitMonat)).all();
-  const zaehle = (ab: string) => {
-    const teil = zeilen.filter(z => z.sent_at >= ab);
-    return { ok: teil.filter(z => z.ok === 1).length, fehl: teil.filter(z => z.ok === 0).length };
-  };
-  const juengste = new Map<string, { chatId: string; detail: string | null; sentAt: string }>();
-  for (const z of zeilen) {
-    if (z.ok === 1) continue;
-    const bisher = juengste.get(z.chat_id);
-    if (!bisher || z.sent_at > bisher.sentAt) juengste.set(z.chat_id, { chatId: z.chat_id, detail: z.detail, sentAt: z.sent_at });
-  }
-  return { woche: zaehle(seitWoche), monat: zaehle(seitMonat), gescheitert: [...juengste.values()].sort((a, b) => b.sentAt.localeCompare(a.sentAt)) };
-}
-
-// ---------------------------------------------------------------------------
 // Eingehende Nachrichten
 // ---------------------------------------------------------------------------
 
@@ -1210,7 +652,7 @@ async function defaultAnswerCallback(callbackId: string, text?: string): Promise
   await answerCallbackQuery(token, callbackId, text);
 }
 
-const DEFAULT_DEPS: HandballBotDeps = {
+export const DEFAULT_DEPS: HandballBotDeps = {
   send: defaultSend, sendPhoto: defaultSendPhoto, sendAnimation: defaultSendAnimation, sendDocument: defaultSendDocument, react: defaultReact, answerCallback: defaultAnswerCallback,
   chatAction: defaultChatAction, sendVenue: defaultSendVenue, answerInline: defaultAnswerInline, sendMediaGroup: defaultSendMediaGroup,
 };
@@ -1247,10 +689,7 @@ function schonGesehen(updateId: number): boolean {
 export function __resetHandballBotForTests(): void {
   gesehen.clear();
   botIdentity.username = null;
-  webhookZustand = null;
-  inlineAn = null;
-  webhookInfo = null;
-  webhookInfoLaeuft = null;
+  __resetHandballBotBasisForTests();
 }
 
 async function antwortAufBefehl(text: string, chatId: string, name: string | null, deps: HandballBotDeps): Promise<void> {
@@ -1745,114 +1184,19 @@ async function inlineStandErfragen(): Promise<void> {
   try {
     const ich = await getMe(token);
     if (!botIdentity.username && ich.username) botIdentity.username = ich.username;
-    inlineAn = typeof ich.supports_inline_queries === 'boolean' ? ich.supports_inline_queries : null;
+    setzeInlineAn(typeof ich.supports_inline_queries === 'boolean' ? ich.supports_inline_queries : null);
   } catch { /* bleibt „unbekannt" */ }
-}
-
-// ---------------------------------------------------------------------------
-// Beschreibung des Bots — aus dem Stand, nur bei Änderung gesetzt
-// ---------------------------------------------------------------------------
-
-/** Auf eine Höchstlänge kürzen, mit „…" statt eines abgeschnittenen Wortes. */
-function kuerze(text: string, max: number): string {
-  if (text.length <= max) return text;
-  const schnitt = text.slice(0, max - 1);
-  const leer = schnitt.lastIndexOf(' ');
-  return `${(leer > max / 2 ? schnitt.slice(0, leer) : schnitt).replace(/[\s,;·—-]+$/, '')}…`;
-}
-
-function eigenerPlatz(team: HandballTeamView): { position: number; points: number; played: number } | null {
-  const zeile = team.standings[0]?.rows.find(r => r.teamId === team.team_id);
-  return zeile ? { position: zeile.position, points: zeile.points, played: zeile.played } : null;
-}
-
-function naechstesKurz(m: HandballMatchView): string {
-  return `${DATUM.format(new Date(m.starts_at))} ${m.is_home ? 'vs' : '@'} ${gegnerVon(m)} (${m.is_home ? 'H' : 'A'})`;
-}
-
-/**
- * Die Kurzbeschreibung (Profil, Teilen; höchstens 120 Zeichen): Mannschaft,
- * Platz, nächstes Spiel — was nicht mehr passt, fällt von hinten weg.
- * Reiner Text, Telegram kennt dort kein HTML. Kein „heute"/„morgen", damit
- * sich der Text nicht jeden Tag von selbst ändert.
- */
-export function textKurzbeschreibung(teams: HandballTeamView[]): string {
-  const teile: string[] = [];
-  for (const team of teams) {
-    const platz = eigenerPlatz(team);
-    const felder = [team.name, platz ? `Platz ${platz.position}` : null, team.next_match ? `Nächstes: ${naechstesKurz(team.next_match)}` : null].filter((x): x is string => !!x);
-    teile.push(felder.join(' · '));
-  }
-  const voll = `🤾 ${teile.join(' | ') || 'Handball'}`;
-  if (voll.length <= BOT_SHORT_DESCRIPTION_MAX) return voll;
-  // Erst das nächste Spiel opfern, dann den Platz, dann kürzen.
-  const ohneSpiel = `🤾 ${teams.map(t => [t.name, eigenerPlatz(t) ? `Platz ${eigenerPlatz(t)!.position}` : null].filter(Boolean).join(' · ')).join(' | ')}`;
-  return kuerze(ohneSpiel.length <= BOT_SHORT_DESCRIPTION_MAX ? ohneSpiel : `🤾 ${teams.map(t => t.name).join(' | ')}`, BOT_SHORT_DESCRIPTION_MAX);
-}
-
-/** Die Beschreibung im leeren Chat („Was kann dieser Bot?", höchstens 512 Zeichen). */
-export function textBeschreibung(teams: HandballTeamView[]): string {
-  const bloecke: string[] = [];
-  for (const team of teams) {
-    const zeilen = [`🤾 ${team.name}`];
-    const liga = [wettbewerbVon(team), saisonName(aktuellesSpiel(team.matches)?.season_id)].filter(Boolean).join(', Saison ');
-    if (liga) zeilen.push(liga);
-    const platz = eigenerPlatz(team);
-    if (platz) zeilen.push(`Tabelle: ${platz.position}. Platz, ${platz.points} Punkte nach ${platz.played} Spiel${platz.played === 1 ? '' : 'en'}`);
-    const m = team.next_match;
-    if (m) zeilen.push(`Nächstes Spiel: ${DATUM.format(new Date(m.starts_at))} ${ZEIT.format(new Date(m.starts_at))} Uhr ${m.is_home ? 'gegen' : 'bei'} ${gegnerVon(m)} (${m.is_home ? 'Heimspiel' : 'auswärts'})`);
-    bloecke.push(zeilen.join('\n'));
-  }
-  const schluss = 'Ich melde Ankündigung, Aufstellung, Halbzeit und Endstand und zeige Tabelle, Kader und Torjäger auf Nachfrage. /start zum Abonnieren.';
-  const kopf = bloecke.join('\n\n') || 'Spiele, Ergebnisse und Tabelle einer Handball-Mannschaft.';
-  const voll = `${kopf}\n\n${schluss}`;
-  return voll.length <= BOT_DESCRIPTION_MAX ? voll : kuerze(kopf, BOT_DESCRIPTION_MAX);
-}
-
-export interface HandballBotDescriptionResult {
-  status: 'aus' | 'kein_token' | 'unveraendert' | 'gesetzt';
-}
-
-/**
- * Nach jedem Abruf: Beschreibung und Kurzbeschreibung aus dem Stand setzen
- * — aber nur, was sich gegenüber dem zuletzt gesetzten Text (Instanz-Zeile)
- * geändert hat, also praktisch nach einem Spieltag oder einer Verlegung.
- * Aus, wenn der Schalter in der Dienste-Zeile aus ist (dann bleibt, was im
- * BotFather steht), ohne Token, und in einer Instanz, für die der Token
- * nicht gespeichert wurde (dieselbe Absicherung wie beim Webhook).
- */
-export async function pflegeHandballBotBeschreibung(): Promise<HandballBotDescriptionResult> {
-  const token = getHandballBotToken();
-  if (!token || !botRegistrationState().registeredHere) return { status: 'kein_token' };
-  if (!botAutoDescription()) return { status: 'aus' };
-  const sicht = handballOverview();
-  if (!sicht.configured || sicht.teams.length === 0) return { status: 'unveraendert' };
-  const lang = textBeschreibung(sicht.teams);
-  const kurz = textKurzbeschreibung(sicht.teams);
-  const zeile = instanzZeile();
-  let gesetzt = false;
-  if (zeile?.description_text !== lang) {
-    await setMyDescription(token, lang);
-    db.update(handball_bot_instance).set({ description_text: lang }).where(eq(handball_bot_instance.id, 1)).run();
-    gesetzt = true;
-  }
-  if (zeile?.short_description_text !== kurz) {
-    await setMyShortDescription(token, kurz);
-    db.update(handball_bot_instance).set({ short_description_text: kurz }).where(eq(handball_bot_instance.id, 1)).run();
-    gesetzt = true;
-  }
-  return { status: gesetzt ? 'gesetzt' : 'unveraendert' };
 }
 
 // ---------------------------------------------------------------------------
 // Meldungen von sich aus
 // ---------------------------------------------------------------------------
 
-function schonGeschickt(id: string): boolean {
+export function schonGeschickt(id: string): boolean {
   return !!db.select().from(handball_bot_sent).where(eq(handball_bot_sent.id, id)).get();
 }
 
-function merke(id: string): void {
+export function merke(id: string): void {
   db.insert(handball_bot_sent).values({ id, sent_at: new Date().toISOString() }).onConflictDoNothing().run();
 }
 
@@ -1862,10 +1206,10 @@ function merke(id: string): void {
  */
 type Empfaenger = (abo: HandballSubscriber) => boolean;
 /** Alle; und nur die, die alles wollen — Ankündigung, Aufstellung und Halbzeit gehen nicht an „nur Ergebnisse". */
-const ALLE: Empfaenger = () => true;
-const NUR_ALLES: Empfaenger = abo => abo.mode === 'all';
+export const ALLE: Empfaenger = () => true;
+export const NUR_ALLES: Empfaenger = abo => abo.mode === 'all';
 /** Dazu die Auswahl aus `/teams`: eine Meldung zu einer Mannschaft geht nur an die, die sie verfolgen. */
-const fuerTeam = (teamId: string, wer: Empfaenger): Empfaenger => abo => wer(abo) && verfolgt(abo, teamId);
+export const fuerTeam = (teamId: string, wer: Empfaenger): Empfaenger => abo => wer(abo) && verfolgt(abo, teamId);
 
 /** Was der Bot von sich aus schickt — der Schlüssel im Zustell-Protokoll. */
 type Meldungsart = 'ankuendigung' | 'aufstellung' | 'halbzeit' | 'endstand' | 'bericht' | 'aenderung' | 'rundruf' | 'saison';
@@ -1877,16 +1221,16 @@ const DELIVERY_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
  * Eine Zustellung protokollieren, gelungen oder nicht — `/status` zählt
  * daraus. Bei einem Fehlschlag die Telegram-Meldung, gekürzt.
  */
-function protokolliere(chatId: string, art: Meldungsart, ok: boolean, err?: unknown): void {
+export function protokolliere(chatId: string, art: Meldungsart, ok: boolean, err?: unknown): void {
   const detail = ok ? null : (err instanceof Error ? err.message : String(err)).slice(0, 160);
   db.insert(handball_bot_delivery).values({ chat_id: chatId, kind: art, ok: ok ? 1 : 0, detail, sent_at: new Date().toISOString() }).run();
 }
 
-function protokollAufraeumen(now: Date): void {
+export function protokollAufraeumen(now: Date): void {
   db.delete(handball_bot_delivery).where(lt(handball_bot_delivery.sent_at, new Date(now.getTime() - DELIVERY_KEEP_MS).toISOString())).run();
 }
 
-async function rundsenden(text: string, deps: HandballBotDeps, keyboard: InlineKeyboard | null, wer: Empfaenger, art: Meldungsart): Promise<number> {
+export async function rundsenden(text: string, deps: HandballBotDeps, keyboard: InlineKeyboard | null, wer: Empfaenger, art: Meldungsart): Promise<number> {
   return (await anAlle(chatId => deps.send(chatId, text, keyboard), wer, art)).count;
 }
 
@@ -1895,7 +1239,7 @@ async function rundsenden(text: string, deps: HandballBotDeps, keyboard: InlineK
  * folgt er als Nachricht. Scheitert das Bild, kommt der Text allein: Ein
  * Endstand ohne Bild ist besser als keiner.
  */
-async function rundsendenBild(png: Buffer, text: string, filename: string, deps: HandballBotDeps, keyboard: InlineKeyboard | null, wer: Empfaenger, art: Meldungsart, gif: Buffer | null = null, effekt: string | null = null): Promise<Zustellung> {
+export async function rundsendenBild(png: Buffer, text: string, filename: string, deps: HandballBotDeps, keyboard: InlineKeyboard | null, wer: Empfaenger, art: Meldungsart, gif: Buffer | null = null, effekt: string | null = null): Promise<Zustellung> {
   return anAlle(async chatId => {
     if (!deps.sendPhoto) return mitEffekt(chatId, effekt, x => deps.send(chatId, text, keyboard, x));
     const sendPhoto = deps.sendPhoto;
@@ -1944,7 +1288,7 @@ export const KONFETTI_EFFECT_ID = '5046509860389126442';
  * lehnen Effekte ab). Ein 400 mit Effekt führt zu genau einem zweiten
  * Versuch ohne; alles andere geht unverändert an den Aufrufer.
  */
-async function mitEffekt<T>(chatId: string, effekt: string | null, sende: (extras?: SendExtras) => Promise<T>): Promise<T> {
+export async function mitEffekt<T>(chatId: string, effekt: string | null, sende: (extras?: SendExtras) => Promise<T>): Promise<T> {
   if (!effekt || chatId.startsWith('-')) return sende();
   try {
     return await sende({ effectId: effekt });
@@ -1957,12 +1301,6 @@ async function mitEffekt<T>(chatId: string, effekt: string | null, sende: (extra
   }
 }
 
-interface Zustellung {
-  count: number;
-  /** Chat und Nachrichten-ID je gelungener Zustellung — für die Reaktion auf den Sieg. */
-  sent: Array<{ chatId: string; messageId: number }>;
-}
-
 /**
  * Eine gescheiterte Zustellung einordnen. 403: blockiert (Privatchat) oder
  * rausgeworfen (Gruppe). 400 „chat not found": die Gruppe ist gelöscht oder
@@ -1970,7 +1308,7 @@ interface Zustellung {
  * jemand /start schickt. Beides trägt aus, sonst kostet jede Meldung für
  * immer einen Fehlversuch mehr.
  */
-function zustellungGescheitert(chatId: string, err: unknown): void {
+export function zustellungGescheitert(chatId: string, err: unknown): void {
   const weg = err instanceof TelegramApiError
     && (err.status === 403 || (err.status === 400 && CHAT_WEG.test(err.message)));
   if (weg) {
@@ -1981,7 +1319,7 @@ function zustellungGescheitert(chatId: string, err: unknown): void {
   serviceLog.warn({ chat: chatId, err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Zustellung fehlgeschlagen');
 }
 
-async function anAlle(sende: (chatId: string) => Promise<number | void>, wer: Empfaenger, art: Meldungsart): Promise<Zustellung> {
+export async function anAlle(sende: (chatId: string) => Promise<number | void>, wer: Empfaenger, art: Meldungsart): Promise<Zustellung> {
   const out: Zustellung = { count: 0, sent: [] };
   for (const abo of listSubscribers()) {
     if (!wer(abo)) continue;
@@ -1993,279 +1331,6 @@ async function anAlle(sende: (chatId: string) => Promise<number | void>, wer: Em
     } catch (err) {
       protokolliere(abo.chatId, art, false, err);
       zustellungGescheitert(abo.chatId, err);
-    }
-  }
-  return out;
-}
-
-export interface HandballBotPushResult {
-  messages: number;
-  recipients: number;
-  /** Aufrufe nach handball.net aus dem Bot heraus: Aufstellung, Torfolge, Spielbericht, Gegner-Spielplan. */
-  fetches: number;
-}
-
-/**
- * Die fälligen Meldungen — ein Takt des Jobs, **nach** dem Abruf. Liest die
- * Sicht aus der Datenbank; nach draußen geht nur der Aufstellungs-Abruf im
- * engen Fenster um den Anwurf und einmal für die Torschützen nach dem Spiel.
- */
-export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = DEFAULT_DEPS): Promise<HandballBotPushResult> {
-  const out: HandballBotPushResult = { messages: 0, recipients: 0, fetches: 0 };
-  if (!isHandballBotEnabled() && deps === DEFAULT_DEPS) return out;
-  if (listSubscribers().length === 0) return out;
-  const sicht = handballOverview();
-  if (!sicht.configured) return out;
-  const jetzt = now.getTime();
-  protokollAufraeumen(now);
-
-  for (const team of sicht.teams) {
-    // --- Verlegungen und Absagen ---
-    // Was der Abruf an einem gespeicherten Spiel geändert hat. Älter als ein
-    // Tag wird nur gemerkt: Der erste Lauf mit Abonnenten soll nicht die
-    // Verlegungen der ganzen Vorrunde nachliefern.
-    for (const c of changesFor(team.team_id)) {
-      const key = `${team.team_id}:${c.match_id}:change:${c.change_id}`;
-      if (schonGeschickt(key)) continue;
-      merke(key);
-      if (jetzt - Date.parse(c.detected_at) > CHANGE_MAX_AGE_MS) continue;
-      const m = team.matches.find(x => x.match_id === c.match_id);
-      if (!m) continue;
-      const n = await rundsenden(textAenderung(team, m, c), deps, c.kind === 'rescheduled' ? routenTastatur(m) : null, fuerTeam(team.team_id, ALLE), 'aenderung');
-      out.messages++; out.recipients += n;
-    }
-
-    for (const m of team.matches) {
-      const start = Date.parse(m.starts_at);
-      const schluessel = (art: string) => `${team.team_id}:${m.match_id}:${art}`;
-
-      // --- Ankündigung — je Chat zu seiner Zeit (`/erinnerung`) ---
-      if (m.status === 'scheduled' && start > jetzt) {
-        let gegnerSpiele: HandballMatch[] | null | undefined;
-        let text: string | null = null;
-        let n = 0;
-        for (const abo of listSubscribers()) {
-          if (abo.mode !== 'all' || !verfolgt(abo, team.team_id)) continue;
-          const ab = ankuendigungFaelligAb(m.starts_at, abo.lead);
-          if (ab === null || jetzt < ab) continue;
-          // Einmal je Chat und Spiel — auch wenn der Vorlauf später geändert wird.
-          const key = schluessel(`upcoming:${abo.chatId}`);
-          if (schonGeschickt(key)) continue;
-          if (text === null) {
-            // Die letzten drei Ergebnisse des Gegners stehen nicht in der eigenen
-            // Datenbank — ein Abruf seines Spielplans, einmal je Spiel, nach bestem Bemühen.
-            if (gegnerSpiele === undefined) {
-              try {
-                gegnerSpiele = await fetchTeamMatches(gegnerId(m), m.season_id);
-                out.fetches++;
-              } catch (err) {
-                // Der Tageslauf hat ihn vielleicht schon — dann lieber der von heute Morgen als keiner.
-                gegnerSpiele = opponentFormFor(gegnerId(m))?.matches ?? null;
-                serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Spielplan des Gegners nicht abrufbar');
-              }
-            }
-            text = textAnkuendigung(team, m, now, gegnerSpiele);
-          }
-          merke(key);
-          try {
-            await deps.send(abo.chatId, text, ankuendigungTastatur(m));
-            n++;
-            protokolliere(abo.chatId, 'ankuendigung', true);
-          } catch (err) {
-            protokolliere(abo.chatId, 'ankuendigung', false, err);
-            zustellungGescheitert(abo.chatId, err);
-            continue;
-          }
-          // Direkt darunter die Halle als Ort — still, weil die Ankündigung
-          // schon geklingelt hat. Nach bestem Bemühen: Die Ankündigung steht.
-          const ort = halleAlsOrt(m);
-          if (ort && deps.sendVenue) {
-            try { await deps.sendVenue(abo.chatId, ort); } catch (err) {
-              serviceLog.warn({ chat: abo.chatId, err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Halle als Ort nicht zustellbar');
-            }
-          }
-        }
-        if (n > 0) { out.messages++; out.recipients += n; }
-      }
-
-      // --- Spieltagsgruß — am Morgen eines Spieltags, einmal je Chat und Spiel ---
-      // Nur, wer Ankündigungen will (nicht „keine") und alles; wer die Ankündigung
-      // dieses Spiels schon bekommen hat (Vorabend, drei Stunden), braucht keinen Gruß.
-      if (m.status === 'scheduled' && start > jetzt && spieltagsGrussFaellig(m, now)) {
-        const text = textSpieltag(team, m, opponentFormFor(gegnerId(m))?.matches ?? null);
-        let n = 0;
-        for (const abo of listSubscribers()) {
-          if (abo.mode !== 'all' || abo.lead === 'aus' || !verfolgt(abo, team.team_id)) continue;
-          const key = schluessel(`morning:${abo.chatId}`);
-          if (schonGeschickt(key) || schonGeschickt(schluessel(`upcoming:${abo.chatId}`))) continue;
-          // Kommt die Ankündigung ohnehin in den nächsten zwei Stunden, wäre der Gruß ein Doppel.
-          const ankuendigungAb = ankuendigungFaelligAb(m.starts_at, abo.lead);
-          if (ankuendigungAb !== null && ankuendigungAb - jetzt < GRUSS_ABSTAND_ZUR_ANKUENDIGUNG_MS) continue;
-          merke(key);
-          try {
-            await deps.send(abo.chatId, text, routenTastatur(m));
-            n++;
-            protokolliere(abo.chatId, 'ankuendigung', true);
-          } catch (err) {
-            protokolliere(abo.chatId, 'ankuendigung', false, err);
-            zustellungGescheitert(abo.chatId, err);
-          }
-        }
-        if (n > 0) { out.messages++; out.recipients += n; }
-      }
-
-      // --- Aufstellung ---
-      const imFenster = jetzt - start >= LINEUP_FROM_MS && jetzt - start <= LINEUP_UNTIL_MS;
-      if ((m.status === 'scheduled' || m.status === 'live') && imFenster && !schonGeschickt(schluessel('lineup'))) {
-        try {
-          const lineup = await fetchLineups(m.match_id);
-          out.fetches++;
-          const seite = eigeneSeite(lineup, team.team_id);
-          if (seite && seite.players.length > 0) {
-            merke(schluessel('lineup'));
-            const n = await rundsenden(textAufstellung(team, m, seite), deps, null, fuerTeam(team.team_id, NUR_ALLES), 'aufstellung');
-            out.messages++; out.recipients += n;
-          }
-        } catch (err) {
-          // Nach bestem Bemühen: Ohne Aufstellung kommt der Endstand trotzdem.
-          serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Aufstellung nicht abrufbar');
-        }
-      } else if (jetzt - start > LINEUP_UNTIL_MS && !schonGeschickt(schluessel('lineup'))) {
-        // Fenster vorbei, nie gekommen — nicht ewig nachsehen.
-        merke(schluessel('lineup'));
-      }
-
-      // --- Halbzeit ---
-      const imHalbzeitFenster = jetzt - start >= HALFTIME_FROM_MS && jetzt - start <= HALFTIME_UNTIL_MS;
-      if ((m.status === 'scheduled' || m.status === 'live') && imHalbzeitFenster && !schonGeschickt(schluessel('halftime'))) {
-        try {
-          const events = await fetchMatchEvents(m.match_id);
-          out.fetches++;
-          // Nebenbei für den Zeitzonen-Selbsttest: Wo lag der Anwurf, gemessen an der Spieluhr?
-          merkeAnwurfSchaetzung(team.team_id, m.match_id, events, now);
-          if (events.halftime) {
-            merke(schluessel('halftime'));
-            setzeHalbzeit(team.team_id, m.match_id, events.halftime.home, events.halftime.away);
-            const n = await rundsenden(textHalbzeit(team, m, events.halftime), deps, halbzeitTastatur(), fuerTeam(team.team_id, NUR_ALLES), 'halbzeit');
-            out.messages++; out.recipients += n;
-          }
-        } catch (err) {
-          serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Torfolge nicht abrufbar');
-        }
-      } else if (jetzt - start > HALFTIME_UNTIL_MS && !schonGeschickt(schluessel('halftime'))) {
-        merke(schluessel('halftime'));
-      }
-
-      // --- Endstand ---
-      const mitStand = m.score_home !== null && m.score_away !== null;
-      if (((m.status === 'finished' && mitStand) || m.rated) && !schonGeschickt(schluessel('result'))) {
-        merke(schluessel('result'));
-        // Gewertet ohne Stand (nur die Tabelle zählt es): ein Satz, keine Karte.
-        if (m.rated && !mitStand) {
-          if (jetzt - start > RATED_MAX_AGE_MS) continue;
-          const n = await rundsenden(textEndstand(team, m, null), deps, endstandTastatur(m), fuerTeam(team.team_id, ALLE), 'endstand');
-          out.messages++; out.recipients += n;
-          continue;
-        }
-        // Nur, was frisch ist: Beim ersten Lauf nach dem Einrichten (oder nach
-        // einem langen Ausfall) sollen nicht alle Endstände der Saison auf
-        // einmal kommen. Der Job fasst bis sechs Stunden nach Anwurf nach —
-        // was später erst als beendet auftaucht, ist Vergangenheit.
-        if (jetzt - start > (m.rated ? RATED_MAX_AGE_MS : RESULT_MAX_AGE_MS)) continue;
-        let seite: HandballLineupSide | null = null;
-        // Die Bilanz **vor** diesem Spiel — für „erstes Saisontor" — muss vor dem Ablegen der Aufstellung gelesen werden.
-        const vorher = playerStats(team.team_id, { excludeMatchId: m.match_id });
-        try {
-          seite = eigeneSeite(await fetchLineups(m.match_id), team.team_id);
-          out.fetches++;
-          if (seite) storeLineup(team.team_id, m.match_id, seite);
-        } catch { /* Torschützen sind Beiwerk */ }
-        const text = textEndstand(team, m, seite, namenAus(team.team_id), { vorher, bewegung: tabellenBewegung(team) });
-        const bester = (seite?.players ?? []).filter(p => p.goals > 0).sort((a, b) => b.goals - a.goals || a.number - b.number)[0];
-        const extras: EndstandKarteExtras = {
-          playerOfMatch: bester ? `${namenAus(team.team_id)(bester.playerId) ?? `Nr. ${bester.number}`} · ${bester.goals} Tor${bester.goals === 1 ? '' : 'e'}` : null,
-        };
-        let png: Buffer | null = null;
-        let gif: Buffer | null = null;
-        if (deps.sendPhoto) {
-          try {
-            png = await svgAlsPng(await endstandBild(team, m, extras));
-          } catch (err) {
-            serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Endstand als Bild fehlgeschlagen — Textfassung');
-          }
-          if (png && deps.sendAnimation) {
-            try {
-              gif = await endstandAnimation(team, m, extras);
-            } catch (err) {
-              serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Endstand als Animation fehlgeschlagen — Foto');
-            }
-          }
-        }
-        // Zum Sieg Konfetti — nur in privaten Chats, siehe `mitEffekt`.
-        const effekt = m.won === true ? KONFETTI_EFFECT_ID : null;
-        const zustellung = png
-          ? await rundsendenBild(png, text, 'endstand.png', deps, endstandTastatur(m), fuerTeam(team.team_id, ALLE), 'endstand', gif, effekt)
-          : await anAlle(chatId => mitEffekt(chatId, effekt, x => deps.send(chatId, text, endstandTastatur(m), x)), fuerTeam(team.team_id, ALLE), 'endstand');
-        out.messages++; out.recipients += zustellung.count;
-        // Ein Sieg bekommt eine Reaktion auf die eigene Nachricht — Beiwerk, das lebendig wirkt.
-        if (m.won === true && deps.react) {
-          for (const z of zustellung.sent) {
-            try { await deps.react(z.chatId, z.messageId, '🏆'); } catch { /* Telegram kennt das Emoji nicht oder der Chat erlaubt keine Reaktionen */ }
-          }
-        }
-        // Der Spielbericht folgt nur auf einen Endstand, der wirklich rausging.
-        merke(schluessel('result-sent'));
-      }
-
-      // --- Spielbericht ---
-      // Nur nach einem gemeldeten Endstand, im Fenster; der Text der Quelle
-      // kommt irgendwann nach dem Abpfiff, und `/bericht` liest ihn danach aus
-      // der Datenbank.
-      if (m.status === 'finished' && schonGeschickt(schluessel('result-sent')) && !schonGeschickt(schluessel('report'))) {
-        if (jetzt - start > REPORT_UNTIL_MS) {
-          merke(schluessel('report'));
-        } else if (jetzt - start >= REPORT_FROM_MS) {
-          try {
-            const text = m.report_text ?? await fetchMatchReport(m.match_id);
-            if (!m.report_text) out.fetches++;
-            if (text) {
-              merke(schluessel('report'));
-              setzeBericht(team.team_id, m.match_id, text);
-              const n = await rundsenden(textBericht(team, { ...m, report_text: text }, 'kurz'), deps, berichtTastatur(m, true), fuerTeam(team.team_id, ALLE), 'bericht');
-              out.messages++; out.recipients += n;
-            }
-          } catch (err) {
-            serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Spielbericht nicht abrufbar');
-          }
-        }
-      }
-    }
-
-    // --- Saisonabschluss ---
-    // Einmal je Mannschaft und Saison, wenn das letzte Spiel durch ist und
-    // höchstens sieben Tage zurückliegt. Später wird nichts gemerkt: Wer den
-    // Bot im Sommer einrichtet, bekommt die Karte über /saisonkarte.
-    // Dazu eine Tabelle, die alle gespielten Spiele schon zählt: Der Endplatz
-    // kommt aus ihr, und eine Tabelle vom Vortag nennte den falschen.
-    const ende = saisonVorbei(team, now);
-    const saisonKey = `${team.team_id}:${aktuellesSpiel(team.matches)?.season_id ?? 0}:saison`;
-    const eigeneZeile = team.standings[0]?.rows.find(r => r.teamId === team.team_id);
-    const gespieltZahl = team.matches.filter(m => m.status === 'finished' || m.rated).length;
-    const tabelleAktuell = !!eigeneZeile && eigeneZeile.played >= gespieltZahl;
-    if (ende.vorbei && ende.frisch && tabelleAktuell && !schonGeschickt(saisonKey)) {
-      merke(saisonKey);
-      const text = `🏅 <b>Die Saison ist vorbei.</b>\n${textSaison(team)}`;
-      const svg = bildSaison(team);
-      let png: Buffer | null = null;
-      if (svg && deps.sendPhoto) {
-        try { png = await svgAlsPng(svg); } catch (err) {
-          serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Saisonkarte fehlgeschlagen — Textfassung');
-        }
-      }
-      const zustellung = png
-        ? await rundsendenBild(png, text, 'saison.png', deps, null, fuerTeam(team.team_id, ALLE), 'saison')
-        : await anAlle(chatId => deps.send(chatId, text), fuerTeam(team.team_id, ALLE), 'saison');
-      out.messages++; out.recipients += zustellung.count;
     }
   }
   return out;

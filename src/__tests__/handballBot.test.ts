@@ -27,7 +27,8 @@ const TEAM = '96254';
 
 let dbRef: typeof import('../db')['db'];
 let schemaRef: typeof import('../db/schema');
-let bot: typeof import('../lib/handballBot');
+/** Der Bot samt den aus ihm gelösten Modulen (ARC-3-001) — die Tests sprechen ihn als ein Ganzes an. */
+let bot: typeof import('../lib/handballBot') & typeof import('../lib/handballBotPush') & typeof import('../lib/handballBotBeschreibung') & typeof import('../lib/handballBotBasis');
 let TelegramApiError: typeof import('../lib/telegramClient')['TelegramApiError'];
 const ORIGINAL_FETCH = global.fetch;
 
@@ -169,7 +170,7 @@ beforeAll(async () => {
   const { db } = await import('../db');
   const schema = await import('../db/schema');
   ({ TelegramApiError } = await import('../lib/telegramClient'));
-  bot = await import('../lib/handballBot');
+  bot = { ...(await import('../lib/handballBot')), ...(await import('../lib/handballBotPush')), ...(await import('../lib/handballBotBeschreibung')), ...(await import('../lib/handballBotBasis')) };
   runMigrations();
   dbRef = db;
   schemaRef = schema;

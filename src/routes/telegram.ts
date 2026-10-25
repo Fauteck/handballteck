@@ -12,7 +12,8 @@
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { handballOverview } from '../lib/handballSicht';
-import { ensureHandballBotSecrets, handleHandballUpdate, isHandballBotEnabled, pruefeInlineSignatur, inlineBildSvg, type InlineArt } from '../lib/handballBot';
+import { handleHandballUpdate, pruefeInlineSignatur, inlineBildSvg, type InlineArt } from '../lib/handballBot';
+import { ensureHandballBotSecrets, isHandballBotEnabled } from '../lib/handballBotBasis';
 import { bildMitKurzweg, standVon } from '../lib/bildCache';
 import { serviceLog } from '../lib/serviceLogger';
 import type { TelegramUpdate } from '../lib/telegramClient';

@@ -47,10 +47,8 @@ import { seitenUebersicht, aktuellesSpiel, HANDBALL_GROUPS, type HandballGroup, 
 import { vervollstaendigePalette, renderWeekendSvg, type FullPalette } from './handballTableImage';
 import { bildMitKurzweg, zwischengespeichert, standVon, leereBildCache } from './bildCache';
 import { bildMarke } from './handballBotImages';
-import {
-  bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSaison, endstandBild,
-  textSaison, alsKlartext, icsKalender, handballBotLink, getHandballBotUsername,
-} from './handballBot';
+import { bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSaison, endstandBild, textSaison, alsKlartext, icsKalender } from './handballBot';
+import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
 import { paarungMitStand, ausgangWort } from './handballBotTexts';
 import type { HandballStandingRow } from './handballNetClient';
 import { siteCss, inhaltsHash, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS } from './handballSiteAssets';
