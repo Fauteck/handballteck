@@ -214,6 +214,25 @@ describe('Einstellungsseite', () => {
     expect(letzte).toBe(429);
   });
 
+  it('drosselt die Anmeldung je IPv6-/64, nicht je Adresse (SEC-3-005)', async () => {
+    const codes: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      codes.push((await fastify.inject({ method: 'POST', url: '/settings/api/login', payload: { user: 'x', password: 'y' }, remoteAddress: `2001:db8:1:2::${i + 1}` })).statusCode);
+    }
+    expect(codes.slice(0, 5).every(c => c === 401)).toBe(true);
+    expect(codes[5]).toBe(429);
+  });
+
+  it('sperrt die Anmeldung nach 20 Fehlversuchen von verschiedenen Adressen — auch für das richtige Passwort (SEC-3-005)', async () => {
+    for (let i = 0; i < 20; i++) {
+      const r = await fastify.inject({ method: 'POST', url: '/settings/api/login', payload: { user: 'x', password: 'y' }, remoteAddress: `192.0.2.${i + 1}` });
+      expect(r.statusCode).toBe(401);
+    }
+    const richtig = await fastify.inject({ method: 'POST', url: '/settings/api/login', payload: { user: 'chef', password: PW }, remoteAddress: '192.0.2.200' });
+    expect(richtig.statusCode).toBe(429);
+    expect(richtig.json()).toMatchObject({ error: 'locked' });
+  }, 30_000);
+
   it('meldet sich ab', async () => {
     const { cookie, csrf } = await anmelden();
     expect((await fastify.inject({ method: 'POST', url: '/settings/api/logout', headers: { cookie, 'x-csrf-token': csrf }, payload: {} })).statusCode).toBe(200);
