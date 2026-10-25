@@ -119,6 +119,8 @@ export interface TelegramMessage {
   voice?: { file_id: string; duration: number; mime_type?: string; file_size?: number };
   audio?: { file_id: string; duration: number; mime_type?: string; file_size?: number };
   photo?: Array<{ file_id: string }>;
+  /** Eine hochgeladene Animation; Telegram legt daneben oft ein `document` an. */
+  animation?: { file_id: string };
   document?: { file_id: string; mime_type?: string };
   sticker?: unknown;
 }
@@ -342,6 +344,17 @@ export async function sendPhotoBytes(token: string, opts: SendUploadOptions): Pr
     timeoutMs: 30_000,
     upload: { field: 'photo', filename: opts.filename, contentType: opts.contentType, data: opts.data },
   });
+}
+
+/**
+ * Dasselbe Foto bzw. dieselbe Animation noch einmal, ohne die Bytes: über die
+ * `file_id` aus einer früheren Antwort. Telegram nimmt sie für jeden Chat
+ * desselben Bots an (PRF-2-004).
+ */
+export async function sendFileIdAgain(token: string, art: 'photo' | 'animation', fileId: string, opts: Omit<SendUploadOptions, 'data' | 'filename' | 'contentType'>): Promise<TelegramMessage> {
+  const payload = uploadPayload({ ...opts, data: Buffer.alloc(0), filename: '', contentType: '' });
+  payload[art] = fileId;
+  return callTelegram<TelegramMessage>(token, art === 'photo' ? 'sendPhoto' : 'sendAnimation', payload, { timeoutMs: 20_000 });
 }
 
 /** Telegram nimmt Animationen (GIF, MP4 ohne Ton) bis 50 MB per Upload an. */

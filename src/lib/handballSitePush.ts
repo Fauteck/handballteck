@@ -31,12 +31,12 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_site_subscription, handball_bot_sent } from '../db/schema';
 import { sendPush as sendWebPush, isPushConfigured, getVapidPublicKey, type PushPayload, type PushResult, type PushTarget } from './webPush';
-import { handballOverview, changesFor, vereinsName, type HandballTeamView, type HandballMatchView } from './handballTeam';
-import {
-  textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung,
-  LEADS, type Lead, type Mode,
-} from './handballBot';
-import { siteConfig, naechstesWochenende, SITE_TITEL } from './handballSite';
+import { changesFor, vereinsName } from './handballTeam';
+import { type HandballTeamView, type HandballMatchView } from './handballSicht';
+import { handballOverview } from './handballSicht';
+import { textAnkuendigung, textEndstand, textAenderung, textHalbzeit, alsKlartext, ankuendigungFaelligAb, tabellenBewegung } from './handballBot';
+import { LEADS, type Lead, type Mode } from './handballBotBasis';
+import { siteConfig, SITE_TITEL, naechstesWochenende } from './handballSite';
 import { serviceLog } from './serviceLogger';
 
 /** Ein Endstand, der älter ist, wird nur gemerkt — beim ersten Lauf nicht die ganze Saison nachliefern. */
@@ -233,20 +233,41 @@ async function zustellen(abo: SiteSubscriber, payload: SitePushPayload, deps: Si
 /** Der Push für eine Anmeldung: mit der Vereinsanmeldung (Worker an der Wurzel) liegen Ziel und Bild eine Ebene tiefer. */
 type PushBau = (club: boolean) => SitePushPayload;
 
-async function anAlle(abos: SiteSubscriber[], bau: PushBau, deps: SitePushDeps): Promise<number> {
+/**
+ * PRF-2-003: So viele Zustellungen laufen gleichzeitig. Seriell brauchten 2000
+ * Anmeldungen bei rund 150 ms je Push-Dienst etwa fünf Minuten, und so lange
+ * stand der Takt (Live-Stand, Bot). Jede einzelne ist zudem auf 10 s begrenzt
+ * (`webPush.ts`).
+ */
+export const PUSH_PARALLEL = 10;
+
+/** Stellt jedem Eintrag seinen Push zu, höchstens `PUSH_PARALLEL` gleichzeitig; zählt die zugestellten. */
+async function zustellenAn(liste: Array<{ abo: SiteSubscriber; payload: SitePushPayload }>, deps: SitePushDeps, fehltext: string): Promise<number> {
   let n = 0;
+  let naechster = 0;
+  const arbeiter = async () => {
+    while (naechster < liste.length) {
+      const { abo, payload } = liste[naechster++]!;
+      try {
+        if (await zustellen(abo, payload, deps)) n++;
+      } catch (err) {
+        serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, fehltext);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PUSH_PARALLEL, liste.length) }, arbeiter));
+  return n;
+}
+
+async function anAlle(abos: SiteSubscriber[], bau: PushBau, deps: SitePushDeps): Promise<number> {
   const fertig = new Map<boolean, SitePushPayload>();
-  for (const abo of abos) {
+  const liste = abos.map(abo => {
     const club = abo.team_id === CLUB;
     let payload = fertig.get(club);
     if (!payload) { payload = bau(club); fertig.set(club, payload); }
-    try {
-      if (await zustellen(abo, payload, deps)) n++;
-    } catch (err) {
-      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-site] Push fehlgeschlagen');
-    }
-  }
-  return n;
+    return { abo, payload };
+  });
+  return zustellenAn(liste, deps, '[handball-site] Push fehlgeschlagen');
 }
 
 /** Die gewählten Themen als Satzteil, so wie man sie im Push zu sehen bekommt. */
@@ -327,7 +348,7 @@ export async function pushHandballSite(now = new Date(), deps: SitePushDeps = DE
       // --- Ankündigung — je Abonnent zu seiner Zeit ---
       if (m.status === 'scheduled' && start > jetzt) {
         const fertig = new Map<boolean, SitePushPayload>();
-        let n = 0;
+        const liste: Array<{ abo: SiteSubscriber; payload: SitePushPayload }> = [];
         for (const abo of fuer(abos, 'upcoming', m)) {
           const ab = ankuendigungFaelligAb(m.starts_at, abo.lead);
           if (ab === null || jetzt < ab) continue;
@@ -340,12 +361,9 @@ export async function pushHandballSite(now = new Date(), deps: SitePushDeps = DE
             payload = alsPush(textAnkuendigung(team, m, now, null), { tag: `handball-${m.match_id}`, url: ziel(team, club) || './', image: ziel(team, club) + 'bild/spiel.png' });
             fertig.set(club, payload);
           }
-          try {
-            if (await zustellen(abo, payload, deps)) n++;
-          } catch (err) {
-            serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-site] Ankündigung nicht zustellbar');
-          }
+          liste.push({ abo, payload });
         }
+        const n = await zustellenAn(liste, deps, '[handball-site] Ankündigung nicht zustellbar');
         if (n > 0) { out.messages++; out.recipients += n; }
       }
 
@@ -429,17 +447,14 @@ async function wochenvorschau(teams: HandballTeamView[], verein: SiteSubscriber[
     title: `Dieses Wochenende: ${summe} ${summe === 1 ? 'Heimspiel' : 'Heimspiele'}`,
     body: tagesteile, tag: 'handball-wochenende', url: './',
   };
-  let n = 0;
+  const liste: Array<{ abo: SiteSubscriber; payload: SitePushPayload }> = [];
   for (const abo of empfaenger) {
     const key = `preview:${we.fr}:${abo.id}`;
     if (schonGeschickt(key)) continue;
     merke(key);
-    try {
-      if (await zustellen(abo, payload, deps)) n++;
-    } catch (err) {
-      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-site] Wochenvorschau nicht zustellbar');
-    }
+    liste.push({ abo, payload });
   }
+  const n = await zustellenAn(liste, deps, '[handball-site] Wochenvorschau nicht zustellbar');
   if (n > 0) { out.messages++; out.recipients += n; }
 }
 

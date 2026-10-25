@@ -23,8 +23,9 @@ import { speichere, protokoll, protokollAnzahl, alsEnvBlock, quelleVon, wirksame
 import { settingsHtml, SETTINGS_JS, SETTINGS_SW } from '../lib/settingsPage';
 import { getBackoffSnapshot } from '../lib/pollerBackoff';
 import { getHandballNetStats, fetchActiveSeason, fetchTeamMatches, HandballEmptyError } from '../lib/handballNetClient';
-import { getHandballHealth, automatischeBereiche, HANDBALL_GROUPS } from '../lib/handballTeam';
-import { isHandballBotEnabled, getHandballBotUsername, getHandballWebhookState, listSubscribers, handballBotLink, adminChatIds } from '../lib/handballBot';
+import { getHandballHealth } from '../lib/handballTeam';
+import { automatischeBereiche, HANDBALL_GROUPS } from '../lib/handballSicht';
+import { isHandballBotEnabled, getHandballBotUsername, getHandballWebhookState, listSubscribers, handballBotLink, adminChatIds } from '../lib/handballBotBasis';
 import { sendMessage } from '../lib/telegramClient';
 import { countSiteSubscribers } from '../lib/handballSitePush';
 import { getVapidPublicKey, sendPush, SETTING_PRIVATE_KEY } from '../lib/webPush';

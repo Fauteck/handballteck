@@ -27,7 +27,7 @@ const TEAM = '96254';
 
 let dbRef: typeof import('../db')['db'];
 let schemaRef: typeof import('../db/schema');
-let mod: typeof import('../lib/handballTeam');
+let mod: typeof import('../lib/handballTeam') & typeof import('../lib/handballSicht');
 let alerts: typeof import('../lib/alerts');
 let resetToken: () => void;
 const ORIGINAL_FETCH = global.fetch;
@@ -121,7 +121,7 @@ beforeAll(async () => {
   const { db } = await import('../db');
   const schema = await import('../db/schema');
   const { __resetHandballTokenForTests } = await import('../lib/handballNetClient');
-  mod = await import('../lib/handballTeam');
+  mod = { ...(await import('../lib/handballTeam')), ...(await import('../lib/handballSicht')) };
   alerts = await import('../lib/alerts');
   runMigrations();
   dbRef = db;
@@ -244,6 +244,33 @@ describe('Tageslauf', () => {
     const zeile = dbRef.select().from(schemaRef.handball_team_match).all()[0];
     expect(zeile.status).toBe('finished');
     expect(zeile.score_home).toBe(31);
+  });
+
+  it('fasst nach einem Saisonwechsel in der Saison des laufenden Spiels nach, nicht in der alten', async () => {
+    trageTeamEin();
+    // ARC-2-002: Die Zeile der Vorsaison liegt im Index vorn — sie darf die Saison nicht bestimmen.
+    legeSpiel({ id: `${TEAM}:alt`, match_id: 'alt', season_id: 2526, starts_at: new Date(Date.now() - 300 * 24 * 3600 * 1000).toISOString(), status: 'finished', status_name: 'Finalizado' });
+    legeSpiel({ starts_at: new Date(Date.now() - 60 * 60 * 1000).toISOString() });
+    const f = quelle([spiel({
+      id: 'm1',
+      date: quellzeit(Date.now() - 60 * 60 * 1000),
+      status: { id: 1, name: 'Finalizado', is_live: false, is_finished: true },
+      result: { local: 31, visitor: 25 },
+    })]);
+    await mod.syncHandballTeams();
+    const spielplaene = f.mock.calls.map(c => String(c[0])).filter(u => u.includes('/matches?'));
+    expect(spielplaene).toHaveLength(1);
+    expect(spielplaene[0]).toContain('season_id=2627');
+  });
+
+  it('zeigt in der Übersicht nur die laufende Saison — die alte bleibt in der Datenbank (PRF-3-003)', () => {
+    trageTeamEin();
+    legeSpiel({ id: `${TEAM}:alt`, match_id: 'alt', season_id: 2526, starts_at: new Date(Date.now() - 300 * 24 * 3600 * 1000).toISOString(), status: 'finished', status_name: 'Finalizado', competition_name: 'Kreisliga mB (alt)', phase_id: 11111 });
+    legeSpiel();
+    const team = mod.handballOverview().teams[0];
+    expect(team.matches.map(m => m.match_id)).toEqual(['m1']);
+    expect(team.matches.every(m => m.season_id === 2627)).toBe(true);
+    expect(dbRef.select().from(schemaRef.handball_team_match).all()).toHaveLength(2);
   });
 
   it('fragt während des Spiels erst im Live-Takt nach — sonst erst 45 Minuten nach Anwurf', async () => {

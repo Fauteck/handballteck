@@ -1007,7 +1007,8 @@ export const SITE_APP_JS = `(function () {
     titelSetzen();
     var liveTakt = setInterval(function () {
       if (document.hidden) return;
-      fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'omit' })
+      // Bedingt nachfragen: Ohne neuen Stand antwortet der Server mit 304 statt der ganzen Seite (PRF-1-002).
+      fetch(location.pathname + location.search, { cache: 'no-cache', credentials: 'omit' })
         .then(function (res) { return res.ok ? res.text() : null; })
         .then(function (html) {
           if (!html) return;

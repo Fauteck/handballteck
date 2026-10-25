@@ -398,6 +398,80 @@ describe('Handball-Microsite', () => {
     expect(js.headers['cache-control']).not.toContain('immutable');
   });
 
+  it('baut Übersicht und Seite nur neu, wenn sich etwas ändert — sonst 304 für den Live-Poll (PRF-1-002)', async () => {
+    const { handballOverview, seitenUebersicht } = await import('../lib/handballSicht');
+    // Ohne Schreiben und ohne neue Konfiguration: dasselbe, eingefrorene Objekt.
+    const a = handballOverview();
+    expect(handballOverview()).toBe(a);
+    expect(Object.isFrozen(a.teams[0].matches)).toBe(true);
+    expect(seitenUebersicht()).toBe(seitenUebersicht());
+
+    const erste = await get(`/${TEAM}/`);
+    const etag = String(erste.headers.etag);
+    expect(etag).toMatch(/^"[0-9a-f]+"$/);
+    const nochmal = await fastify.inject({ method: 'GET', url: `/${TEAM}/`, headers: { 'if-none-match': etag } });
+    expect(nochmal.statusCode).toBe(304);
+    expect(nochmal.body).toBe('');
+
+    // Ein geschriebener Wert macht Übersicht und Seite neu — der alte Stand passt nicht mehr.
+    db.update(schema.handball_team_match).set({ venue_name: 'Halle am Rathaus' }).where(eq(schema.handball_team_match.match_id, 'm3')).run();
+    try {
+      expect(handballOverview()).not.toBe(a);
+      const neu = await fastify.inject({ method: 'GET', url: `/${TEAM}/`, headers: { 'if-none-match': etag } });
+      expect(neu.statusCode).toBe(200);
+      expect(neu.body).toContain('Halle am Rathaus');
+      expect(neu.headers.etag).not.toBe(etag);
+    } finally {
+      db.update(schema.handball_team_match).set({ venue_name: 'Sporthalle Heimerzheim' }).where(eq(schema.handball_team_match.match_id, 'm3')).run();
+    }
+
+    // Eine geänderte Konfiguration ebenso, ohne dass die Datenbank geschrieben wird.
+    const b = handballOverview();
+    process.env.CLUB_NAME = 'TV Test';
+    try {
+      expect(handballOverview()).not.toBe(b);
+    } finally {
+      delete process.env.CLUB_NAME;
+    }
+
+    // Die Vorschau bekommt kein ETag und landet nicht im Zwischenspeicher.
+    process.env.SITE_PREVIEW_TOKEN = 'v'.repeat(32);
+    try {
+      const vorab = await get(`/${TEAM}/?vorab=${'v'.repeat(32)}`);
+      expect(vorab.statusCode).toBe(200);
+      expect(vorab.headers.etag).toBeUndefined();
+    } finally {
+      delete process.env.SITE_PREVIEW_TOKEN;
+    }
+  });
+
+  it('lässt den Live-Poll einer ganzen Halle hinter einer Adresse durch — und drosselt trotzdem (PRF-3-004)', async () => {
+    const rateLimit = (await import('@fastify/rate-limit')).default;
+    const { siteRoutes } = await import('../routes/site');
+    const mitLimit = Fastify();
+    await mitLimit.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
+    await mitLimit.register(siteRoutes);
+    await mitLimit.ready();
+    try {
+      const codes: number[] = [];
+      for (let i = 0; i < 120; i++) codes.push((await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' })).statusCode);
+      expect(codes.filter(c => c === 429)).toHaveLength(0);
+      for (let i = 120; i < 300; i++) await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' });
+      expect((await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' })).statusCode).toBe(429);
+    } finally {
+      await mitLimit.close();
+    }
+  });
+
+  it('liefert Skript, Stil und Schriften ohne die Übersicht — und nur für eingetragene Mannschaften', async () => {
+    expect((await get(`/${TEAM}/app.js`)).statusCode).toBe(200);
+    expect((await get('/12345/app.js')).statusCode).toBe(404);
+    expect((await get('/12345/site.css')).statusCode).toBe(404);
+    expect((await get('/12345')).statusCode).toBe(404);
+    setConfig({});
+    expect((await get(`/${TEAM}/app.js`)).statusCode).toBe(404);
+  });
+
   it('baut die Bedienung der Seite ein: Kacheln mit Schlüssel, Countdown, Spielplan-Filter, Überspringen', async () => {
     const html = (await get(`/${TEAM}/`)).body;
     expect(html).toContain('data-dialog-open="push"');
@@ -705,7 +779,7 @@ describe('Handball-Microsite', () => {
 
   it('springt in den Ferien zum nächsten Spieltag und zeigt danach das letzte gespielte Wochenende', async () => {
     const { spielWochenende, letztesSpielWochenende } = await import('../lib/handballSite');
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { handballOverview } = await import('../lib/handballSicht');
     const vorlage = handballOverview().teams[0].matches[0];
     const spiel = (start: string, status: string, a: number | null = null, b: number | null = null) =>
       ({ ...vorlage, starts_at: start, status, score_home: a, score_away: b, rated: false });
@@ -722,8 +796,8 @@ describe('Handball-Microsite', () => {
   });
 
   it('zeigt auf der Startseite Heim- und Auswärtsspiele von Freitag bis Sonntag in sortierbaren Tabellen mit Halle', async () => {
-    const { renderStartHtml } = await import('../lib/handballSite');
-    const { handballOverview } = await import('../lib/handballTeam');
+    const { renderStartHtml } = await import('../lib/handballSitePages');
+    const { handballOverview } = await import('../lib/handballSicht');
     const t = handballOverview().teams[0];
     const vorlage = t.matches[0];
     const spiel = (id: string, start: string, heim: boolean, halle: string | null, adresse: string | null) => ({
@@ -783,7 +857,7 @@ describe('Handball-Microsite', () => {
   });
 
   it('ordnet E- und F-Jugend und Minis den Kindern zu, A–D den Jugendgruppen', async () => {
-    const { gruppeVon } = await import('../lib/handballTeam');
+    const { gruppeVon } = await import('../lib/handballSicht');
     const g = (wettbewerb: string, name = 'HSG') => gruppeVon(name, [{ competition_name: wettbewerb, championship_name: null }], null);
     expect(g('Kreisliga mE')).toBe('kinder');
     expect(g('Kreisliga wE-Jugend')).toBe('kinder');
@@ -934,6 +1008,9 @@ describe('Handball-Microsite', () => {
       const mittag = new Date(`${heute}T11:00:00Z`).toISOString();
       const nachmittag = new Date(`${heute}T13:00:00Z`).toISOString();
       db.insert(schema.handball_team_match).values([heuteSpiel('t1', mittag, 'scheduled', null, null), heuteSpiel('t2', nachmittag, 'scheduled', null, null)] as never).run();
+      // Die Uhr steht auf heute früh: Ab 13:00 UTC wäre der Anwurf von t2 vorbei, und der Test hinge an der Tageszeit.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(`${heute}T06:00:00Z`));
       try {
         const start = (await get('/')).body;
         expect(start).toContain('<section class="card dark" id="heute">');
@@ -951,6 +1028,7 @@ describe('Handball-Microsite', () => {
         expect(mitLetztem).toContain('href="./96254/spiel/lw1"');
         expect(mitLetztem).toContain('27:27');
       } finally {
+        vi.useRealTimers();
         db.delete(schema.handball_team_match).where(sql`${schema.handball_team_match.match_id} IN ('t1','t2','lw1')`).run();
       }
     });
@@ -1161,6 +1239,30 @@ describe('Handball-Microsite', () => {
       const nochmal = await sitePush.pushHandballSite(new Date(), deps);
       expect(nochmal.messages).toBe(0);
       expect(sendPush).not.toHaveBeenCalled();
+    });
+
+    it('stellt an viele Abonnenten parallel zu, höchstens PUSH_PARALLEL gleichzeitig (PRF-2-003)', async () => {
+      sitePush.resetSiteSent();
+      const viele = Array.from({ length: 40 }, (_, i) => `https://fcm.googleapis.com/fcm/send/viele-${i}`);
+      for (const endpoint of viele) sitePush.saveSiteSubscription(TEAM, { endpoint, p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
+      let gleichzeitig = 0; let hoechstens = 0;
+      sendPush.mockImplementation(async () => {
+        gleichzeitig++; hoechstens = Math.max(hoechstens, gleichzeitig);
+        await new Promise(r => setTimeout(r, 30));
+        gleichzeitig--;
+        return { status: 'sent' };
+      });
+      try {
+        const t0 = Date.now();
+        const r = await sitePush.pushHandballSite(new Date(), deps);
+        const dauer = Date.now() - t0;
+        expect(r.recipients).toBeGreaterThanOrEqual(40);
+        expect(hoechstens).toBe(sitePush.PUSH_PARALLEL);
+        // Seriell wären es 40 × 30 ms = 1,2 s.
+        expect(dauer).toBeLessThan(600);
+      } finally {
+        for (const endpoint of viele) sitePush.deleteSiteSubscription(endpoint);
+      }
     });
 
     it('nimmt die gewählten Themen, wirft Unbekanntes und für eine Mannschaft die Wochenvorschau heraus', async () => {

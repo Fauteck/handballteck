@@ -32,10 +32,30 @@ export function configOverride(name: string): string | undefined {
   return overrides.get(name);
 }
 
-const env = (name: string): string | undefined => {
+/** Jeder Name, den der Code je gelesen hat — die Grundlage von `konfigurationsStand()`. */
+const gelesen = new Set<string>();
+
+const roh = (name: string): string | undefined => {
   const v = overrides.has(name) ? overrides.get(name) : process.env[name];
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
 };
+
+const env = (name: string): string | undefined => {
+  gelesen.add(name);
+  return roh(name);
+};
+
+/**
+ * Der Stand der Konfiguration als Text: alle Werte, die der Code bisher
+ * gelesen hat. Ändert sich einer (Einstellungsseite, in Tests die Umgebung),
+ * ändert sich der Text — daran hängen die Zwischenspeicher der Übersicht und
+ * der Microsite (PRF-1-002).
+ */
+export function konfigurationsStand(): string {
+  let out = '';
+  for (const name of gelesen) out += `${name}=${roh(name) ?? ''}\u0000`;
+  return out;
+}
 
 function schalter(name: string, standard: boolean): boolean {
   const v = env(name);

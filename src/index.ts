@@ -10,9 +10,12 @@ import { buildServer } from './server';
 import { port, teamIds, publicUrl, importTodoteckDb, apiToken, adminPort, adminPassword, ADMIN_PASSWORD_MIN } from './config';
 import { beiAenderung, setzeSyncAktion } from './lib/settingsStore';
 import { importTodoteck } from './import/todoteck';
-import { syncHandballTeams, naechsterAbstandMs, handballOverview } from './lib/handballTeam';
+import { syncHandballTeams, naechsterAbstandMs } from './lib/handballTeam';
+import { handballOverview } from './lib/handballSicht';
 import { clubdeskHolen, clubdeskFaelligMachen } from './lib/clubdesk';
-import { pushHandballBot, registerHandballBotAtBoot, pflegeHandballBotBeschreibung, refreshHandballWebhookInfo } from './lib/handballBot';
+import { registerHandballBotAtBoot, refreshHandballWebhookInfo } from './lib/handballBotBasis';
+import { pflegeHandballBotBeschreibung } from './lib/handballBotBeschreibung';
+import { pushHandballBot } from './lib/handballBotPush';
 import { pushHandballSite } from './lib/handballSitePush';
 import { serviceLog } from './lib/serviceLogger';
 

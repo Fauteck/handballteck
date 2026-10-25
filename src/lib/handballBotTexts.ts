@@ -7,10 +7,8 @@
 
 import { escapeHtml, type InlineKeyboard } from './telegramClient';
 import { type HandballLineup, type HandballLineupSide, type HandballMatch, type HandballMatchEvents } from './handballNetClient';
-import {
-  rosterFor, matchTopScorers, playerMatchLog, tendenzReferenz, type HandballMatchView, type HandballTeamView, type HandballStandingsView,
-  type HandballChangeView, type HandballPlayerStats, type HandballRosterName, type HandballPlayerGame,
-} from './handballTeam';
+import { rosterFor, matchTopScorers, playerMatchLog, tendenzReferenz, type HandballChangeView, type HandballPlayerStats, type HandballRosterName, type HandballPlayerGame } from './handballTeam';
+import { type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
 import type { HandballVenue } from './handballBot';
 
 // ---------------------------------------------------------------------------
