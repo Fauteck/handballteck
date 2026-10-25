@@ -1016,7 +1016,9 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
     await bot.handleHandballUpdate(update(`/feedback ${'x'.repeat(2000)}`, 4713), deps);
     const zeile = dbRef.select().from(schemaRef.handball_bot_feedback).all().find(z => z.chat_id === '4713')!;
     expect(zeile.text.length).toBe(1001);
+    // Aufräumen samt Zähler: Der nächste Test erwartet die erste Rückmeldung als #1.
     dbRef.delete(schemaRef.handball_bot_feedback).run();
+    (await import('../db')).sqlite.prepare("DELETE FROM sqlite_sequence WHERE name = 'handball_bot_feedback'").run();
   });
 
   it('/status, /rundruf und /feedback: der Betreiber aus der Konfiguration', async () => {
