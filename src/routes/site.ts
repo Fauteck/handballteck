@@ -121,6 +121,14 @@ export async function siteRoutes(fastify: FastifyInstance) {
   const limit = (max: number) => ({ config: { rateLimit: { max, timeWindow: '1 minute' } } });
 
   /**
+   * PRF-3-004: Die Seiten selbst. Der Live-Modus fragt alle 30 s nach; in einer
+   * Halle stehen viele Zuschauer hinter derselben Adresse (WLAN, NAT), und mit
+   * 60/min bekam schon der 31. eine 429 — genau während des Spiels. Seit dem
+   * Zwischenspeicher kostet eine Antwort rund 1 ms oder ist ein 304.
+   */
+  const SEITEN_LIMIT = 300;
+
+  /**
    * Stil und Skript: Der Hash im Namen (`?v=…`) macht sie ein Jahr lang
    * zwischenspeicherbar; ohne oder mit altem Hash gilt eine kurze Frist, und
    * ein ETag erspart die Übertragung, wenn sich nichts geändert hat.
@@ -146,7 +154,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
    * liegen unter `./<Team-ID>/`, deshalb gilt auch hier die Adresse mit
    * Schrägstrich (die Wurzel hat ihn immer).
    */
-  fastify.get('/', limit(60), async (request, reply) => {
+  fastify.get('/', limit(SEITEN_LIMIT), async (request, reply) => {
     const sicht = seitenUebersicht();
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
@@ -194,7 +202,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     return reply.redirect(`${encodeURIComponent(request.params.teamId)}/`, 301);
   });
 
-  fastify.get<{ Params: { teamId: string } }>('/:teamId/', limit(60), async (request, reply) => {
+  fastify.get<{ Params: { teamId: string } }>('/:teamId/', limit(SEITEN_LIMIT), async (request, reply) => {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
     const vorschau = vorschauAus(request.query);

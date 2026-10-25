@@ -445,6 +445,24 @@ describe('Handball-Microsite', () => {
     }
   });
 
+  it('lässt den Live-Poll einer ganzen Halle hinter einer Adresse durch — und drosselt trotzdem (PRF-3-004)', async () => {
+    const rateLimit = (await import('@fastify/rate-limit')).default;
+    const { siteRoutes } = await import('../routes/site');
+    const mitLimit = Fastify();
+    await mitLimit.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
+    await mitLimit.register(siteRoutes);
+    await mitLimit.ready();
+    try {
+      const codes: number[] = [];
+      for (let i = 0; i < 120; i++) codes.push((await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' })).statusCode);
+      expect(codes.filter(c => c === 429)).toHaveLength(0);
+      for (let i = 120; i < 300; i++) await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' });
+      expect((await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' })).statusCode).toBe(429);
+    } finally {
+      await mitLimit.close();
+    }
+  });
+
   it('liefert Skript, Stil und Schriften ohne die Übersicht — und nur für eingetragene Mannschaften', async () => {
     expect((await get(`/${TEAM}/app.js`)).statusCode).toBe(200);
     expect((await get('/12345/app.js')).statusCode).toBe(404);
