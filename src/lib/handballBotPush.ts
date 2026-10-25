@@ -6,7 +6,7 @@
  * sie braucht.
  */
 
-import { type HandballBotDeps, DEFAULT_DEPS, protokollAufraeumen, schonGeschickt, merke, rundsenden, fuerTeam, ALLE, ankuendigungFaelligAb, protokolliere, zustellungGescheitert, NUR_ALLES, halbzeitTastatur, KONFETTI_EFFECT_ID, rundsendenBild, anAlle, mitEffekt } from './handballBot';
+import { type HandballBotDeps, DEFAULT_DEPS, protokollAufraeumen, rundsenden, fuerTeam, ALLE, ankuendigungFaelligAb, protokolliere, zustellungGescheitert, NUR_ALLES, halbzeitTastatur, KONFETTI_EFFECT_ID, rundsendenBild, anAlle, mitEffekt, merke as merkeInDb, merkerLaden } from './handballBot';
 import { isHandballBotEnabled, listSubscribers, CHANGE_MAX_AGE_MS, verfolgt, GRUSS_ABSTAND_ZUR_ANKUENDIGUNG_MS, LINEUP_FROM_MS, LINEUP_UNTIL_MS, HALFTIME_FROM_MS, HALFTIME_UNTIL_MS, RATED_MAX_AGE_MS, RESULT_MAX_AGE_MS, REPORT_UNTIL_MS, REPORT_FROM_MS } from './handballBotBasis';
 import { handballOverview, aktuellesSpiel } from './handballSicht';
 import { changesFor, opponentFormFor, merkeAnwurfSchaetzung, setzeHalbzeit, playerStats, storeLineup, setzeBericht, saisonVorbei } from './handballTeam';
@@ -31,7 +31,12 @@ export interface HandballBotPushResult {
 export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = DEFAULT_DEPS): Promise<HandballBotPushResult> {
   const out: HandballBotPushResult = { messages: 0, recipients: 0, fetches: 0 };
   if (!isHandballBotEnabled() && deps === DEFAULT_DEPS) return out;
-  if (listSubscribers().length === 0) return out;
+  // PRF-4-001: Abonnenten und Merker einmal je Lauf statt je Spiel und Chat.
+  const abonnenten = listSubscribers();
+  if (abonnenten.length === 0) return out;
+  const gemerkt = merkerLaden();
+  const schonGeschickt = (id: string) => gemerkt.has(id);
+  const merke = (id: string) => { gemerkt.add(id); merkeInDb(id); };
   const sicht = handballOverview();
   if (!sicht.configured) return out;
   const jetzt = now.getTime();
@@ -62,7 +67,7 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
         let gegnerSpiele: HandballMatch[] | null | undefined;
         let text: string | null = null;
         let n = 0;
-        for (const abo of listSubscribers()) {
+        for (const abo of abonnenten) {
           if (abo.mode !== 'all' || !verfolgt(abo, team.team_id)) continue;
           const ab = ankuendigungFaelligAb(m.starts_at, abo.lead);
           if (ab === null || jetzt < ab) continue;
@@ -112,7 +117,7 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
       if (m.status === 'scheduled' && start > jetzt && spieltagsGrussFaellig(m, now)) {
         const text = textSpieltag(team, m, opponentFormFor(gegnerId(m))?.matches ?? null);
         let n = 0;
-        for (const abo of listSubscribers()) {
+        for (const abo of abonnenten) {
           if (abo.mode !== 'all' || abo.lead === 'aus' || !verfolgt(abo, team.team_id)) continue;
           const key = schluessel(`morning:${abo.chatId}`);
           if (schonGeschickt(key) || schonGeschickt(schluessel(`upcoming:${abo.chatId}`))) continue;

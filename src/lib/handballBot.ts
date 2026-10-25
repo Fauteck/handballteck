@@ -63,7 +63,7 @@
  */
 
 import crypto from 'node:crypto';
-import { and, eq, gte, lt } from 'drizzle-orm';
+import { and, eq, gte, lt, notLike } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_bot_sent, handball_bot_feedback, handball_bot_delivery, handball_site_subscription } from '../db/schema';
 import {
@@ -1219,10 +1219,6 @@ async function inlineStandErfragen(): Promise<void> {
 // Meldungen von sich aus
 // ---------------------------------------------------------------------------
 
-export function schonGeschickt(id: string): boolean {
-  return !!db.select().from(handball_bot_sent).where(eq(handball_bot_sent.id, id)).get();
-}
-
 export function merke(id: string): void {
   db.insert(handball_bot_sent).values({ id, sent_at: new Date().toISOString() }).onConflictDoNothing().run();
 }
@@ -1243,6 +1239,8 @@ type Meldungsart = 'ankuendigung' | 'aufstellung' | 'halbzeit' | 'endstand' | 'b
 
 /** Aufbewahrung des Zustell-Protokolls. */
 const DELIVERY_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
+/** Wie lange die Merker der Bot-Meldungen bleiben (PRF-4-001). */
+const MERKER_KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
 /**
  * Eine Zustellung protokollieren, gelungen oder nicht — `/status` zählt
@@ -1255,6 +1253,18 @@ export function protokolliere(chatId: string, art: Meldungsart, ok: boolean, err
 
 export function protokollAufraeumen(now: Date): void {
   db.delete(handball_bot_delivery).where(lt(handball_bot_delivery.sent_at, new Date(now.getTime() - DELIVERY_KEEP_MS).toISOString())).run();
+  // PRF-4-001: Die Merker wuchsen ohne Ende (Chats × Spiele je Saison). Nach einem Jahr meldet keiner
+  // mehr etwas — Endstände gelten 6 h, gewertete 14 Tage, Verlegungen 24 h, die Saison nur die laufende.
+  db.delete(handball_bot_sent).where(lt(handball_bot_sent.sent_at, new Date(now.getTime() - MERKER_KEEP_MS).toISOString())).run();
+}
+
+/**
+ * PRF-4-001: Alle Merker des Bots auf einmal — für einen Lauf von
+ * `pushHandballBot`, der sonst je Spiel und Chat einzeln nachfragte. Die
+ * Merker der Microsite (`site:`) gehören nicht dazu.
+ */
+export function merkerLaden(): Set<string> {
+  return new Set(db.select({ id: handball_bot_sent.id }).from(handball_bot_sent).where(notLike(handball_bot_sent.id, 'site:%')).all().map(r => r.id));
 }
 
 export async function rundsenden(text: string, deps: HandballBotDeps, keyboard: InlineKeyboard | null, wer: Empfaenger, art: Meldungsart): Promise<number> {

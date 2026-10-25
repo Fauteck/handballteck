@@ -507,6 +507,18 @@ describe('Meldungen', () => {
     expect(gesendet[0].text).toContain('🏁');
   });
 
+  it('löscht Merker nach einem Jahr, jüngere bleiben (PRF-4-001)', async () => {
+    abonniere();
+    const alt = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString();
+    const jung = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    dbRef.insert(schemaRef.handball_bot_sent).values([{ id: 'alt:result', sent_at: alt }, { id: 'jung:result', sent_at: jung }]).run();
+    const { deps } = sammler();
+    await bot.pushHandballBot(new Date(), deps);
+    const ids = dbRef.select().from(schemaRef.handball_bot_sent).all().map(s => s.id);
+    expect(ids).not.toContain('alt:result');
+    expect(ids).toContain('jung:result');
+  });
+
   it('liefert alte Endstände nicht nach', async () => {
     abonniere();
     legeSpiel({ starts_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), status: 'finished', score_home: 30, score_away: 22 });
