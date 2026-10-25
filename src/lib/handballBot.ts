@@ -697,7 +697,19 @@ export function __resetHandballBotForTests(): void {
   __resetHandballBotBasisForTests();
 }
 
-async function antwortAufBefehl(text: string, chatId: string, name: string | null, deps: HandballBotDeps): Promise<void> {
+/**
+ * SEC-4-013: Darf dieser Absender in diesem Chat die Betreiber-Befehle? Im
+ * Privatchat ist die Chat-ID die des Nutzers. Ist eine Gruppe als Admin-Chat
+ * eingetragen, bekommt sie die Meldungen — die Befehle darf darin aber nur,
+ * wer selbst eingetragen ist; sonst schickte jedes Gruppenmitglied
+ * `/rundruf` an alle Abonnenten.
+ */
+function darfBetreiben(chatId: string, vonId: string | null): boolean {
+  if (!istAdmin(chatId)) return false;
+  return !chatId.startsWith('-') || (vonId !== null && istAdmin(vonId));
+}
+
+async function antwortAufBefehl(text: string, chatId: string, name: string | null, deps: HandballBotDeps, vonId: string | null = null): Promise<void> {
   // Das Argument ist der Text nach dem ersten Wort, **mit** Zeilenumbrüchen —
   // ein mehrzeiliger `/rundruf` kam bis zum 27.09.2026 als ein Absatz an.
   const zerlegt = /^(\S+)\s*([\s\S]*)$/.exec(text.trim());
@@ -803,7 +815,7 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     return;
   }
   if (befehl === '/status') {
-    if (!istAdmin(chatId)) {
+    if (!darfBetreiben(chatId, vonId)) {
       await deps.send(chatId, `Deine Chat-ID ist <code>${escapeHtml(chatId)}</code>. In TELEGRAM_ADMIN_CHAT_IDS eingetragen, zeigt /status hier den Betriebsstand.`);
       return;
     }
@@ -814,7 +826,7 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     return;
   }
   if (befehl === '/erledigt') {
-    if (!istAdmin(chatId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
+    if (!darfBetreiben(chatId, vonId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
     const id = Number.parseInt(argument, 10);
     const zeile = Number.isFinite(id) ? db.select().from(handball_bot_feedback).where(eq(handball_bot_feedback.id, id)).get() : undefined;
     if (!zeile) { await deps.send(chatId, 'Welche Rückmeldung? /erledigt 12 — die Nummern stehen unter /status.'); return; }
@@ -824,7 +836,7 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     return;
   }
   if (befehl === '/rundruf') {
-    if (!istAdmin(chatId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
+    if (!darfBetreiben(chatId, vonId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
     if (!argument) { await deps.send(chatId, 'Text hinter den Befehl: /rundruf Ab jetzt gibt es den Halbzeitstand.'); return; }
     const n = await rundsenden(`📣 <b>Info vom Betreiber</b>\n${escapeHtml(argument)}`, deps, null, ALLE, 'rundruf');
     await deps.send(chatId, `Rundruf an ${n} Chat${n === 1 ? '' : 's'} geschickt.`);
@@ -1011,7 +1023,7 @@ export async function handleHandballUpdate(update: TelegramUpdate, deps: Handbal
     const chatId = String(chat.id);
     const name = istGruppe(chat) ? (chat.title ? `Gruppe: ${chat.title}` : 'Gruppe') : (cb.from.first_name ?? cb.from.username ?? null);
     try {
-      await antwortAufBefehl(`/${m[1]}${m[2] ? ` ${m[2]}` : ''}`, chatId, name, deps);
+      await antwortAufBefehl(`/${m[1]}${m[2] ? ` ${m[2]}` : ''}`, chatId, name, deps, String(cb.from.id));
     } catch (err) {
       serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Antwort auf Knopf fehlgeschlagen');
     }
@@ -1028,7 +1040,7 @@ export async function handleHandballUpdate(update: TelegramUpdate, deps: Handbal
     : (message.from.first_name ?? message.from.username ?? null);
   try {
     if (text.startsWith('/')) {
-      await antwortAufBefehl(text, chatId, name, deps);
+      await antwortAufBefehl(text, chatId, name, deps, String(message.from.id));
     } else if (gruppe) {
       return;
     } else if (istAbonnent(chatId)) {

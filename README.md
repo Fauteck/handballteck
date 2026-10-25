@@ -155,7 +155,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `SITE_PUSH_MAX` | `2000` | Maximum number of browser push subscriptions; the subscribe route answers 503 above it. |
 | `TELEGRAM_BOT_TOKEN` | – | Enables the bot. |
 | `TELEGRAM_INVITE_CODE` | – | Restricts `/start` to invitees. |
-| `TELEGRAM_ADMIN_CHAT_IDS` | – | Operator chats (status, broadcast, feedback, alerts). |
+| `TELEGRAM_ADMIN_CHAT_IDS` | – | Operator chats (status, broadcast, feedback, alerts). In a listed group, only members whose own ID is listed too may use the operator commands. |
 | `BOT_AUTO_DESCRIPTION` | `true` | Keep the bot's profile texts in sync with standings and next match. |
 | `SITE_ENABLED` | `true` | Serve the microsite. |
 | `SITE_URL` | – | Root under which a proxy serves the pages. |

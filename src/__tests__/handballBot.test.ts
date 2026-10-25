@@ -999,6 +999,20 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
     expect(kb.inline_keyboard.flat().map(b => b.callback_data)).toContain('cmd:saison');
   });
 
+  it('in einer Admin-Gruppe dürfen nur eingetragene Mitglieder die Betreiber-Befehle (SEC-4-013)', async () => {
+    trageTeamEin({ bot_admin_chat_id: '-100123' });
+    abonniere('-100123'); abonniere('4712');
+    const { deps, gesendet } = sammler();
+    // 4711 ist Mitglied der Gruppe, aber selbst nicht eingetragen: kein Rundruf.
+    await bot.handleHandballUpdate(gruppenUpdate('/rundruf Hallo alle'), deps);
+    expect(gesendet.at(-1)!.text).toContain('nur der Betreiber');
+    expect(gesendet.some(g => g.text.includes('Info vom Betreiber'))).toBe(false);
+    // Mit eigener ID in der Liste darf er es — aus der Gruppe heraus.
+    trageTeamEin({ bot_admin_chat_id: '-100123,4711' });
+    await bot.handleHandballUpdate(gruppenUpdate('/rundruf Hallo alle'), deps);
+    expect(gesendet.filter(g => g.text.includes('Info vom Betreiber')).map(g => g.chatId).sort()).toEqual(['-100123', '4712']);
+  });
+
   it('/feedback: höchstens drei je Stunde und Chat, lange Texte gekürzt (SEC-4-012)', async () => {
     trageTeamEin({ bot_admin_chat_id: '4711' });
     abonniere('4712');
