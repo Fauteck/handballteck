@@ -1259,12 +1259,16 @@ export function renderPlayerChartSvg(input: PlayerChartInput): string {
 // Rastern
 // ---------------------------------------------------------------------------
 
-/** Doppelt gerastert (1600 px breit), damit es auf dem Telefon scharf bleibt. */
+/**
+ * Doppelt gerastert (1600 px breit), damit es auf dem Telefon scharf bleibt.
+ * PRF-3-001: Stufe 6 statt 9 — gemessen 32 statt 84 ms je Tabelle bei rund
+ * 10 % größerer Datei; Stufe 9 kostete das Zweieinhalbfache für fast nichts.
+ */
 export async function renderPng(svg: string, scale = 2): Promise<Buffer> {
   return sharp(Buffer.from(svg), { density: 72 * scale })
     .resize({ width: WIDTH * scale })
     .flatten({ background: '#ffffff' })
-    .png({ compressionLevel: 9 })
+    .png({ compressionLevel: 6 })
     .toBuffer();
 }
 
