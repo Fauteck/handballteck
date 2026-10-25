@@ -29,10 +29,10 @@
  */
 
 import { and, eq, inArray } from 'drizzle-orm';
-import { db } from '../db';
+import { db, sqlite } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
-import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds, teamGroups } from '../config';
+import { teamIds as configTeamIds, palette as configPalette, teamLabelAusConfig, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds, teamGroups, konfigurationsStand } from '../config';
 import {
   HANDBALL_KIND,
   fetchActiveSeason,
@@ -1502,9 +1502,11 @@ export function automatischeBereiche(): Record<string, HandballGroup | null> {
  * der Seite — unter ihrem Label („D1 (RTV)"), nicht unter dem Vereinsnamen mit
  * der Ziffer der Quelle („Wölfe Voreifel II"); auch als Gegner einer anderen
  * eigenen. Bot, Kalender des Bots und `/api` behalten den Vereinsnamen, denn
- * dort fehlt der Zusammenhang der Seite. Ändert die übergebene Sicht.
+ * dort fehlt der Zusammenhang der Seite. Liefert eine Kopie; die übergebene
+ * Sicht bleibt, wie sie ist (sie kann die eingefrorene aus dem Zwischenspeicher sein).
  */
-export function mitLabelsInSpielen(sicht: HandballOverview): HandballOverview {
+export function mitLabelsInSpielen(vorlage: HandballOverview): HandballOverview {
+  const sicht = structuredClone(vorlage);
   const labelVon = new Map(sicht.teams.map(v => [v.team_id, v.label]));
   const benennen = (m: HandballMatchView | null) => {
     if (!m) return;
@@ -1532,7 +1534,47 @@ export function aktuellesSpiel<T extends { season_id: number }>(matches: readonl
   return matches.at(-1);
 }
 
+// PRF-1-002: Die Übersicht liest alle Spiele und Tabellen aller Mannschaften
+// samt ihrem JSON — rund 10 ms je Aufbau, und jede Route der Microsite, des
+// Bots und der API fragte sie neu. Sie gilt, bis die Datenbank geschrieben
+// wird (`total_changes()` der einen Verbindung zählt jede geänderte Zeile),
+// sich ein gelesener Wert der Konfiguration ändert oder SICHT_FRIST_MS
+// vergehen — „nächstes Spiel" und Wertung hängen an der Uhr. Alle Aufrufer
+// bekommen dasselbe Objekt, deshalb ist es eingefroren.
+const SICHT_FRIST_MS = 10_000;
+type SichtEintrag = { schluessel: string; at: number; sicht: HandballOverview };
+const sichtCache: { roh: SichtEintrag | null; seite: SichtEintrag | null } = { roh: null, seite: null };
+const geaenderteZeilen = sqlite.prepare('SELECT total_changes()').pluck();
+
+function einfrieren<T>(wert: T): T {
+  if (wert && typeof wert === 'object' && !Object.isFrozen(wert)) {
+    Object.freeze(wert);
+    for (const kind of Object.values(wert)) einfrieren(kind);
+  }
+  return wert;
+}
+
+function zwischengespeichert(art: 'roh' | 'seite', bauen: () => HandballOverview): HandballOverview {
+  const schluessel = `${geaenderteZeilen.get() as number}\u0000${konfigurationsStand()}`;
+  const jetzt = Date.now();
+  const e = sichtCache[art];
+  if (e && e.schluessel === schluessel && jetzt >= e.at && jetzt - e.at < SICHT_FRIST_MS) return e.sicht;
+  const sicht = einfrieren(bauen());
+  sichtCache[art] = { schluessel, at: jetzt, sicht };
+  return sicht;
+}
+
+/** Die Übersicht aller Mannschaften — zwischengespeichert und eingefroren. */
 export function handballOverview(): HandballOverview {
+  return zwischengespeichert('roh', baueUebersicht);
+}
+
+/** Dieselbe Übersicht für die Microsite: Spiele tragen die Labels der eigenen Mannschaften. */
+export function seitenUebersicht(): HandballOverview {
+  return zwischengespeichert('seite', () => mitLabelsInSpielen(handballOverview()));
+}
+
+function baueUebersicht(): HandballOverview {
   const teams = readTeamIds();
   if (teams.length === 0) return { configured: false, teams: [], updated_at: null };
 

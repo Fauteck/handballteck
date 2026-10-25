@@ -398,6 +398,62 @@ describe('Handball-Microsite', () => {
     expect(js.headers['cache-control']).not.toContain('immutable');
   });
 
+  it('baut Übersicht und Seite nur neu, wenn sich etwas ändert — sonst 304 für den Live-Poll (PRF-1-002)', async () => {
+    const { handballOverview, seitenUebersicht } = await import('../lib/handballTeam');
+    // Ohne Schreiben und ohne neue Konfiguration: dasselbe, eingefrorene Objekt.
+    const a = handballOverview();
+    expect(handballOverview()).toBe(a);
+    expect(Object.isFrozen(a.teams[0].matches)).toBe(true);
+    expect(seitenUebersicht()).toBe(seitenUebersicht());
+
+    const erste = await get(`/${TEAM}/`);
+    const etag = String(erste.headers.etag);
+    expect(etag).toMatch(/^"[0-9a-f]+"$/);
+    const nochmal = await fastify.inject({ method: 'GET', url: `/${TEAM}/`, headers: { 'if-none-match': etag } });
+    expect(nochmal.statusCode).toBe(304);
+    expect(nochmal.body).toBe('');
+
+    // Ein geschriebener Wert macht Übersicht und Seite neu — der alte Stand passt nicht mehr.
+    db.update(schema.handball_team_match).set({ venue_name: 'Halle am Rathaus' }).where(eq(schema.handball_team_match.match_id, 'm3')).run();
+    try {
+      expect(handballOverview()).not.toBe(a);
+      const neu = await fastify.inject({ method: 'GET', url: `/${TEAM}/`, headers: { 'if-none-match': etag } });
+      expect(neu.statusCode).toBe(200);
+      expect(neu.body).toContain('Halle am Rathaus');
+      expect(neu.headers.etag).not.toBe(etag);
+    } finally {
+      db.update(schema.handball_team_match).set({ venue_name: 'Sporthalle Heimerzheim' }).where(eq(schema.handball_team_match.match_id, 'm3')).run();
+    }
+
+    // Eine geänderte Konfiguration ebenso, ohne dass die Datenbank geschrieben wird.
+    const b = handballOverview();
+    process.env.CLUB_NAME = 'TV Test';
+    try {
+      expect(handballOverview()).not.toBe(b);
+    } finally {
+      delete process.env.CLUB_NAME;
+    }
+
+    // Die Vorschau bekommt kein ETag und landet nicht im Zwischenspeicher.
+    process.env.SITE_PREVIEW_TOKEN = 'v'.repeat(32);
+    try {
+      const vorab = await get(`/${TEAM}/?vorab=${'v'.repeat(32)}`);
+      expect(vorab.statusCode).toBe(200);
+      expect(vorab.headers.etag).toBeUndefined();
+    } finally {
+      delete process.env.SITE_PREVIEW_TOKEN;
+    }
+  });
+
+  it('liefert Skript, Stil und Schriften ohne die Übersicht — und nur für eingetragene Mannschaften', async () => {
+    expect((await get(`/${TEAM}/app.js`)).statusCode).toBe(200);
+    expect((await get('/12345/app.js')).statusCode).toBe(404);
+    expect((await get('/12345/site.css')).statusCode).toBe(404);
+    expect((await get('/12345')).statusCode).toBe(404);
+    setConfig({});
+    expect((await get(`/${TEAM}/app.js`)).statusCode).toBe(404);
+  });
+
   it('baut die Bedienung der Seite ein: Kacheln mit Schlüssel, Countdown, Spielplan-Filter, Überspringen', async () => {
     const html = (await get(`/${TEAM}/`)).body;
     expect(html).toContain('data-dialog-open="push"');

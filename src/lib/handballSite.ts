@@ -43,7 +43,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { siteEnabled, sitePhotos, siteUrl, publicUrl as configPublicUrl, siteOperator, siteFeedbackMail, clubName } from '../config';
 import {
-  handballOverview, aktuellesSpiel, mitLabelsInSpielen, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
+  seitenUebersicht, aktuellesSpiel, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
 import { vervollstaendigePalette, renderPng, renderWeekendSvg, type FullPalette } from './handballTableImage';
@@ -1788,7 +1788,7 @@ export function renderSiteIcs(team: HandballTeamView): string {
 
 /** Die Mannschaft aus der Übersicht, oder null, wenn sie nicht eingetragen ist. */
 export function siteTeam(teamId: string): { team: HandballTeamView; stand: string | null } | null {
-  const sicht = mitLabelsInSpielen(handballOverview());
+  const sicht = seitenUebersicht();
   if (!sicht.configured) return null;
   const team = sicht.teams.find(t => t.team_id === teamId);
   return team ? { team, stand: sicht.updated_at } : null;

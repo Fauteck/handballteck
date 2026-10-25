@@ -35,7 +35,7 @@ import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
   sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode, bereinigeThemen, CLUB, type SiteSubscriber,
 } from '../lib/handballSitePush';
-import { readPalette, handballOverview, mitLabelsInSpielen } from '../lib/handballTeam';
+import { readPalette, readTeamIds, handballOverview, seitenUebersicht } from '../lib/handballTeam';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
 import { isPushServiceUrl } from '../lib/ssrf';
@@ -80,6 +80,40 @@ export async function siteRoutes(fastify: FastifyInstance) {
     return t ? { ...t, cfg } : null;
   }
 
+  /**
+   * Für Dateien, die nichts von der Mannschaft enthalten (Skript, Stil,
+   * Schriften, Service Worker): dieselbe Freigabe, ohne die Übersicht zu
+   * bauen (PRF-1-002).
+   */
+  function freigabeOhneSicht(teamId: string): boolean {
+    return TEAM_ID.test(teamId) && siteConfig(teamId).enabled && readTeamIds().includes(teamId);
+  }
+
+  /** Ob der Browser diesen Stand schon hat. Ein Proxy, der komprimiert, macht daraus ein schwaches `W/"…"`; mehrere Werte kommen durch Komma getrennt. */
+  function schonDa(request: { headers: Record<string, unknown> }, etag: string): boolean {
+    return String(request.headers['if-none-match'] ?? '').split(',').map(t => t.trim().replace(/^W\//, '')).includes(etag);
+  }
+
+  /**
+   * PRF-1-002: Das HTML der Seiten je Übersicht. Die Übersicht ist
+   * zwischengespeichert und wird neu, sobald die Datenbank geschrieben wird,
+   * die Konfiguration sich ändert oder ihre Frist abläuft — dann ist auch das
+   * HTML neu, und das alte fällt mit ihr weg. Mit dem ETag antwortet ein
+   * Live-Poll ohne neuen Stand mit 304.
+   */
+  const seitenCache = new WeakMap<object, Map<string, { html: string; etag: string }>>();
+  function seite(sicht: object, schluessel: string, bauen: () => string): { html: string; etag: string } {
+    let jeSicht = seitenCache.get(sicht);
+    if (!jeSicht) { jeSicht = new Map(); seitenCache.set(sicht, jeSicht); }
+    let eintrag = jeSicht.get(schluessel);
+    if (!eintrag) {
+      const html = bauen();
+      eintrag = { html, etag: `"${inhaltsHash(html)}"` };
+      jeSicht.set(schluessel, eintrag);
+    }
+    return eintrag;
+  }
+
   function nichtDa(reply: FastifyReply) {
     return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'not_found', message: 'Diese Seite gibt es nicht.' });
   }
@@ -96,9 +130,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const fest = (request.query as { v?: string } | undefined)?.v === hash;
     reply.header('Content-Type', contentType).header('ETag', etag)
       .header('Cache-Control', fest ? 'public, max-age=31536000, immutable' : 'public, max-age=300, must-revalidate');
-    // Ein Proxy, der komprimiert, macht daraus ein schwaches `W/"…"`; mehrere Werte kommen durch Komma getrennt.
-    const angefragt = String(request.headers['if-none-match'] ?? '').split(',').map(t => t.trim().replace(/^W\//, ''));
-    if (angefragt.includes(etag)) return reply.code(304).send();
+    if (schonDa(request, etag)) return reply.code(304).send();
     return reply.send(text);
   }
 
@@ -114,22 +146,26 @@ export async function siteRoutes(fastify: FastifyInstance) {
    * liegen unter `./<Team-ID>/`, deshalb gilt auch hier die Adresse mit
    * Schrägstrich (die Wurzel hat ihn immer).
    */
-  fastify.get('/', limit(60), async (_request, reply) => {
-    const sicht = mitLabelsInSpielen(handballOverview());
+  fastify.get('/', limit(60), async (request, reply) => {
+    const sicht = seitenUebersicht();
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    const html = renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl: `${siteRootUrl()}/`, stand: sicht.updated_at, pushEnabled: sitePushConfig().enabled });
+    const baseUrl = `${siteRootUrl()}/`;
+    const pushEnabled = sitePushConfig().enabled;
+    const s = seite(sicht, `start|${baseUrl}|${pushEnabled}`, () => renderStartHtml(sicht.teams, { teams: mannschaftswahl(), baseUrl, stand: sicht.updated_at, pushEnabled }));
     const live = sicht.teams.some(t => istLiveFenster(t.next_match));
-    return reply
+    reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
       .header('X-Robots-Tag', 'noindex, nofollow')
-      .send(html);
+      .header('ETag', s.etag);
+    if (schonDa(request, s.etag)) return reply.code(304).send();
+    return reply.send(s.html);
   });
 
   // Das Wochenende als Bild zum Weiterschicken — ein Cache-Eintrag je Wochenende, wie die Bilder der Mannschaften.
   fastify.get('/bild/wochenende.png', limit(30), async (_request, reply) => {
-    const sicht = mitLabelsInSpielen(handballOverview());
+    const sicht = seitenUebersicht();
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
     const png = await wochenendePng(sicht.teams, sicht.updated_at);
@@ -154,7 +190,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
 
   // Ohne Schrägstrich: umleiten, damit `./bild/…` und der Service-Worker-Scope stimmen.
   fastify.get<{ Params: { teamId: string } }>('/:teamId', limit(120), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
     return reply.redirect(`${encodeURIComponent(request.params.teamId)}/`, 301);
   });
 
@@ -162,17 +198,22 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
     const vorschau = vorschauAus(request.query);
-    const html = renderSiteHtml(t.team, {
-      baseUrl: t.cfg.baseUrl, pushEnabled: sitePushConfig().enabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
+    const pushEnabled = sitePushConfig().enabled;
+    const bauen = () => renderSiteHtml(t.team, {
+      baseUrl: t.cfg.baseUrl, pushEnabled, stand: t.stand, teams: mannschaftswahl(), vorschau,
     });
     // Läuft ein Spiel, darf die Seite nur kurz im Zwischenspeicher liegen — sonst zeigt der Live-Modus Altes.
     const live = istLiveFenster(t.team.next_match);
-    return reply
+    reply
       .header('Content-Type', 'text/html; charset=utf-8')
-      // Die Vorschau darf in keinem Zwischenspeicher landen, auch nicht in dem eines Proxys.
+      // Die Vorschau darf in keinem Zwischenspeicher landen, auch nicht in dem eines Proxys — und nicht in unserem.
       .header('Cache-Control', vorschau ? 'private, no-store' : live ? 'public, max-age=15' : 'public, max-age=60')
-      .header('X-Robots-Tag', 'noindex, nofollow')
-      .send(html);
+      .header('X-Robots-Tag', 'noindex, nofollow');
+    if (vorschau) return reply.send(bauen());
+    const s = seite(seitenUebersicht(), `team|${t.team.team_id}|${t.cfg.baseUrl}|${pushEnabled}`, bauen);
+    reply.header('ETag', s.etag);
+    if (schonDa(request, s.etag)) return reply.code(304).send();
+    return reply.send(s.html);
   });
 
   /** Die Seite zu einem einzelnen Spiel: Spielstand, Verlauf, Halle; mit Spielernamen auch Torschützen und Bericht. */
@@ -192,12 +233,12 @@ export async function siteRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/app.js', limit(120), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
     return festeDatei(request, reply, SITE_APP_JS, APP_JS_HASH, 'application/javascript; charset=utf-8');
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/theme.js', limit(120), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
     return festeDatei(request, reply, SITE_THEME_JS, THEME_JS_HASH, 'application/javascript; charset=utf-8');
   });
 
@@ -219,13 +260,13 @@ export async function siteRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/site.css', limit(120), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
     const css = siteCssText();
     return festeDatei(request, reply, css.text, css.hash, 'text/css; charset=utf-8');
   });
 
   fastify.get<{ Params: { teamId: string } }>('/:teamId/sw.js', limit(120), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
     return reply.header('Content-Type', 'application/javascript; charset=utf-8').header('Cache-Control', 'no-cache').send(SITE_SW_JS);
   });
 
@@ -250,7 +291,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get<{ Params: { teamId: string; datei: string } }>('/:teamId/fonts/:datei', limit(120), async (request, reply) => {
-    if (!freigegeben(request.params.teamId)) return nichtDa(reply);
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
     const pfad = siteFontPath(request.params.datei);
     if (!pfad) return nichtDa(reply);
     return reply.header('Content-Type', 'font/ttf').header('Cache-Control', 'public, max-age=31536000, immutable').send(fs.createReadStream(pfad));
