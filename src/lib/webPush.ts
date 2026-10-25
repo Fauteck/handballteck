@@ -109,6 +109,9 @@ export function resetPushConfigCache(): void {
 
 export const PUSH_TIMEOUT_MS = 10_000;
 
+/** Netzwerkfehler, nach denen ein späterer Versuch gelingen kann. */
+const VORUEBERGEHEND = new Set(['ETIMEDOUT', 'ESOCKETTIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE', 'ENETUNREACH', 'EHOSTUNREACH']);
+
 /** Wirft nicht — der Aufrufer arbeitet eine Liste ab und darf nicht am ersten toten Gerät hängenbleiben. */
 export async function sendPush(target: PushTarget, payload: PushPayload): Promise<PushResult> {
   if (!isPushConfigured()) return { status: 'retry', reason: 'VAPID nicht konfiguriert' };
@@ -129,6 +132,12 @@ export async function sendPush(target: PushTarget, payload: PushPayload): Promis
     if (statusCode === 404 || statusCode === 410 || statusCode === 403) {
       return { status: 'gone', reason: `HTTP ${statusCode}` };
     }
-    return { status: 'retry', reason: statusCode ? `HTTP ${statusCode}` : String(err) };
+    if (statusCode) return { status: 'retry', reason: `HTTP ${statusCode}` };
+    // SEC-3-004: Ohne HTTP-Status kam die Nachricht nie beim Dienst an. Ein Netzwerkfehler (Zeitüberschreitung,
+    // Abbruch, DNS gerade nicht erreichbar) kann sich erholen; eine Domain, die es nicht gibt, oder ein
+    // Schlüssel, mit dem sich nicht verschlüsseln lässt, nicht — die Zeile bliebe sonst zwölf Fehlversuche lang.
+    const code = (err as { code?: string })?.code;
+    if (code && VORUEBERGEHEND.has(code)) return { status: 'retry', reason: code };
+    return { status: 'gone', reason: code ?? (err instanceof Error ? err.message : String(err)) };
   }
 }

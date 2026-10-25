@@ -33,7 +33,9 @@ import { inhaltsHash } from '../lib/handballSiteAssets';
 import {
   sitePushConfig, saveSiteSubscription, deleteSiteSubscription, siteSubscriptionExists, countSiteSubscribers, sendSiteWelcome, istLead, istMode, bereinigeThemen, CLUB, type SiteSubscriber,
 } from '../lib/handballSitePush';
-import { readPalette, readTeamIds } from '../lib/handballTeam';
+import { readPalette, readTeamIds, logoDataUri, logoVersion } from '../lib/handballTeam';
+import { zwischengespeichert } from '../lib/bildCache';
+import sharp from 'sharp';
 import { handballOverview, seitenUebersicht } from '../lib/handballSicht';
 import { vervollstaendigePalette } from '../lib/handballTableImage';
 import { serviceLog } from '../lib/serviceLogger';
@@ -55,10 +57,22 @@ function vorschauAus(query: unknown): string | null {
   return timingSafeEqual(Buffer.from(ist), Buffer.from(soll)) ? ist : null;
 }
 
+/**
+ * SEC-3-004: Die Schlüssel einer echten Anmeldung — p256dh ist ein
+ * unkomprimierter P-256-Punkt (65 Bytes, beginnt mit 0x04), auth 16 Bytes,
+ * beide base64url. Beliebige Zeichenketten legten Zeilen an, an die nie ein
+ * Push ging und die das Kontingent (`SITE_PUSH_MAX`) füllten.
+ */
+function base64urlBytes(text: string): Buffer | null {
+  return /^[A-Za-z0-9_-]+={0,2}$/.test(text) ? Buffer.from(text, 'base64url') : null;
+}
+const p256dhSchema = z.string().max(128).refine(t => { const b = base64urlBytes(t); return b !== null && b.length === 65 && b[0] === 0x04; }, 'kein P-256-Schlüssel');
+const authSchema = z.string().max(64).refine(t => base64urlBytes(t)?.length === 16, 'kein Auth-Geheimnis');
+
 const subscribeSchema = z.object({
   subscription: z.object({
     endpoint: z.string().url().max(1000).refine(isPushServiceUrl, 'kein bekannter Push-Dienst'),
-    keys: z.object({ p256dh: z.string().min(16).max(256), auth: z.string().min(8).max(128) }),
+    keys: z.object({ p256dh: p256dhSchema, auth: authSchema }),
   }),
   lead: z.string().optional(),
   mode: z.string().optional(),
@@ -290,6 +304,31 @@ export async function siteRoutes(fastify: FastifyInstance) {
     return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=86400').send(png);
   });
 
+  /**
+   * PRF-1-001: Die Logos, auf die die Seiten verweisen — das eigene und die der
+   * Gegner aus der Tabelle, auf 240 px verkleinert (größer zeigt die Seite
+   * keins, auch nicht doppelt aufgelöst). Mit passendem `?v=` dauerhaft
+   * zwischenspeicherbar. Nur unter einer freigegebenen Mannschaft, und nur,
+   * was der Abruf von handball.net gespeichert hat.
+   */
+  fastify.get<{ Params: { teamId: string; datei: string }; Querystring: { v?: string } }>('/:teamId/logo/:datei', limit(120), async (request, reply) => {
+    if (!freigabeOhneSicht(request.params.teamId)) return nichtDa(reply);
+    const id = /^(\d{1,12})\.png$/.exec(request.params.datei)?.[1];
+    const version = id ? logoVersion(id) : null;
+    if (!id || !version) return nichtDa(reply);
+    const png = await zwischengespeichert(`logo:seite:${id}:${version}`, async () => {
+      const uri = logoDataUri(id);
+      if (!uri) return null;
+      const roh = Buffer.from(uri.slice(uri.indexOf(',') + 1), 'base64');
+      return sharp(roh).resize(240, 240, { fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+    }, 6 * 60 * 60 * 1000);
+    if (!png) return nichtDa(reply);
+    const fest = request.query.v === version;
+    return reply.header('Content-Type', 'image/png')
+      .header('Cache-Control', fest ? 'public, max-age=31536000, immutable' : 'public, max-age=3600')
+      .header('X-Robots-Tag', 'noindex').send(png);
+  });
+
   fastify.get<{ Params: { teamId: string } }>('/:teamId/logo-192.png', limit(120), async (request, reply) => {
     const t = freigegeben(request.params.teamId);
     if (!t) return nichtDa(reply);
@@ -343,7 +382,8 @@ export async function siteRoutes(fastify: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_body', message: 'Die Anmeldung ist unvollständig.' });
     const { subscription, lead, mode, topics } = parsed.data;
     // Eine neue Anmeldung nur, solange Platz ist; wer schon drin ist, darf seine Wahl ändern.
-    if (!siteSubscriptionExists(subscription.endpoint) && countSiteSubscribers() >= sitePushMax()) {
+    const neu = !siteSubscriptionExists(subscription.endpoint);
+    if (neu && countSiteSubscribers() >= sitePushMax()) {
       return reply.code(503).header('Retry-After', '3600').send({ error: 'push_full', message: 'Es sind gerade keine weiteren Benachrichtigungen möglich.' });
     }
     const abo: SiteSubscriber = saveSiteSubscription(scope, {
@@ -352,10 +392,19 @@ export async function siteRoutes(fastify: FastifyInstance) {
       topics: bereinigeThemen(topics, scope === CLUB),
       userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : null,
     });
-    // Nach bestem Bemühen — die Anmeldung steht, auch wenn die Bestätigung nicht ankommt.
-    sendSiteWelcome(abo, team?.team ?? null).catch(err => {
+    // SEC-3-004: Eine neue Anmeldung zählt erst, wenn der Push-Dienst die Bestätigung annimmt — sonst
+    // war es keine (Schein-Endpoint, unbekannte Domain) und die Zeile geht wieder. Eine bestehende
+    // Anmeldung, die nur ihre Wahl ändert, bleibt auch ohne Bestätigung.
+    let zugestellt = false;
+    try {
+      zugestellt = await sendSiteWelcome(abo, team?.team ?? null);
+    } catch (err) {
       serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[site] Bestätigung nicht zustellbar');
-    });
+    }
+    if (neu && !zugestellt) {
+      deleteSiteSubscription(subscription.endpoint);
+      return reply.code(400).header('Cache-Control', 'no-store').send({ error: 'push_failed', message: 'Der Browser hat die Bestätigung nicht angenommen — bitte noch einmal versuchen.' });
+    }
     return reply.header('Cache-Control', 'no-store').send({ ok: true, lead: abo.lead, mode: abo.mode, topics: abo.topics });
   }
 

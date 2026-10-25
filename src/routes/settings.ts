@@ -41,7 +41,30 @@ const sitzungen = new Map<string, Sitzung>();
 let zuletztAufgeraeumt = 0;
 
 /** Nur für Tests. */
-export function __resetSettingsSessionsForTests(): void { sitzungen.clear(); zuletztAufgeraeumt = 0; }
+export function __resetSettingsSessionsForTests(): void { sitzungen.clear(); zuletztAufgeraeumt = 0; fehlversuche = []; gesperrtBis = 0; }
+
+/**
+ * SEC-3-005: Das Limit je Adresse (5/min) hält einen Angreifer mit vielen
+ * Adressen nicht auf. Nach 20 Fehlversuchen in 10 Minuten — gleich von wo —
+ * nimmt die Anmeldung 15 Minuten lang nichts an, auch das richtige Passwort
+ * nicht. Das kann den Betreiber aussperren; in Betrieb hängt die Seite aber
+ * nur im LAN (`ADMIN_PORT`), und 15 Minuten Warten ist der kleinere Schaden.
+ */
+const SPERRE_NACH = 20;
+const SPERRE_FENSTER_MS = 10 * 60 * 1000;
+const SPERRE_MS = 15 * 60 * 1000;
+let fehlversuche: number[] = [];
+let gesperrtBis = 0;
+
+function fehlversuchMerken(jetzt: number): void {
+  fehlversuche = fehlversuche.filter(t => jetzt - t < SPERRE_FENSTER_MS);
+  fehlversuche.push(jetzt);
+  if (fehlversuche.length >= SPERRE_NACH) {
+    gesperrtBis = jetzt + SPERRE_MS;
+    fehlversuche = [];
+    serviceLog.warn({ minuten: SPERRE_MS / 60_000 }, '[settings] Zu viele Fehlversuche — Anmeldung gesperrt');
+  }
+}
 
 /** Nur für Tests: die Uhr einer Sitzung vorstellen. */
 export function __alterSitzungenForTests(ms: number): void {
@@ -197,10 +220,12 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
     const user = typeof request.body?.user === 'string' ? request.body.user : '';
     const pw = typeof request.body?.password === 'string' ? request.body.password : '';
     if (!herkunftPasst(request)) return sendeNein(reply, 403, 'csrf', 'Anfrage abgelehnt.');
+    if (Date.now() < gesperrtBis) return sendeNein(reply, 429, 'locked', 'Zu viele Fehlversuche — die Anmeldung ist für eine Viertelstunde gesperrt.');
     // Beide Teile immer prüfen (kein früher Abbruch), danach eine kleine Pause gegen Durchprobieren.
     const userOk = gleich(user, adminUser());
     const pwOk = soll !== null && gleich(pw, soll);
     if (!(userOk && pwOk)) {
+      fehlversuchMerken(Date.now());
       await new Promise(r => setTimeout(r, 400));
       serviceLog.warn({ ip: request.ip }, '[settings] Anmeldung fehlgeschlagen');
       return sendeNein(reply, 401, 'unauthorized', 'Name oder Passwort stimmt nicht.');

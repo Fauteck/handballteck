@@ -5,8 +5,8 @@
  */
 
 import { vervollstaendigePalette } from './handballTableImage';
-import { readPalette, vereinsName, logoDataUri, playerGames } from './handballTeam';
-import { h, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml } from './handballSite';
+import { readPalette, vereinsName, playerGames } from './handballTeam';
+import { h, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad } from './handballSite';
 import { inhaltsHash, SITE_THEME_JS, SITE_APP_JS } from './handballSiteAssets';
 import { type HandballTeamView, HANDBALL_GROUPS } from './handballSicht';
 import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
@@ -97,7 +97,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   const stand = fertig ? `${m.score_home}:${m.score_away}` : null;
   const titel = `${stand ? `${m.home_name} ${stand} ${m.away_name}` : paarung} · ${vereinsName(team.name)}`;
   const beschreibung = `${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr · ${wettbewerb}${ausgang ? ` · ${ausgang}` : ''}`;
-  const logo = logoDataUri(team.team_id);
+  const logo = logoPfad(team.team_id, '../');
   const verlauf = fertig ? spielverlaufSvg(m) : null;
   const schuetzen = fertig ? playerGames(team.team_id).filter(g => g.matchId === m.match_id && g.goals > 0) : [];
   const bild = fertig ? `../bild/endstand.png?match=${encodeURIComponent(m.match_id)}` : null;
@@ -311,7 +311,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
 </section>`;
 
   const titel = SITE_TITEL;
-  const logo = logoDataUri(erste.team_id);
+  const logo = logoPfad(erste.team_id, `./${encodeURIComponent(erste.team_id)}/`);
   const botLink = handballBotLink();
   const botName = getHandballBotUsername();
   const verpassen = verpassenHtml(opts.baseUrl, opts.pushEnabled === true, botLink && botName ? { link: botLink, handle: `@${botName}` } : null, true);

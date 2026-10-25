@@ -23,6 +23,7 @@ import { ladeEinstellungen } from './lib/settingsStore';
 import { setServiceLogger } from './lib/serviceLogger';
 import { getBackoffSnapshot } from './lib/pollerBackoff';
 import { getHandballNetStats } from './lib/handballNetClient';
+import { rateLimitSchluessel } from './lib/rateLimitKey';
 
 /**
  * Die URL, wie sie ins Log geht: ohne das Pfadgeheimnis des Webhooks und
@@ -94,7 +95,8 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   fastify.addHook('onSend', async (_request, reply) => {
     reply.header('Permissions-Policy', PERMISSIONS_POLICY);
   });
-  await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute' });
+  // SEC-3-005: IPv6 zählt je /64 — sonst wählt, wer ein Präfix hat, für jede Anfrage eine neue Adresse.
+  await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute', keyGenerator: request => rateLimitSchluessel(request.ip) });
 
   // SEC-1-002: Ohne TRUST_PROXY sieht der Dienst hinter einem Reverse Proxy
   // nur dessen Adresse — dann teilen sich alle Besucher jedes Rate-Limit,

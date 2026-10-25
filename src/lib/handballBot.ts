@@ -63,7 +63,7 @@
  */
 
 import crypto from 'node:crypto';
-import { eq, lt } from 'drizzle-orm';
+import { and, eq, gte, lt, notLike } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_bot_sent, handball_bot_feedback, handball_bot_delivery, handball_site_subscription } from '../db/schema';
 import {
@@ -685,6 +685,11 @@ function schonGesehen(updateId: number): boolean {
   return false;
 }
 
+/** SEC-4-012: Rückmeldungen je Chat und Stunde, und wie lang eine sein darf. */
+const FEEDBACK_JE_STUNDE = 3;
+const FEEDBACK_FENSTER_MS = 60 * 60 * 1000;
+const FEEDBACK_MAX_ZEICHEN = 1000;
+
 /** Nur für Tests. */
 export function __resetHandballBotForTests(): void {
   gesehen.clear();
@@ -692,7 +697,19 @@ export function __resetHandballBotForTests(): void {
   __resetHandballBotBasisForTests();
 }
 
-async function antwortAufBefehl(text: string, chatId: string, name: string | null, deps: HandballBotDeps): Promise<void> {
+/**
+ * SEC-4-013: Darf dieser Absender in diesem Chat die Betreiber-Befehle? Im
+ * Privatchat ist die Chat-ID die des Nutzers. Ist eine Gruppe als Admin-Chat
+ * eingetragen, bekommt sie die Meldungen — die Befehle darf darin aber nur,
+ * wer selbst eingetragen ist; sonst schickte jedes Gruppenmitglied
+ * `/rundruf` an alle Abonnenten.
+ */
+function darfBetreiben(chatId: string, vonId: string | null): boolean {
+  if (!istAdmin(chatId)) return false;
+  return !chatId.startsWith('-') || (vonId !== null && istAdmin(vonId));
+}
+
+async function antwortAufBefehl(text: string, chatId: string, name: string | null, deps: HandballBotDeps, vonId: string | null = null): Promise<void> {
   // Das Argument ist der Text nach dem ersten Wort, **mit** Zeilenumbrüchen —
   // ein mehrzeiliger `/rundruf` kam bis zum 27.09.2026 als ein Absatz an.
   const zerlegt = /^(\S+)\s*([\s\S]*)$/.exec(text.trim());
@@ -780,15 +797,25 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
   }
   if (befehl === '/feedback') {
     if (!argument) { await deps.send(chatId, 'Schreib dein Feedback hinter den Befehl: /feedback Die Halbzeit kommt zu spät.'); return; }
-    db.insert(handball_bot_feedback).values({ chat_id: chatId, name, text: argument, created_at: new Date().toISOString() }).run();
+    // SEC-4-012: Jeder Abonnent kann schreiben (ohne Einladungscode jeder), und jede Zeile ging an alle
+    // Admin-Chats — ohne Drossel ein Kanal, um Tabelle und Betreiber zu fluten.
+    const seit = new Date(Date.now() - FEEDBACK_FENSTER_MS).toISOString();
+    const juengst = db.select({ id: handball_bot_feedback.id }).from(handball_bot_feedback)
+      .where(and(eq(handball_bot_feedback.chat_id, chatId), gte(handball_bot_feedback.created_at, seit))).all().length;
+    if (juengst >= FEEDBACK_JE_STUNDE) {
+      await deps.send(chatId, `Danke! Mehr als ${FEEDBACK_JE_STUNDE} Rückmeldungen in der Stunde nehme ich nicht an — versuch es später noch einmal.`);
+      return;
+    }
+    const text = argument.length > FEEDBACK_MAX_ZEICHEN ? `${argument.slice(0, FEEDBACK_MAX_ZEICHEN)}…` : argument;
+    db.insert(handball_bot_feedback).values({ chat_id: chatId, name, text, created_at: new Date().toISOString() }).run();
     for (const admin of adminChatIds()) {
-      try { await deps.send(admin, `💬 <b>Feedback</b> von ${escapeHtml(name ?? chatId)} (Chat <code>${escapeHtml(chatId)}</code>):\n${escapeHtml(argument)}`); } catch { /* der Betreiber ist nicht erreichbar — der Eintrag steht in der Datenbank */ }
+      try { await deps.send(admin, `💬 <b>Feedback</b> von ${escapeHtml(name ?? chatId)} (Chat <code>${escapeHtml(chatId)}</code>):\n${escapeHtml(text)}`); } catch { /* der Betreiber ist nicht erreichbar — der Eintrag steht in der Datenbank */ }
     }
     await deps.send(chatId, 'Danke, ist angekommen.');
     return;
   }
   if (befehl === '/status') {
-    if (!istAdmin(chatId)) {
+    if (!darfBetreiben(chatId, vonId)) {
       await deps.send(chatId, `Deine Chat-ID ist <code>${escapeHtml(chatId)}</code>. In TELEGRAM_ADMIN_CHAT_IDS eingetragen, zeigt /status hier den Betriebsstand.`);
       return;
     }
@@ -799,7 +826,7 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     return;
   }
   if (befehl === '/erledigt') {
-    if (!istAdmin(chatId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
+    if (!darfBetreiben(chatId, vonId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
     const id = Number.parseInt(argument, 10);
     const zeile = Number.isFinite(id) ? db.select().from(handball_bot_feedback).where(eq(handball_bot_feedback.id, id)).get() : undefined;
     if (!zeile) { await deps.send(chatId, 'Welche Rückmeldung? /erledigt 12 — die Nummern stehen unter /status.'); return; }
@@ -809,7 +836,7 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
     return;
   }
   if (befehl === '/rundruf') {
-    if (!istAdmin(chatId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
+    if (!darfBetreiben(chatId, vonId)) { await deps.send(chatId, 'Das darf nur der Betreiber.'); return; }
     if (!argument) { await deps.send(chatId, 'Text hinter den Befehl: /rundruf Ab jetzt gibt es den Halbzeitstand.'); return; }
     const n = await rundsenden(`📣 <b>Info vom Betreiber</b>\n${escapeHtml(argument)}`, deps, null, ALLE, 'rundruf');
     await deps.send(chatId, `Rundruf an ${n} Chat${n === 1 ? '' : 's'} geschickt.`);
@@ -996,7 +1023,7 @@ export async function handleHandballUpdate(update: TelegramUpdate, deps: Handbal
     const chatId = String(chat.id);
     const name = istGruppe(chat) ? (chat.title ? `Gruppe: ${chat.title}` : 'Gruppe') : (cb.from.first_name ?? cb.from.username ?? null);
     try {
-      await antwortAufBefehl(`/${m[1]}${m[2] ? ` ${m[2]}` : ''}`, chatId, name, deps);
+      await antwortAufBefehl(`/${m[1]}${m[2] ? ` ${m[2]}` : ''}`, chatId, name, deps, String(cb.from.id));
     } catch (err) {
       serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Antwort auf Knopf fehlgeschlagen');
     }
@@ -1013,7 +1040,7 @@ export async function handleHandballUpdate(update: TelegramUpdate, deps: Handbal
     : (message.from.first_name ?? message.from.username ?? null);
   try {
     if (text.startsWith('/')) {
-      await antwortAufBefehl(text, chatId, name, deps);
+      await antwortAufBefehl(text, chatId, name, deps, String(message.from.id));
     } else if (gruppe) {
       return;
     } else if (istAbonnent(chatId)) {
@@ -1192,10 +1219,6 @@ async function inlineStandErfragen(): Promise<void> {
 // Meldungen von sich aus
 // ---------------------------------------------------------------------------
 
-export function schonGeschickt(id: string): boolean {
-  return !!db.select().from(handball_bot_sent).where(eq(handball_bot_sent.id, id)).get();
-}
-
 export function merke(id: string): void {
   db.insert(handball_bot_sent).values({ id, sent_at: new Date().toISOString() }).onConflictDoNothing().run();
 }
@@ -1216,6 +1239,8 @@ type Meldungsart = 'ankuendigung' | 'aufstellung' | 'halbzeit' | 'endstand' | 'b
 
 /** Aufbewahrung des Zustell-Protokolls. */
 const DELIVERY_KEEP_MS = 90 * 24 * 60 * 60 * 1000;
+/** Wie lange die Merker der Bot-Meldungen bleiben (PRF-4-001). */
+const MERKER_KEEP_MS = 365 * 24 * 60 * 60 * 1000;
 
 /**
  * Eine Zustellung protokollieren, gelungen oder nicht — `/status` zählt
@@ -1228,6 +1253,18 @@ export function protokolliere(chatId: string, art: Meldungsart, ok: boolean, err
 
 export function protokollAufraeumen(now: Date): void {
   db.delete(handball_bot_delivery).where(lt(handball_bot_delivery.sent_at, new Date(now.getTime() - DELIVERY_KEEP_MS).toISOString())).run();
+  // PRF-4-001: Die Merker wuchsen ohne Ende (Chats × Spiele je Saison). Nach einem Jahr meldet keiner
+  // mehr etwas — Endstände gelten 6 h, gewertete 14 Tage, Verlegungen 24 h, die Saison nur die laufende.
+  db.delete(handball_bot_sent).where(lt(handball_bot_sent.sent_at, new Date(now.getTime() - MERKER_KEEP_MS).toISOString())).run();
+}
+
+/**
+ * PRF-4-001: Alle Merker des Bots auf einmal — für einen Lauf von
+ * `pushHandballBot`, der sonst je Spiel und Chat einzeln nachfragte. Die
+ * Merker der Microsite (`site:`) gehören nicht dazu.
+ */
+export function merkerLaden(): Set<string> {
+  return new Set(db.select({ id: handball_bot_sent.id }).from(handball_bot_sent).where(notLike(handball_bot_sent.id, 'site:%')).all().map(r => r.id));
 }
 
 export async function rundsenden(text: string, deps: HandballBotDeps, keyboard: InlineKeyboard | null, wer: Empfaenger, art: Meldungsart): Promise<number> {

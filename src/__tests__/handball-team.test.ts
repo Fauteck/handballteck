@@ -136,6 +136,7 @@ afterAll(() => {
 
 beforeEach(() => {
   resetToken();
+  mod.__resetHandballBackoffForTests();
   global.fetch = ORIGINAL_FETCH;
   dbRef.delete(schemaRef.handball_team_match).run();
   dbRef.delete(schemaRef.handball_standings).run();
@@ -292,6 +293,25 @@ describe('Tageslauf', () => {
     }
   });
 
+  it('fragt nach einem 403 eine halbe Stunde lang nicht nach — außer von Hand (PRF-2-006)', async () => {
+    trageTeamEin();
+    const f = quelle([]);
+    const erster = await mod.syncHandballTeams();
+    expect(erster.status).toBe('auth_error');
+    const nachErstem = apiAufrufe(f);
+    expect(nachErstem).toBeGreaterThan(0);
+    // Der nächste Takt — auch im Live-Fenster — geht nicht nach draußen und meldet den Fehler weiter.
+    const zweiter = await mod.syncHandballTeams();
+    expect(zweiter.status).toBe('auth_error');
+    expect(zweiter.detail).toMatch(/^Pause nach Fehler, noch 30 min/);
+    expect(apiAufrufe(f)).toBe(nachErstem);
+    // Der Takt plant den nächsten Lauf erst nach dem Backoff.
+    expect(mod.naechsterAbstandMs()).toBeGreaterThan(29 * 60 * 1000);
+    // Ein Lauf von Hand (/api/sync) fragt trotzdem.
+    await mod.syncHandballTeams(true);
+    expect(apiAufrufe(f)).toBeGreaterThan(nachErstem);
+  });
+
   it('wählt den Live-Takt nur, solange ein Spiel läuft oder gleich beginnt', () => {
     trageTeamEin();
     process.env.SYNC_LIVE_INTERVAL_MS = '0';
@@ -351,6 +371,15 @@ describe('Tageslauf', () => {
     // Derselbe Fehler noch einmal: keine zweite Meldung.
     await mod.syncHandballTeams(true);
     expect(f.mock.calls.filter(c => String(c[0]).includes('api.telegram.org'))).toHaveLength(1);
+  });
+});
+
+describe('Indizes', () => {
+  it('liest Verlegungen je Mannschaft und löscht alte Bot-Merker über einen Index (PRF-4-002, PRF-4-001)', async () => {
+    const { sqlite } = await import('../db');
+    const plan = (sql: string) => (sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(r => r.detail).join(' | ');
+    expect(plan("SELECT * FROM handball_match_change WHERE team_id = '1'")).toContain('idx_handball_match_change_team');
+    expect(plan("DELETE FROM handball_bot_sent WHERE sent_at < '2025-01-01'")).toContain('idx_handball_bot_sent_at');
   });
 });
 

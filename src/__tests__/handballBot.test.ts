@@ -507,6 +507,18 @@ describe('Meldungen', () => {
     expect(gesendet[0].text).toContain('🏁');
   });
 
+  it('löscht Merker nach einem Jahr, jüngere bleiben (PRF-4-001)', async () => {
+    abonniere();
+    const alt = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString();
+    const jung = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    dbRef.insert(schemaRef.handball_bot_sent).values([{ id: 'alt:result', sent_at: alt }, { id: 'jung:result', sent_at: jung }]).run();
+    const { deps } = sammler();
+    await bot.pushHandballBot(new Date(), deps);
+    const ids = dbRef.select().from(schemaRef.handball_bot_sent).all().map(s => s.id);
+    expect(ids).not.toContain('alt:result');
+    expect(ids).toContain('jung:result');
+  });
+
   it('liefert alte Endstände nicht nach', async () => {
     abonniere();
     legeSpiel({ starts_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), status: 'finished', score_home: 30, score_away: 22 });
@@ -997,6 +1009,42 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
     await bot.handleHandballUpdate(update('/hilfe'), deps);
     const kb = gesendet[2].keyboard as { inline_keyboard: Array<Array<{ callback_data: string }>> };
     expect(kb.inline_keyboard.flat().map(b => b.callback_data)).toContain('cmd:saison');
+  });
+
+  it('in einer Admin-Gruppe dürfen nur eingetragene Mitglieder die Betreiber-Befehle (SEC-4-013)', async () => {
+    trageTeamEin({ bot_admin_chat_id: '-100123' });
+    abonniere('-100123'); abonniere('4712');
+    const { deps, gesendet } = sammler();
+    // 4711 ist Mitglied der Gruppe, aber selbst nicht eingetragen: kein Rundruf.
+    await bot.handleHandballUpdate(gruppenUpdate('/rundruf Hallo alle'), deps);
+    expect(gesendet.at(-1)!.text).toContain('nur der Betreiber');
+    expect(gesendet.some(g => g.text.includes('Info vom Betreiber'))).toBe(false);
+    // Mit eigener ID in der Liste darf er es — aus der Gruppe heraus.
+    trageTeamEin({ bot_admin_chat_id: '-100123,4711' });
+    await bot.handleHandballUpdate(gruppenUpdate('/rundruf Hallo alle'), deps);
+    expect(gesendet.filter(g => g.text.includes('Info vom Betreiber')).map(g => g.chatId).sort()).toEqual(['-100123', '4712']);
+  });
+
+  it('/feedback: höchstens drei je Stunde und Chat, lange Texte gekürzt (SEC-4-012)', async () => {
+    trageTeamEin({ bot_admin_chat_id: '4711' });
+    abonniere('4712');
+    const { deps, gesendet } = sammler();
+    for (let i = 0; i < 3; i++) await bot.handleHandballUpdate(update(`/feedback Nummer ${i}`, 4712), deps);
+    expect(dbRef.select().from(schemaRef.handball_bot_feedback).all()).toHaveLength(3);
+    const vorher = gesendet.filter(g => g.chatId === '4711').length;
+    await bot.handleHandballUpdate(update('/feedback Nummer 4', 4712), deps);
+    // Der vierte wird abgelehnt: keine Zeile, nichts an den Betreiber.
+    expect(dbRef.select().from(schemaRef.handball_bot_feedback).all()).toHaveLength(3);
+    expect(gesendet.filter(g => g.chatId === '4711')).toHaveLength(vorher);
+    expect(gesendet.at(-1)!.text).toContain('Mehr als 3 Rückmeldungen');
+    // Ein anderer Chat darf weiter — und ein langer Text kommt gekürzt an.
+    abonniere('4713');
+    await bot.handleHandballUpdate(update(`/feedback ${'x'.repeat(2000)}`, 4713), deps);
+    const zeile = dbRef.select().from(schemaRef.handball_bot_feedback).all().find(z => z.chat_id === '4713')!;
+    expect(zeile.text.length).toBe(1001);
+    // Aufräumen samt Zähler: Der nächste Test erwartet die erste Rückmeldung als #1.
+    dbRef.delete(schemaRef.handball_bot_feedback).run();
+    (await import('../db')).sqlite.prepare("DELETE FROM sqlite_sequence WHERE name = 'handball_bot_feedback'").run();
   });
 
   it('/status, /rundruf und /feedback: der Betreiber aus der Konfiguration', async () => {

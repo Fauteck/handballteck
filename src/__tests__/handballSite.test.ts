@@ -33,6 +33,9 @@ vi.mock('../lib/webPush', () => ({
 }));
 
 const TEAM = '96254';
+/** Schlüssel in der Form, die ein Browser liefert (SEC-3-004): ein P-256-Punkt (65 Bytes, 0x04 vorn) und 16 Bytes Auth. */
+const P256DH = Buffer.concat([Buffer.from([0x04]), Buffer.alloc(64, 7)]).toString('base64url');
+const AUTH = Buffer.alloc(16, 3).toString('base64url');
 
 describe('Handball-Microsite', () => {
   let fastify: FastifyInstance;
@@ -460,6 +463,39 @@ describe('Handball-Microsite', () => {
       expect((await mitLimit.inject({ method: 'GET', url: `/${TEAM}/`, remoteAddress: '203.0.113.7' })).statusCode).toBe(429);
     } finally {
       await mitLimit.close();
+    }
+  });
+
+  it('verweist auf Logos statt sie einzubetten, und liefert sie verkleinert und dauerhaft zwischenspeicherbar (PRF-1-001)', async () => {
+    const sharp = (await import('sharp')).default;
+    const { logoVerkleinern } = await import('../lib/handballTeam');
+    // Ein Logo in Originalgröße, wie es die Quelle liefert: 1000 px.
+    const gross = await sharp({ create: { width: 1000, height: 800, channels: 4, background: { r: 200, g: 20, b: 20, alpha: 1 } } }).png().toBuffer();
+    const gespeichert = await logoVerkleinern(gross, 'image/png');
+    expect((await sharp(gespeichert.buffer).metadata()).width).toBe(512);
+    const jetzt = new Date().toISOString();
+    for (const id of [TEAM, '96300']) {
+      db.insert(schema.handball_team_logo).values({ team_id: id, source_url: `https://logo.test/${id}.png`, mime_type: gespeichert.mimeType, image: gespeichert.buffer, fetched_at: jetzt })
+        .onConflictDoUpdate({ target: schema.handball_team_logo.team_id, set: { image: gespeichert.buffer, fetched_at: jetzt } }).run();
+    }
+    try {
+      const html = (await get(`/${TEAM}/`)).body;
+      expect(html).not.toContain('data:image');
+      const verweis = new RegExp(`src="\\./logo/96300\\.png\\?v=([0-9a-z]+)"`).exec(html);
+      expect(verweis).not.toBeNull();
+      expect(html).toMatch(new RegExp(`src="\\./logo/${TEAM}\\.png\\?v=`));
+      const res = await get(`/${TEAM}/logo/96300.png?v=${verweis![1]}`);
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('image/png');
+      expect(res.headers['cache-control']).toContain('immutable');
+      expect((await sharp(res.rawPayload).metadata()).width).toBe(240);
+      // Ohne passende Fassung kurz, Unbekanntes und fremde Mannschaften 404.
+      expect((await get(`/${TEAM}/logo/96300.png`)).headers['cache-control']).not.toContain('immutable');
+      expect((await get(`/${TEAM}/logo/12345.png`)).statusCode).toBe(404);
+      expect((await get(`/${TEAM}/logo/abc.png`)).statusCode).toBe(404);
+      expect((await get('/12345/logo/96300.png')).statusCode).toBe(404);
+    } finally {
+      db.delete(schema.handball_team_logo).run();
     }
   });
 
@@ -1147,7 +1183,7 @@ describe('Handball-Microsite', () => {
   });
 
   describe('Web-Push ohne Konto', () => {
-    const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
+    const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: P256DH, auth: AUTH } };
     const post = (payload: Record<string, unknown>) => fastify.inject({ method: 'POST', url: `/${TEAM}/push`, payload });
     const deps = { send: (t: PushTarget, p: PushPayload): Promise<PushResult> => sendPush(t, p) as Promise<PushResult> };
 
@@ -1155,6 +1191,24 @@ describe('Handball-Microsite', () => {
       const res = await get(`/${TEAM}/push`);
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ enabled: true, public_key: 'BTestVapidKey' });
+    });
+
+    it('nimmt nur Schlüssel in Browser-Form an und zählt eine neue Anmeldung erst nach angenommener Bestätigung (SEC-3-004)', async () => {
+      const vorher = sitePush.countSiteSubscribers();
+      // Beliebige Zeichenketten statt P-256-Punkt bzw. 16-Byte-Geheimnis: 400, keine Zeile, kein Push.
+      const schein = { endpoint: 'https://fcm.googleapis.com/fcm/send/schein', keys: { p256dh: 'p'.repeat(87), auth: AUTH } };
+      expect((await post({ subscription: schein })).statusCode).toBe(400);
+      expect((await post({ subscription: { ...schein, keys: { p256dh: P256DH, auth: 'a'.repeat(16) } } })).statusCode).toBe(400);
+      expect(sendPush).not.toHaveBeenCalled();
+      // Nimmt der Push-Dienst die Bestätigung nicht an, war es keine Anmeldung: 400, die Zeile geht wieder.
+      sendPush.mockResolvedValue({ status: 'gone', reason: 'ENOTFOUND' });
+      const tot = { endpoint: 'https://fcm.googleapis.com/fcm/send/nirgends', keys: { p256dh: P256DH, auth: AUTH } };
+      const res = await post({ subscription: tot });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: 'push_failed' });
+      sendPush.mockResolvedValue({ status: 'retry', reason: 'ETIMEDOUT' });
+      expect((await post({ subscription: tot })).statusCode).toBe(400);
+      expect(sitePush.countSiteSubscribers()).toBe(vorher);
     });
 
     it('trägt eine Subscription ein, bestätigt per Push und erneuert statt zu verdoppeln', async () => {
@@ -1217,7 +1271,7 @@ describe('Handball-Microsite', () => {
     it('schickt den frischen Endstand genau einmal — und löscht tote Abonnenten', async () => {
       sitePush.resetSiteSent();
       // Der Abonnent von oben will nur Ergebnisse; ein zweiter alles.
-      sitePush.saveSiteSubscription(TEAM, { endpoint: 'https://fcm.googleapis.com/fcm/send/tot', p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
+      sitePush.saveSiteSubscription(TEAM, { endpoint: 'https://fcm.googleapis.com/fcm/send/tot', p256dh: P256DH, auth: AUTH, lead: '1h', mode: 'all' });
       sendPush.mockImplementation(async (target: { endpoint: string }) => (target.endpoint.endsWith('/tot') ? { status: 'gone', reason: 'HTTP 410' } : { status: 'sent' }));
 
       // Der Push nennt die Mannschaft mit dem eingestellten Vereinsnamen, nicht mit dem von handball.net.
@@ -1244,7 +1298,7 @@ describe('Handball-Microsite', () => {
     it('stellt an viele Abonnenten parallel zu, höchstens PUSH_PARALLEL gleichzeitig (PRF-2-003)', async () => {
       sitePush.resetSiteSent();
       const viele = Array.from({ length: 40 }, (_, i) => `https://fcm.googleapis.com/fcm/send/viele-${i}`);
-      for (const endpoint of viele) sitePush.saveSiteSubscription(TEAM, { endpoint, p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
+      for (const endpoint of viele) sitePush.saveSiteSubscription(TEAM, { endpoint, p256dh: P256DH, auth: AUTH, lead: '1h', mode: 'all' });
       let gleichzeitig = 0; let hoechstens = 0;
       sendPush.mockImplementation(async () => {
         gleichzeitig++; hoechstens = Math.max(hoechstens, gleichzeitig);
@@ -1288,7 +1342,7 @@ describe('Handball-Microsite', () => {
     });
 
     it('meldet den Verein an der Wurzel an: nur Heimspiele, Ziel und Bild vom Worker der Wurzel aus', async () => {
-      const verein = { endpoint: 'https://fcm.googleapis.com/fcm/send/verein', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
+      const verein = { endpoint: 'https://fcm.googleapis.com/fcm/send/verein', keys: { p256dh: P256DH, auth: AUTH } };
       expect((await get('/push')).json()).toEqual({ enabled: true, public_key: 'BTestVapidKey' });
       const res = await fastify.inject({ method: 'POST', url: '/push', payload: { subscription: verein, lead: '1h', topics: ['upcoming', 'result', 'preview', 'halftime'] } });
       expect(res.statusCode).toBe(200);
@@ -1328,7 +1382,7 @@ describe('Handball-Microsite', () => {
       // Die Grund-Spiele m1–m3 liegen relativ zu heute und könnten aufs Testwochenende fallen — für den Test weg damit.
       const grund = db.select().from(schema.handball_team_match).where(sql`${schema.handball_team_match.match_id} IN ('m1','m2','m3')`).all();
       db.update(schema.handball_team_match).set({ starts_at: '2020-01-01T12:00:00Z' }).where(sql`${schema.handball_team_match.match_id} IN ('m1','m2','m3')`).run();
-      const verein = { endpoint: 'https://fcm.googleapis.com/fcm/send/vorschau', keys: { p256dh: 'p'.repeat(32), auth: 'a'.repeat(16) } };
+      const verein = { endpoint: 'https://fcm.googleapis.com/fcm/send/vorschau', keys: { p256dh: P256DH, auth: AUTH } };
       sitePush.saveSiteSubscription(sitePush.CLUB, { endpoint: verein.endpoint, p256dh: verein.keys.p256dh, auth: verein.keys.auth, lead: 'aus', mode: 'all', topics: ['preview'] });
       try {
         sitePush.resetSiteSent();

@@ -24,11 +24,12 @@ const STARTUP_DELAY_MS = 20_000;
 
 let laeuft = false;
 
-export async function einTakt(): Promise<void> {
+/** `vonHand`: der Knopf der Einstellungsseite — er fragt auch im Backoff nach (PRF-2-006). */
+export async function einTakt(vonHand = false): Promise<void> {
   if (laeuft) return;
   laeuft = true;
   try {
-    const result = await syncHandballTeams();
+    const result = await syncHandballTeams(vonHand);
     if (result.status === 'not_configured') { serviceLog.warn('[sync] Keine Mannschaft eingetragen (TEAM_IDS)'); return; }
     if (result.status !== 'ok') return;
     const bot = await pushHandballBot();
@@ -79,7 +80,7 @@ async function main(): Promise<void> {
   const token = apiToken();
   if (token && token.length < 32) fastify.log.warn(`API_TOKEN hat nur ${token.length} Zeichen — mindestens 32 nehmen (openssl rand -hex 32).`);
   // Einstellungsseite: ein Lauf auf Knopfdruck, und nach Änderungen an Mannschaften oder Quellen sofort.
-  setzeSyncAktion(einTakt);
+  setzeSyncAktion(() => einTakt(true));
   beiAenderung(keys => {
     // Eine geänderte Foto-Freigabe soll nicht bis zum nächsten Tagesabruf der Vereinsseite warten.
     const fotos = keys.some(k => ['CLUBDESK_URL', 'CLUBDESK_TEAMS', 'SITE_PHOTOS'].includes(k));
