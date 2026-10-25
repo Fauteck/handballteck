@@ -76,7 +76,7 @@ import {
   type TelegramUpdate, type TelegramInlineQuery, type BotCommand, type InlineKeyboard, type ChatAction, type InlineQueryResultPhoto,
   type AnswerInlineQueryOptions,
 } from './telegramClient';
-import { renderPng } from './handballTableImage';
+import { svgAlsPng } from './bildCache';
 import {
   fetchLineups, fetchMatchEvents, fetchMatchReport, fetchTeamMatches, sourceTimeToUtc, type HandballLineupSide, type HandballMatch,
 } from './handballNetClient';
@@ -501,7 +501,7 @@ async function tabelleSenden(chatId: string, team: HandballTeamView, s: Handball
   if (deps.sendPhoto) {
     zeigeAktivitaet(chatId, 'upload_photo', deps);
     try {
-      const png = await renderPng(bildTabelle(team, s));
+      const png = await svgAlsPng(bildTabelle(team, s));
       const caption = tabellenUnterschrift(s);
       await deps.sendPhoto(chatId, png, caption, 'tabelle.png');
       return;
@@ -522,7 +522,7 @@ async function kaderSenden(chatId: string, team: HandballTeamView, deps: Handbal
   if (svg && deps.sendPhoto) {
     zeigeAktivitaet(chatId, 'upload_photo', deps);
     try {
-      const png = await renderPng(svg);
+      const png = await svgAlsPng(svg);
       const spieler = rosterFor(team.team_id).filter(r => r.role === 'player').length;
       const caption = `<b>${escapeHtml(team.name)}</b> — Kader (${spieler} Spieler)`;
       await deps.sendPhoto(chatId, png, caption, 'kader.png');
@@ -543,7 +543,7 @@ async function bildMitText(chatId: string, svg: () => string, text: string, file
   if (deps.sendPhoto) {
     zeigeAktivitaet(chatId, 'upload_photo', deps);
     try {
-      const png = await renderPng(svg());
+      const png = await svgAlsPng(svg());
       const passt = text.length <= CAPTION_MAX_CHARS;
       await deps.sendPhoto(chatId, png, passt ? text : text.split('\n')[0], filename, keyboard);
       if (!passt) await deps.send(chatId, text);
@@ -674,7 +674,7 @@ async function alsAlbum(chatId: string, teile: AlbumTeil[], deps: HandballBotDep
   zeigeAktivitaet(chatId, 'upload_photo', deps);
   let pngs: Buffer[];
   try {
-    pngs = await Promise.all(teile.map(t => renderPng(t.svg)));
+    pngs = await Promise.all(teile.map(t => svgAlsPng(t.svg)));
   } catch (err) {
     serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Album nicht gerendert — einzeln');
     return false;
@@ -790,7 +790,7 @@ async function spieleSenden(chatId: string, teams: HandballTeamView[], deps: Han
   if (deps.sendPhoto && team && m && !m.is_live) {
     zeigeAktivitaet(chatId, 'upload_photo', deps);
     try {
-      const png = await renderPng(await bildSpiel(m));
+      const png = await svgAlsPng(await bildSpiel(m));
       await deps.sendPhoto(chatId, png, text.length <= CAPTION_MAX_CHARS ? text : text.split('\n\n')[0], 'spiel.png', spielTastatur(m));
       return;
     } catch (err) {
@@ -2164,7 +2164,7 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
         let gif: Buffer | null = null;
         if (deps.sendPhoto) {
           try {
-            png = await renderPng(await endstandBild(team, m, extras));
+            png = await svgAlsPng(await endstandBild(team, m, extras));
           } catch (err) {
             serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Endstand als Bild fehlgeschlagen — Textfassung');
           }
@@ -2233,7 +2233,7 @@ export async function pushHandballBot(now = new Date(), deps: HandballBotDeps = 
       const svg = bildSaison(team);
       let png: Buffer | null = null;
       if (svg && deps.sendPhoto) {
-        try { png = await renderPng(svg); } catch (err) {
+        try { png = await svgAlsPng(svg); } catch (err) {
           serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[handball-bot] Saisonkarte fehlgeschlagen — Textfassung');
         }
       }

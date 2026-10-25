@@ -13,7 +13,7 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { handballOverview } from '../lib/handballTeam';
 import { ensureHandballBotSecrets, handleHandballUpdate, isHandballBotEnabled, pruefeInlineSignatur, inlineBildSvg, type InlineArt } from '../lib/handballBot';
-import { renderJpeg } from '../lib/handballTableImage';
+import { bildMitKurzweg, standVon } from '../lib/bildCache';
 import { serviceLog } from '../lib/serviceLogger';
 import type { TelegramUpdate } from '../lib/telegramClient';
 
@@ -42,9 +42,11 @@ export async function telegramRoutes(fastify: FastifyInstance) {
     }
     const sicht = handballOverview();
     const team = sicht.configured ? sicht.teams.find(x => x.team_id === teamId) ?? null : null;
-    const svg = team ? await inlineBildSvg(team, art as InlineArt) : null;
-    if (!svg) return reply.code(404).send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });
-    const jpg = await renderJpeg(svg, request.query.vorschau === '1' ? 0.4 : 2);
+    // PRF-2-005: Eine Inline-Anfrage liefert bis zu 50 Ergebnisse, deren Bilder Telegram einzeln holt —
+    // aus dem Zwischenspeicher, solange der Stand der Mannschaft gilt.
+    const scale = request.query.vorschau === '1' ? 0.4 : 2;
+    const jpg = team ? await bildMitKurzweg(`inline:${team.team_id}:${art}:${standVon(team)}`, () => inlineBildSvg(team, art as InlineArt), 'jpeg', scale) : null;
+    if (!jpg) return reply.code(404).send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });
     return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', 'public, max-age=300').send(jpg);
   });
 

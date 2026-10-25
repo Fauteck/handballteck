@@ -46,7 +46,8 @@ import {
   seitenUebersicht, aktuellesSpiel, vereinsName, logoDataUri, rosterFor, playerGames, playerStats, playerMatchLog, readPalette, changesFor, tendenzReferenz, opponentFormFor,
   HANDBALL_GROUPS, type HandballTeamView, type HandballMatchView, type HandballGroup,
 } from './handballTeam';
-import { vervollstaendigePalette, renderPng, renderWeekendSvg, type FullPalette } from './handballTableImage';
+import { vervollstaendigePalette, renderWeekendSvg, type FullPalette } from './handballTableImage';
+import { bildMitKurzweg, zwischengespeichert, standVon, leereBildCache } from './bildCache';
 import { bildMarke } from './handballBotImages';
 import {
   bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSaison, endstandBild,
@@ -176,16 +177,12 @@ export function istBildArt(art: string): art is SiteImageArt {
   return (SITE_IMAGES as readonly string[]).includes(art);
 }
 
-// PRF-3-002: Platz für jede Bildart jeder Mannschaft samt Logo und einigen
-// Endständen (8 × 12); bei rund 200 KB je PNG etwa 20 MB. Mit 48 verdrängten
-// sich die Bilder von acht Mannschaften gegenseitig und wurden neu gerendert.
-const BILD_CACHE_MAX = 96;
-const BILD_CACHE_TTL_MS = 10 * 60 * 1000;
-const bildCache = new Map<string, { stand: string; at: number; png: Buffer }>();
+// Die Bilder liegen im gemeinsamen Zwischenspeicher (`bildCache.ts`), gedeckelt nach Bytes.
+const LOGO_FRIST_MS = 6 * 60 * 60 * 1000;
 
 /** Nur für Tests. */
 export function resetSiteImageCache(): void {
-  bildCache.clear();
+  leereBildCache();
 }
 
 async function bildSvg(team: HandballTeamView, art: SiteImageArt, matchId: string | null): Promise<string | null> {
@@ -214,24 +211,12 @@ async function bildSvg(team: HandballTeamView, art: SiteImageArt, matchId: strin
 }
 
 /**
- * Ein Bild der Seite als PNG — aus dem Cache, wenn der Stand der Übersicht
- * derselbe ist und der Eintrag jünger als zehn Minuten; sonst gerendert und
- * abgelegt. `null` heißt: dafür gibt es nichts zu zeichnen.
+ * Ein Bild der Seite als PNG — aus dem Zwischenspeicher, solange der Stand
+ * dieser Mannschaft derselbe ist (`standVon`); sonst gerendert und abgelegt.
+ * `null` heißt: dafür gibt es nichts zu zeichnen.
  */
-export async function siteImagePng(team: HandballTeamView, art: SiteImageArt, matchId: string | null, stand: string | null): Promise<Buffer | null> {
-  const key = `${team.team_id}:${art}:${matchId ?? ''}`;
-  const now = Date.now();
-  const hit = bildCache.get(key);
-  if (hit && hit.stand === (stand ?? '') && now - hit.at < BILD_CACHE_TTL_MS) return hit.png;
-  const svg = await bildSvg(team, art, matchId);
-  if (!svg) return null;
-  const png = await renderPng(svg);
-  if (bildCache.size >= BILD_CACHE_MAX) {
-    const aeltester = [...bildCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-    if (aeltester) bildCache.delete(aeltester[0]);
-  }
-  bildCache.set(key, { stand: stand ?? '', at: now, png });
-  return png;
+export async function siteImagePng(team: HandballTeamView, art: SiteImageArt, matchId: string | null): Promise<Buffer | null> {
+  return bildMitKurzweg(`seite:${team.team_id}:${art}:${matchId ?? ''}:${standVon(team)}`, () => bildSvg(team, art, matchId));
 }
 
 /**
@@ -240,15 +225,15 @@ export async function siteImagePng(team: HandballTeamView, art: SiteImageArt, ma
  * die Bilder der Mannschaften, Schlüssel ist das Wochenende. `null`, wenn die
  * Übersicht keine Mannschaft hat.
  */
-export async function wochenendePng(teams: HandballTeamView[], stand: string | null, now = new Date()): Promise<Buffer | null> {
+export async function wochenendePng(teams: readonly HandballTeamView[], now = new Date()): Promise<Buffer | null> {
   const erste = teams[0];
   if (!erste) return null;
   const we = spielWochenende(teams.flatMap(t => t.matches), now);
   const dieses = we.fr === naechstesWochenende(now).fr;
-  const key = `*:wochenende:${we.fr}`;
-  const t0 = Date.now();
-  const hit = bildCache.get(key);
-  if (hit && hit.stand === (stand ?? '') && t0 - hit.at < BILD_CACHE_TTL_MS) return hit.png;
+  return bildMitKurzweg(`seite:*:wochenende:${we.fr}:${dieses}:${standVon(teams)}`, () => wochenendeSvg(teams, erste, we, dieses, now));
+}
+
+function wochenendeSvg(teams: readonly HandballTeamView[], erste: HandballTeamView, we: ReturnType<typeof spielWochenende>, dieses: boolean, now: Date): string {
   const tage: Array<[string, string]> = [['Freitag', we.fr], ['Samstag', we.sa], ['Sonntag', we.so]];
   const spiele = teams.flatMap(t => t.matches.filter(m => m.is_home && m.status !== 'cancelled' && m.status !== 'postponed').map(m => ({ t, m })));
   const days = tage.map(([name, iso]) => ({
@@ -268,13 +253,7 @@ export async function wochenendePng(teams: HandballTeamView[], stand: string | n
     brand: bildMarke(now),
     palette: readPalette(),
   });
-  const png = await renderPng(svg);
-  if (bildCache.size >= BILD_CACHE_MAX) {
-    const aeltester = [...bildCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-    if (aeltester) bildCache.delete(aeltester[0]);
-  }
-  bildCache.set(key, { stand: stand ?? '', at: t0, png });
-  return png;
+  return svg;
 }
 
 /**
@@ -284,16 +263,12 @@ export async function wochenendePng(teams: HandballTeamView[], stand: string | n
  */
 export async function siteLogoPng(team: HandballTeamView, palette: FullPalette, groesse: 192 | 512 = 512): Promise<Buffer> {
   if (groesse === 192) {
-    const key192 = `${team.team_id}:logo192`;
-    const treffer = bildCache.get(key192);
-    if (treffer && Date.now() - treffer.at < 6 * 60 * 60 * 1000) return treffer.png;
-    const klein = await sharp(await siteLogoPng(team, palette, 512)).resize(192, 192).png().toBuffer();
-    bildCache.set(key192, { stand: '', at: Date.now(), png: klein });
-    return klein;
+    return (await zwischengespeichert(`logo:${team.team_id}:192`, async () => sharp(await siteLogoPng(team, palette, 512)).resize(192, 192).png().toBuffer(), LOGO_FRIST_MS))!;
   }
-  const key = `${team.team_id}:logo`;
-  const hit = bildCache.get(key);
-  if (hit && Date.now() - hit.at < 6 * 60 * 60 * 1000) return hit.png;
+  return (await zwischengespeichert(`logo:${team.team_id}:512`, () => logoPng512(team, palette), LOGO_FRIST_MS))!;
+}
+
+async function logoPng512(team: HandballTeamView, palette: FullPalette): Promise<Buffer> {
   const uri = logoDataUri(team.team_id);
   let png: Buffer;
   if (uri) {
@@ -312,7 +287,6 @@ export async function siteLogoPng(team: HandballTeamView, palette: FullPalette, 
     </svg>`;
     png = await sharp(Buffer.from(svg)).png().toBuffer();
   }
-  bildCache.set(key, { stand: '', at: Date.now(), png });
   return png;
 }
 

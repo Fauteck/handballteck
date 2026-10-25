@@ -20,7 +20,7 @@ import {
   bildTabelle, bildKader, bildSpiel, bildVerlauf, bildTorjaeger, bildSpieler, bildSaison, endstandBild,
   textSaison, textRekorde, alsKlartext, pflegeHandballBotBeschreibung,
 } from '../lib/handballBot';
-import { renderPng } from '../lib/handballTableImage';
+import { svgAlsPng } from '../lib/bildCache';
 import { siteConfig } from '../lib/handballSite';
 import { pushHandballSite, countSiteSubscribers, sitePushConfig } from '../lib/handballSitePush';
 import { getBackoffSnapshot } from '../lib/pollerBackoff';
@@ -113,11 +113,11 @@ export async function apiRoutes(fastify: FastifyInstance) {
 
   async function bildAntwort(reply: FastifyReply, svg: string | null, fehlt: string) {
     if (!svg) return reply.code(404).send({ error: 'no_image', message: fehlt });
-    const png = await renderPng(svg);
+    const png = await svgAlsPng(svg);
     return reply.header('Content-Type', 'image/png').header('Cache-Control', 'private, max-age=300').send(png);
   }
 
-  /** Die Bilder des Bots für das Cockpit: dieselben Funktionen, dieselben PNGs, gerendert je Aufruf. */
+  /** Die Bilder des Bots für das Cockpit: dieselben Funktionen, dieselben PNGs, aus dem gemeinsamen Zwischenspeicher. */
   fastify.get<{ Params: { teamId: string; art: string }; Querystring: { match?: string } }>('/api/teams/:teamId/bild/:art', async (request, reply) => {
     const team = mannschaft(request.params.teamId);
     if (!team) return reply.code(404).send({ error: 'not_found', message: 'Diese Mannschaft ist nicht eingetragen.' });

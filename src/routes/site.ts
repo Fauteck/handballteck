@@ -168,7 +168,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const sicht = seitenUebersicht();
     const erste = sicht.configured ? sicht.teams[0] : undefined;
     if (!sicht.configured || !erste || !siteConfig(erste.team_id).enabled) return nichtDa(reply);
-    const png = await wochenendePng(sicht.teams, sicht.updated_at);
+    const png = await wochenendePng(sicht.teams);
     if (!png) return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });
     return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=300').send(png);
   });
@@ -304,7 +304,7 @@ export async function siteRoutes(fastify: FastifyInstance) {
     const art = /^([a-z]+)\.png$/.exec(request.params.datei)?.[1] ?? '';
     if (!istBildArt(art)) return nichtDa(reply);
     const match = typeof request.query.match === 'string' && /^[\w-]{1,64}$/.test(request.query.match) ? request.query.match : null;
-    const png = await siteImagePng(t.team, art, art === 'endstand' ? match : null, t.stand);
+    const png = await siteImagePng(t.team, art, art === 'endstand' ? match : null);
     if (!png) return reply.code(404).header('Cache-Control', 'no-store').send({ error: 'no_image', message: 'Dafür gibt es gerade kein Bild.' });
     return reply.header('Content-Type', 'image/png').header('Cache-Control', 'public, max-age=300').send(png);
   });

@@ -1,7 +1,7 @@
 /**
  * Die Bilder des Handball-Bots — je Funktion ein SVG (oder null, wenn es nichts
  * zu zeichnen gibt), für Bot, Microsite und Cockpit. Gerendert wird erst beim
- * Senden (`renderPng`); die Sender fallen auf den Text zurück, die Routen
+ * Senden (`svgAlsPng` aus `bildCache.ts`); die Sender fallen auf den Text zurück, die Routen
  * antworten 404.
  */
 
