@@ -63,7 +63,7 @@
  */
 
 import crypto from 'node:crypto';
-import { eq, lt } from 'drizzle-orm';
+import { and, eq, gte, lt } from 'drizzle-orm';
 import { db } from '../db';
 import { handball_bot_sent, handball_bot_feedback, handball_bot_delivery, handball_site_subscription } from '../db/schema';
 import {
@@ -685,6 +685,11 @@ function schonGesehen(updateId: number): boolean {
   return false;
 }
 
+/** SEC-4-012: Rückmeldungen je Chat und Stunde, und wie lang eine sein darf. */
+const FEEDBACK_JE_STUNDE = 3;
+const FEEDBACK_FENSTER_MS = 60 * 60 * 1000;
+const FEEDBACK_MAX_ZEICHEN = 1000;
+
 /** Nur für Tests. */
 export function __resetHandballBotForTests(): void {
   gesehen.clear();
@@ -780,9 +785,19 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
   }
   if (befehl === '/feedback') {
     if (!argument) { await deps.send(chatId, 'Schreib dein Feedback hinter den Befehl: /feedback Die Halbzeit kommt zu spät.'); return; }
-    db.insert(handball_bot_feedback).values({ chat_id: chatId, name, text: argument, created_at: new Date().toISOString() }).run();
+    // SEC-4-012: Jeder Abonnent kann schreiben (ohne Einladungscode jeder), und jede Zeile ging an alle
+    // Admin-Chats — ohne Drossel ein Kanal, um Tabelle und Betreiber zu fluten.
+    const seit = new Date(Date.now() - FEEDBACK_FENSTER_MS).toISOString();
+    const juengst = db.select({ id: handball_bot_feedback.id }).from(handball_bot_feedback)
+      .where(and(eq(handball_bot_feedback.chat_id, chatId), gte(handball_bot_feedback.created_at, seit))).all().length;
+    if (juengst >= FEEDBACK_JE_STUNDE) {
+      await deps.send(chatId, `Danke! Mehr als ${FEEDBACK_JE_STUNDE} Rückmeldungen in der Stunde nehme ich nicht an — versuch es später noch einmal.`);
+      return;
+    }
+    const text = argument.length > FEEDBACK_MAX_ZEICHEN ? `${argument.slice(0, FEEDBACK_MAX_ZEICHEN)}…` : argument;
+    db.insert(handball_bot_feedback).values({ chat_id: chatId, name, text, created_at: new Date().toISOString() }).run();
     for (const admin of adminChatIds()) {
-      try { await deps.send(admin, `💬 <b>Feedback</b> von ${escapeHtml(name ?? chatId)} (Chat <code>${escapeHtml(chatId)}</code>):\n${escapeHtml(argument)}`); } catch { /* der Betreiber ist nicht erreichbar — der Eintrag steht in der Datenbank */ }
+      try { await deps.send(admin, `💬 <b>Feedback</b> von ${escapeHtml(name ?? chatId)} (Chat <code>${escapeHtml(chatId)}</code>):\n${escapeHtml(text)}`); } catch { /* der Betreiber ist nicht erreichbar — der Eintrag steht in der Datenbank */ }
     }
     await deps.send(chatId, 'Danke, ist angekommen.');
     return;

@@ -999,6 +999,26 @@ describe('Dritte Runde: Erinnerung, Modus, Knöpfe, Saison, Kalender, Live, Betr
     expect(kb.inline_keyboard.flat().map(b => b.callback_data)).toContain('cmd:saison');
   });
 
+  it('/feedback: höchstens drei je Stunde und Chat, lange Texte gekürzt (SEC-4-012)', async () => {
+    trageTeamEin({ bot_admin_chat_id: '4711' });
+    abonniere('4712');
+    const { deps, gesendet } = sammler();
+    for (let i = 0; i < 3; i++) await bot.handleHandballUpdate(update(`/feedback Nummer ${i}`, 4712), deps);
+    expect(dbRef.select().from(schemaRef.handball_bot_feedback).all()).toHaveLength(3);
+    const vorher = gesendet.filter(g => g.chatId === '4711').length;
+    await bot.handleHandballUpdate(update('/feedback Nummer 4', 4712), deps);
+    // Der vierte wird abgelehnt: keine Zeile, nichts an den Betreiber.
+    expect(dbRef.select().from(schemaRef.handball_bot_feedback).all()).toHaveLength(3);
+    expect(gesendet.filter(g => g.chatId === '4711')).toHaveLength(vorher);
+    expect(gesendet.at(-1)!.text).toContain('Mehr als 3 Rückmeldungen');
+    // Ein anderer Chat darf weiter — und ein langer Text kommt gekürzt an.
+    abonniere('4713');
+    await bot.handleHandballUpdate(update(`/feedback ${'x'.repeat(2000)}`, 4713), deps);
+    const zeile = dbRef.select().from(schemaRef.handball_bot_feedback).all().find(z => z.chat_id === '4713')!;
+    expect(zeile.text.length).toBe(1001);
+    dbRef.delete(schemaRef.handball_bot_feedback).run();
+  });
+
   it('/status, /rundruf und /feedback: der Betreiber aus der Konfiguration', async () => {
     trageTeamEin({ bot_admin_chat_id: '4711' });
     abonniere('4711'); abonniere('4712');
