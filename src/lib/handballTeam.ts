@@ -1121,7 +1121,7 @@ export interface HandballSyncResult {
 
 /**
  * Ein Lauf des Hintergrund-Jobs. `force` überspringt die Tagesprüfung — für
- * den Knopf in den Diensten und die Aktualisierung im Tab.
+ * den Knopf in den Diensten und die Aktualisierung im Tab — und das Backoff-Fenster.
  */
 export async function syncHandballTeams(force = false): Promise<HandballSyncResult> {
   const teams = readTeamIds();

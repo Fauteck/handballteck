@@ -374,6 +374,15 @@ describe('Tageslauf', () => {
   });
 });
 
+describe('Indizes', () => {
+  it('liest Verlegungen je Mannschaft und löscht alte Bot-Merker über einen Index (PRF-4-002, PRF-4-001)', async () => {
+    const { sqlite } = await import('../db');
+    const plan = (sql: string) => (sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Array<{ detail: string }>).map(r => r.detail).join(' | ');
+    expect(plan("SELECT * FROM handball_match_change WHERE team_id = '1'")).toContain('idx_handball_match_change_team');
+    expect(plan("DELETE FROM handball_bot_sent WHERE sent_at < '2025-01-01'")).toContain('idx_handball_bot_sent_at');
+  });
+});
+
 describe('Verlegungen', () => {
   const jetzt = Date.now();
   const inZwei = new Date(jetzt + 2 * 24 * 60 * 60 * 1000).toISOString();
