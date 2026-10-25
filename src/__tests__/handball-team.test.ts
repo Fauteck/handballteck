@@ -263,6 +263,16 @@ describe('Tageslauf', () => {
     expect(spielplaene[0]).toContain('season_id=2627');
   });
 
+  it('zeigt in der Übersicht nur die laufende Saison — die alte bleibt in der Datenbank (PRF-3-003)', () => {
+    trageTeamEin();
+    legeSpiel({ id: `${TEAM}:alt`, match_id: 'alt', season_id: 2526, starts_at: new Date(Date.now() - 300 * 24 * 3600 * 1000).toISOString(), status: 'finished', status_name: 'Finalizado', competition_name: 'Kreisliga mB (alt)', phase_id: 11111 });
+    legeSpiel();
+    const team = mod.handballOverview().teams[0];
+    expect(team.matches.map(m => m.match_id)).toEqual(['m1']);
+    expect(team.matches.every(m => m.season_id === 2627)).toBe(true);
+    expect(dbRef.select().from(schemaRef.handball_team_match).all()).toHaveLength(2);
+  });
+
   it('fragt während des Spiels erst im Live-Takt nach — sonst erst 45 Minuten nach Anwurf', async () => {
     trageTeamEin();
     legeSpiel({ starts_at: new Date(Date.now() - 10 * 60 * 1000).toISOString() });

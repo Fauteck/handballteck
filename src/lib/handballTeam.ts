@@ -1488,7 +1488,7 @@ export function automatischeBereiche(): Record<string, HandballGroup | null> {
   const alle = teams.length > 0 ? db.select().from(handball_team_match).where(inArray(handball_team_match.team_id, teams)).all() : [];
   const out: Record<string, HandballGroup | null> = {};
   for (const teamId of teams) {
-    const meine = alle.filter(r => r.team_id === teamId).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const meine = laufendeSaison(alle.filter(r => r.team_id === teamId));
     const erste = meine[0];
     const quellname = erste ? (erste.home_id === teamId ? erste.home_name : erste.away_name) : `Team ${teamId}`;
     const label = teamLabelAusConfig(teamId) ?? automatischesLabel(quellname, meine) ?? erste?.championship_name ?? quellname;
@@ -1525,6 +1525,19 @@ export function mitLabelsInSpielen(vorlage: HandballOverview): HandballOverview 
  * Der Tab liest ausschließlich die Datenbank — **kein** Aufruf nach draußen.
  * Gefüllt hat sie der Job; steht dort nichts, sagt der Tab das.
  */
+/**
+ * Die Spiele einer Mannschaft in ihrer laufenden Saison, aufsteigend nach
+ * Anwurf. PRF-3-003: Spiele vergangener Saisons bleiben in der Datenbank,
+ * die Übersicht trug sie aber mit — sie wuchs mit jeder Saison, und alte
+ * Tabellen, Labels und Bilanzen mischten sich in die neue. Laufend ist die
+ * Saison des jüngsten Spiels.
+ */
+function laufendeSaison<T extends { starts_at: string; season_id: number }>(spiele: T[]): T[] {
+  const sortiert = spiele.sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const saison = sortiert.at(-1)?.season_id;
+  return sortiert.filter(r => r.season_id === saison);
+}
+
 /**
  * Die Saison einer Mannschaft, wie sie gerade läuft: die des jüngsten Spiels.
  * `matches` ist aufsteigend nach Anwurf sortiert — `[0]` wäre nach einem
@@ -1586,7 +1599,7 @@ function baueUebersicht(): HandballOverview {
   let updatedAt: string | null = null;
 
   const views = teams.map(teamId => {
-    const meine = alle.filter(r => r.team_id === teamId).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const meine = laufendeSaison(alle.filter(r => r.team_id === teamId));
     for (const r of meine) if (!updatedAt || r.updated_at > updatedAt) updatedAt = r.updated_at;
     const erste = meine[0];
     // Das Label und die Gruppe lesen den Namen der Quelle („… III"), angezeigt wird `anzeigeName`.
