@@ -1008,6 +1008,9 @@ describe('Handball-Microsite', () => {
       const mittag = new Date(`${heute}T11:00:00Z`).toISOString();
       const nachmittag = new Date(`${heute}T13:00:00Z`).toISOString();
       db.insert(schema.handball_team_match).values([heuteSpiel('t1', mittag, 'scheduled', null, null), heuteSpiel('t2', nachmittag, 'scheduled', null, null)] as never).run();
+      // Die Uhr steht auf heute früh: Ab 13:00 UTC wäre der Anwurf von t2 vorbei, und der Test hinge an der Tageszeit.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(`${heute}T06:00:00Z`));
       try {
         const start = (await get('/')).body;
         expect(start).toContain('<section class="card dark" id="heute">');
@@ -1025,6 +1028,7 @@ describe('Handball-Microsite', () => {
         expect(mitLetztem).toContain('href="./96254/spiel/lw1"');
         expect(mitLetztem).toContain('27:27');
       } finally {
+        vi.useRealTimers();
         db.delete(schema.handball_team_match).where(sql`${schema.handball_team_match.match_id} IN ('t1','t2','lw1')`).run();
       }
     });
