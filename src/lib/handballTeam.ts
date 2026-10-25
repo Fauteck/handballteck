@@ -127,6 +127,11 @@ export function laeuftGerade(status: string, startsAt: string, now = Date.now())
  * der kurze Live-Takt.
  */
 export function naechsterAbstandMs(now = Date.now()): number {
+  // PRF-2-006: Im Backoff wartet der Takt mindestens, bis er abgelaufen ist — auch im Live-Fenster.
+  return Math.max(taktAbstand(now), backoff.remainingBackoffMs(BACKOFF_KEY, now));
+}
+
+function taktAbstand(now: number): number {
   const live = syncLiveIntervalMs();
   if (live <= 0) return syncIntervalMs();
   // Der Takt plant sich nach jedem Lauf selbst neu — scheitert der Blick in die
@@ -160,6 +165,15 @@ const BERICHT_NACHFRAGEN_BIS_MS = 30 * 24 * 60 * 60 * 1000;
 const backoff = new KeyedBackoff(DEFAULT_LOG_THRESHOLD, 'handball');
 const BACKOFF_KEY = 'team';
 let lastError: string | null = null;
+/** Wie der letzte gescheiterte Lauf endete — das meldet ein Lauf, der im Backoff übersprungen wird. */
+let letzterFehlerStatus: 'auth_error' | 'transient_error' = 'transient_error';
+
+/** Nur für Tests: Backoff und letzter Fehler wie nach dem Start. */
+export function __resetHandballBackoffForTests(): void {
+  backoff.reset();
+  lastError = null;
+  letzterFehlerStatus = 'transient_error';
+}
 
 export function getHandballHealth(): { lastError: string | null } {
   return { lastError };
@@ -1112,6 +1126,14 @@ export interface HandballSyncResult {
 export async function syncHandballTeams(force = false): Promise<HandballSyncResult> {
   const teams = readTeamIds();
   if (teams.length === 0) return { status: 'not_configured', teams: 0, fetched: 0 };
+  // PRF-2-006: Nach einem 403 (30 min) oder Ausfall (10 min) fragt der Takt handball.net nicht
+  // erneut — vorher wiederholte jeder Takt den Abruf, im Live-Fenster jede Minute. Ein Lauf von
+  // Hand (`force`: /api/sync, Knopf der Einstellungsseite) geht trotzdem raus. Gemeldet wird der Fehler des
+  // letzten Laufs; die Form der Antwort bleibt (Vertrag mit Todoteck).
+  const wartezeit = force ? 0 : backoff.remainingBackoffMs(BACKOFF_KEY);
+  if (wartezeit > 0) {
+    return { status: letzterFehlerStatus, teams: teams.length, fetched: 0, detail: `Pause nach Fehler, noch ${Math.ceil(wartezeit / 60_000)} min: ${lastError ?? ''}`.trim() };
+  }
 
   const heute = berlinDay();
   const jetzt = Date.now();
@@ -1199,6 +1221,7 @@ export async function syncHandballTeams(force = false): Promise<HandballSyncResu
     const status = klassifiziereHandballFehler(err);
     const isAuth = status === 'auth_error';
     const { consecutiveFailures, logAsError } = backoff.recordFailure(BACKOFF_KEY, isAuth ? AUTH_BACKOFF_MS : TRANSIENT_BACKOFF_MS);
+    letzterFehlerStatus = isAuth ? 'auth_error' : 'transient_error';
     const line = `[handball] ${isAuth ? 'Zugangsfehler' : 'Vorübergehender Fehler'} (#${consecutiveFailures}): ${message}`;
     if (logAsError) serviceLog.error(line); else serviceLog.warn(line);
     lastError = message;

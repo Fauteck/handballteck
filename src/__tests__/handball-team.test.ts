@@ -136,6 +136,7 @@ afterAll(() => {
 
 beforeEach(() => {
   resetToken();
+  mod.__resetHandballBackoffForTests();
   global.fetch = ORIGINAL_FETCH;
   dbRef.delete(schemaRef.handball_team_match).run();
   dbRef.delete(schemaRef.handball_standings).run();
@@ -290,6 +291,25 @@ describe('Tageslauf', () => {
     } finally {
       delete process.env.SYNC_LIVE_INTERVAL_MS;
     }
+  });
+
+  it('fragt nach einem 403 eine halbe Stunde lang nicht nach — außer von Hand (PRF-2-006)', async () => {
+    trageTeamEin();
+    const f = quelle([]);
+    const erster = await mod.syncHandballTeams();
+    expect(erster.status).toBe('auth_error');
+    const nachErstem = apiAufrufe(f);
+    expect(nachErstem).toBeGreaterThan(0);
+    // Der nächste Takt — auch im Live-Fenster — geht nicht nach draußen und meldet den Fehler weiter.
+    const zweiter = await mod.syncHandballTeams();
+    expect(zweiter.status).toBe('auth_error');
+    expect(zweiter.detail).toMatch(/^Pause nach Fehler, noch 30 min/);
+    expect(apiAufrufe(f)).toBe(nachErstem);
+    // Der Takt plant den nächsten Lauf erst nach dem Backoff.
+    expect(mod.naechsterAbstandMs()).toBeGreaterThan(29 * 60 * 1000);
+    // Ein Lauf von Hand (/api/sync) fragt trotzdem.
+    await mod.syncHandballTeams(true);
+    expect(apiAufrufe(f)).toBeGreaterThan(nachErstem);
   });
 
   it('wählt den Live-Takt nur, solange ein Spiel läuft oder gleich beginnt', () => {
