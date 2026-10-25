@@ -107,6 +107,8 @@ export function resetPushConfigCache(): void {
   activePublicKey = null;
 }
 
+export const PUSH_TIMEOUT_MS = 10_000;
+
 /** Wirft nicht — der Aufrufer arbeitet eine Liste ab und darf nicht am ersten toten Gerät hängenbleiben. */
 export async function sendPush(target: PushTarget, payload: PushPayload): Promise<PushResult> {
   if (!isPushConfigured()) return { status: 'retry', reason: 'VAPID nicht konfiguriert' };
@@ -118,7 +120,8 @@ export async function sendPush(target: PushTarget, payload: PushPayload): Promis
     await webpush.sendNotification(
       { endpoint: target.endpoint, keys: { p256dh: target.p256dh, auth: target.auth } },
       JSON.stringify(payload),
-      { TTL: 60 * 60 },
+      // PRF-2-003: Ein Push-Dienst, der nicht antwortet, hält die Runde nicht länger als 10 s auf.
+      { TTL: 60 * 60, timeout: PUSH_TIMEOUT_MS },
     );
     return { status: 'sent' };
   } catch (err) {

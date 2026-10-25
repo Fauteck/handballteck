@@ -1219,6 +1219,30 @@ describe('Handball-Microsite', () => {
       expect(sendPush).not.toHaveBeenCalled();
     });
 
+    it('stellt an viele Abonnenten parallel zu, höchstens PUSH_PARALLEL gleichzeitig (PRF-2-003)', async () => {
+      sitePush.resetSiteSent();
+      const viele = Array.from({ length: 40 }, (_, i) => `https://fcm.googleapis.com/fcm/send/viele-${i}`);
+      for (const endpoint of viele) sitePush.saveSiteSubscription(TEAM, { endpoint, p256dh: 'p'.repeat(32), auth: 'a'.repeat(16), lead: '1h', mode: 'all' });
+      let gleichzeitig = 0; let hoechstens = 0;
+      sendPush.mockImplementation(async () => {
+        gleichzeitig++; hoechstens = Math.max(hoechstens, gleichzeitig);
+        await new Promise(r => setTimeout(r, 30));
+        gleichzeitig--;
+        return { status: 'sent' };
+      });
+      try {
+        const t0 = Date.now();
+        const r = await sitePush.pushHandballSite(new Date(), deps);
+        const dauer = Date.now() - t0;
+        expect(r.recipients).toBeGreaterThanOrEqual(40);
+        expect(hoechstens).toBe(sitePush.PUSH_PARALLEL);
+        // Seriell wären es 40 × 30 ms = 1,2 s.
+        expect(dauer).toBeLessThan(600);
+      } finally {
+        for (const endpoint of viele) sitePush.deleteSiteSubscription(endpoint);
+      }
+    });
+
     it('nimmt die gewählten Themen, wirft Unbekanntes und für eine Mannschaft die Wochenvorschau heraus', async () => {
       const res = await post({ subscription: sub, lead: '3h', topics: ['result', 'bogus', 'preview', 'result'] });
       expect(res.json()).toMatchObject({ ok: true, lead: '3h', topics: ['result'] });
