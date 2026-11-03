@@ -137,13 +137,13 @@ jobs:
   #
   # Kein Gate, sondern das Bindeglied der Release-Kette: Home Assistant
   # erfährt hier, ob der Dispatch durchgelaufen ist, und stößt danach den
-  # Portainer-Redeploy an (script.portainer_deploy, Health-Polling über das
-  # Image-Label). Portainer ist nur im LAN erreichbar, ein GitHub-Runner
+  # Komodo-Redeploy an (script.komodo_deploy: `DeployStack`, danach Prüfung
+  # auf healthy und Image-Label). Komodo ist nur im LAN erreichbar, ein GitHub-Runner
   # kann es nicht aufrufen — deshalb endet der Repo-Anteil hier.
   #
   # Läuft per `if: always()` auch dann, wenn ein Job rot ist, sonst gäbe
   # es für den Fehlerpfad keine Meldung. `repository` in der Nutzlast ist
-  # der Schlüssel, mit dem Home Assistant den Portainer-Stack auswählt.
+  # der Schlüssel, mit dem Home Assistant den Komodo-Stack auswählt.
   # Vorbild und Nutzlast-Vertrag: Repo Fauteck/todo, publish.yml (notify).
   notify:
     name: Ergebnis an Home Assistant melden

@@ -73,8 +73,8 @@ re-fetched; they are copied once from the Todoteck database (its tables are call
 The copy also takes the VAPID key pair from Todoteck's `app_settings` — without it every
 browser subscription would silently fail with HTTP 403.
 
-In production the import runs **at startup**, because operations go through Portainer
-stacks, not `docker exec`:
+In production the import runs **at startup**, because operations go through the Komodo
+stack `handballteck` (from `docker-configs`), not `docker exec`:
 
 1. Mount a Todoteck backup snapshot (or its database file) read-only into the container.
 2. Set `IMPORT_TODOTECK_DB` to its path inside the container and redeploy.

@@ -45,7 +45,7 @@ In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; ther
 - **Images only by manual dispatch** of `.github/workflows/publish.yml`. Never add an
   automatic trigger; new checks go as steps into its `quality` job, not into a second
   workflow. Production is deployed from `docker-configs`, never by `docker compose up`
-  on a server, never by hand in Portainer.
+  on a server, never by hand in Komodo (stack `handballteck` on NAS1).
 - **Every foreign host has a row in README → „Outbound connections“** (kind, purpose,
   trigger). `outbound.test.ts` fails on a host in the code without a row and on a row
   without a host. Addresses from input or from foreign answers go through `safeFetch`.

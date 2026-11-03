@@ -14,7 +14,7 @@
  * es vor der ersten fälligen Meldung.
  *
  * **Warum beim Start und nicht als Befehl:** Der Betrieb läuft über
- * Portainer-Git-Stacks, und ein `docker exec` in einen laufenden Container
+ * Komodo-Stacks aus `docker-configs`, und ein `docker exec` in einen laufenden Container
  * ist dort ausdrücklich nicht der Weg. Also: Variable im Stack setzen,
  * redeployen, Log lesen, Variable wieder entfernen.
  *
