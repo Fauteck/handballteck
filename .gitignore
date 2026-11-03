@@ -6,3 +6,6 @@ coverage/
 *.db
 *.db-wal
 *.db-shm
+
+# Claude Code lokale Einstellungen
+.claude/settings.local.json
