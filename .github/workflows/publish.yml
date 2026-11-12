@@ -47,8 +47,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
+      # Mit Coverage: Die Untergrenzen stehen in vitest.config.mts; fällt die
+      # Abdeckung darunter, ist der Lauf rot.
+      - name: Test (mit Coverage-Untergrenzen)
+        run: npm run test:coverage
 
       - name: Browser-Test der Einstellungsseite
         run: |
