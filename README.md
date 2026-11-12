@@ -43,7 +43,7 @@ All state is one SQLite file under `DATA_DIR`. Configuration is the environment 
 
 ## Prerequisites
 
-- Node.js 22 (local) or Docker
+- Node.js 22.12 or newer (local) or Docker
 - A public `https://` address for the Telegram webhook and the microsite
 - Optional: a bot token from BotFather, and a Todoteck instance that wants the cockpit
 
