@@ -14,8 +14,8 @@ process.env.PUBLIC_URL = 'https://todo.test.local';
 
 const sendNotification = vi.fn();
 vi.mock('web-push', async importOriginal => {
-  const echt = (await importOriginal()) as { default: Record<string, unknown> };
-  return { default: { ...echt.default, sendNotification: (...a: unknown[]) => sendNotification(...a) } };
+  const echt = (await importOriginal()) as Record<string, unknown>;
+  return { ...echt, sendNotification: (...a: unknown[]) => sendNotification(...a) };
 });
 
 let sendPush: typeof import('../lib/webPush')['sendPush'];
@@ -23,7 +23,7 @@ const ziel = { endpoint: 'https://fcm.googleapis.com/fcm/send/x', p256dh: 'k', a
 const fehler = (felder: Record<string, unknown>) => Object.assign(new Error('kaputt'), felder);
 
 beforeAll(async () => {
-  const webpush = (await import('web-push')).default;
+  const webpush = await import('web-push');
   const paar = webpush.generateVAPIDKeys();
   process.env.VAPID_PUBLIC_KEY = paar.publicKey;
   process.env.VAPID_PRIVATE_KEY = paar.privateKey;

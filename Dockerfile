@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --prefer-offline --no-audit
@@ -8,9 +8,9 @@ COPY src ./src
 RUN npm run build
 RUN npm prune --omit=dev
 
-FROM node:22-alpine
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5
 WORKDIR /app
-# fontconfig + DejaVu: sharp rastert SVGs mit Text, und node:22-alpine bringt
+# fontconfig + DejaVu: sharp rastert SVGs mit Text, und node:alpine bringt
 # keine einzige Schrift mit — ohne diese Pakete fehlen alle Beschriftungen,
 # ohne Fehlermeldung. Barlow und Barlow Condensed (SIL Open Font License,
 # assets/fonts/OFL.txt) sind die Schriften der Bilder und der Microsite;
