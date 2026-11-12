@@ -1,0 +1,91 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate hebt Abhängigkeiten, Basis-Image und Actions als PR an, wie in Fauteck/todo und Fauteck/jobteck. Monatlich und gebündelt, damit es nicht jede Woche klingelt. Ein PR baut kein Image; die Gates laufen beim nächsten Dispatch.",
+  "extends": [
+    "config:recommended"
+  ],
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate-Dashboard (handballteck)",
+  "timezone": "Europe/Berlin",
+  "schedule": [
+    "before 7am on the first day of the month"
+  ],
+  "prConcurrentLimit": 5,
+  "lockFileMaintenance": {
+    "enabled": false
+  },
+  "enabledManagers": [
+    "npm",
+    "dockerfile",
+    "github-actions"
+  ],
+  "rangeStrategy": "bump",
+  "packageRules": [
+    {
+      "description": "npm, Laufzeit: minor und patch gesammelt in einem PR, major einzeln",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "dependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "laufzeit"
+    },
+    {
+      "description": "npm, Werkzeuge: minor und patch gesammelt in einem PR, major einzeln",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "werkzeuge"
+    },
+    {
+      "description": "Dockerfile: Basis-Image auf den Digest pinnen; patch und Digest-Wechsel gesammelt",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "pinDigests": true,
+      "matchUpdateTypes": [
+        "patch",
+        "digest",
+        "pinDigest"
+      ],
+      "groupName": "Docker-Basis-Image"
+    },
+    {
+      "description": "Node-Major im Basis-Image nur nach Freigabe im Dashboard: Der Sprung braucht dieselbe Version in setup-node und einen Lauf der ganzen Suite.",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "GitHub Actions: minor und patch gesammelt, major einzeln; vorhandene SHA-Pins bleiben SHA-Pins",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "GitHub Actions"
+    }
+  ]
+}
