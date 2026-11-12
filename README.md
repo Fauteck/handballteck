@@ -1,6 +1,6 @@
 # Handballteck
 
-![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen) ![Fastify](https://img.shields.io/badge/fastify-5-black) ![SQLite](https://img.shields.io/badge/sqlite-better--sqlite3-blue) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen) ![Fastify](https://img.shields.io/badge/fastify-5-black) ![SQLite](https://img.shields.io/badge/sqlite-better--sqlite3-blue) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 Follow the handball teams of one club from [handball.net](https://www.handball.net): a public
 microsite in the club's colours, a Telegram bot, browser push, a calendar subscription
@@ -43,7 +43,7 @@ All state is one SQLite file under `DATA_DIR`. Configuration is the environment 
 
 ## Prerequisites
 
-- Node.js 22.12 or newer (local) or Docker
+- Node.js 26 (local) or Docker
 - A public `https://` address for the Telegram webhook and the microsite
 - Optional: a bot token from BotFather, and a Todoteck instance that wants the cockpit
 
@@ -264,7 +264,7 @@ Adding a host: write the client (addresses from input or foreign answers through
 
 ## Technology stack
 
-Node 22 · TypeScript · Fastify 5 (`@fastify/helmet`, `@fastify/rate-limit`) · better-sqlite3 + drizzle-orm ·
+Node 26 · TypeScript · Fastify 5 (`@fastify/helmet`, `@fastify/rate-limit`) · better-sqlite3 + drizzle-orm ·
 sharp (SVG → PNG/JPEG/GIF) · web-push · zod · vitest · esbuild.
 
 ## Project structure
