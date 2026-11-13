@@ -1358,7 +1358,12 @@ describe('Handball-Microsite', () => {
       // m2 (Endstand) war ein Auswärtsspiel — für den Verein kein Push. m3 (Heimspiel) wird in 30 Minuten angekündigt.
       const kurzVorAnwurf = new Date(Date.now() + 7 * 24 * 3600 * 1000 - 30 * 60 * 1000);
       await sitePush.pushHandballSite(kurzVorAnwurf, deps);
-      const payloads = sendPush.mock.calls.filter(c => c[0].endpoint === verein.endpoint).map(c => c[1] as { title: string; url?: string; image?: string });
+      // Die Wochenvorschau zählt hier nicht mit: Der Verein hat `preview` gewählt, und fällt „in sieben Tagen“
+      // auf einen Freitagvormittag, liegt `kurzVorAnwurf` im Vorschau-Fenster (Do 17 Uhr bis Fr 12 Uhr) und m3
+      // auf dem Freitag dieses Wochenendes. Die Vorschau prüft der nächste Test mit festem Datum.
+      const payloads = sendPush.mock.calls.filter(c => c[0].endpoint === verein.endpoint)
+        .map(c => c[1] as { title: string; url?: string; image?: string; tag?: string })
+        .filter(p => p.tag !== 'handball-wochenende');
       expect(payloads).toHaveLength(1);
       expect(payloads[0].title).not.toContain('Niederlage');
       expect(payloads[0].url).toBe('96254/');
