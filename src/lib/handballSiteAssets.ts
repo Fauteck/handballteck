@@ -326,6 +326,11 @@ html.mit-mini section[id]{scroll-margin-top:124px}
 .mini .minfo{min-width:0;flex:1;font-size:.9rem;color:rgba(255,255,255,.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mini .nachoben{font:inherit;font-size:1.2rem;min-width:44px;min-height:44px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;cursor:pointer}
 html.kompakt .mini{display:none}
+/* UXA-1: Im Rahmen mit angepasster Höhe ist der ganze Rahmen das Fenster; die Vereinsseite meldet, welcher Teil zu sehen ist. */
+html.eingebettet{scroll-behavior:auto}
+html.eingebettet .sprung{top:var(--sicht-oben,0px)}
+html.eingebettet .toast{bottom:auto;top:calc(var(--sicht-oben,0px) + var(--sicht-hoehe,100vh) - 96px)}
+html.eingebettet dialog.popup[open]{position:absolute;top:calc(var(--sicht-oben,0px) + 16px);bottom:auto;margin-top:0;max-height:calc(var(--sicht-hoehe,100vh) - 32px)}
 h3.unter{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;font-weight:700;text-transform:uppercase;color:var(--hd);margin:12px 0 4px}
 .legende{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.9rem}
 .legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
@@ -408,6 +413,9 @@ ${dunkel()}
  */
 export const SITE_THEME_JS = `try { var t = localStorage.getItem('handball-site-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
 if (/[?&]kompakt=1(&|$)/.test(location.search)) document.documentElement.className += ' kompakt';
+// UXA-2: Die Vereinsseite legt das Farbschema fest (?farbe=dunkel|hell); das schlägt Gerät und gespeicherte Wahl.
+var farbe = /[?&]farbe=(dunkel|hell)(&|$)/.exec(location.search);
+if (farbe) document.documentElement.setAttribute('data-theme', farbe[1] === 'dunkel' ? 'dark' : 'light');
 `;
 
 /**
@@ -492,13 +500,50 @@ export const SITE_APP_JS = `(function () {
   // Nur die Mannschaftsseite trägt ein Manifest; Spiel- und Übersichtsseite liegen eine Ebene tiefer und haben keinen eigenen Worker.
   if ('serviceWorker' in navigator && document.querySelector('link[rel=manifest]')) navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
 
-  // Eingebettet in die Vereinsseite (?kompakt=1): der Kompaktmodus wandert mit jedem Verweis innerhalb der Seite.
-  if (/[?&]kompakt=1(&|$)/.test(location.search)) {
+  // Eingebettet in die Vereinsseite (?kompakt=1, ?farbe=…): beide Angaben wandern mit jedem Verweis innerhalb der Seite.
+  var mitnehmen = ['kompakt=1'];
+  var farbeVorgabe = /[?&]farbe=(dunkel|hell)(&|$)/.exec(location.search);
+  if (farbeVorgabe) mitnehmen.push('farbe=' + farbeVorgabe[1]);
+  if (!/[?&]kompakt=1(&|$)/.test(location.search)) mitnehmen.shift();
+  if (mitnehmen.length > 0) {
     Array.prototype.forEach.call(document.querySelectorAll('a[href]'), function (a) {
       var href = a.getAttribute('href') || '';
-      if (/^(https?:|mailto:|webcal:|#)/.test(href) || /kompakt=1/.test(href) || a.hasAttribute('download') || a.hasAttribute('data-install')) return;
+      if (/^(https?:|mailto:|webcal:|#)/.test(href) || a.hasAttribute('download') || a.hasAttribute('data-install')) return;
       var teile = href.split('#');
-      a.setAttribute('href', teile[0] + (teile[0].indexOf('?') >= 0 ? '&' : '?') + 'kompakt=1' + (teile[1] ? '#' + teile[1] : ''));
+      var fehlt = mitnehmen.filter(function (p) { return teile[0].indexOf(p.split('=')[0] + '=') < 0; });
+      if (fehlt.length === 0) return;
+      a.setAttribute('href', teile[0] + (teile[0].indexOf('?') >= 0 ? '&' : '?') + fehlt.join('&') + (teile[1] ? '#' + teile[1] : ''));
+    });
+  }
+
+  // UXA-1/UXA-2: Im Rahmen der Vereinsseite meldet die Seite ihre Höhe und jeden Seitenwechsel nach außen.
+  // Das Skript der Vereinsseite (README → Einbetten) passt damit den Rahmen an und springt nach
+  // einem Klick zum Anfang des Rahmens. Es meldet zurück, welcher Teil des Rahmens gerade zu sehen
+  // ist; daran richten sich Fenster, Hinweis und Sprungleiste aus. Ohne dieses Skript bleibt alles wie bisher.
+  var imRahmen = true;
+  try { imRahmen = window.top !== window.self; } catch (e) {}
+  if (imRahmen && window.parent && typeof window.parent.postMessage === 'function') {
+    var melden = function (nachricht) { nachricht.quelle = 'woelfe-live'; try { window.parent.postMessage(nachricht, '*'); } catch (e) {} };
+    var letzteHoehe = 0, hoeheGeplant = false;
+    var hoeheMelden = function () {
+      hoeheGeplant = false;
+      var hoehe = Math.ceil(document.body.getBoundingClientRect().height);
+      if (hoehe > 0 && Math.abs(hoehe - letzteHoehe) >= 2) { letzteHoehe = hoehe; melden({ typ: 'hoehe', hoehe: hoehe }); }
+    };
+    var hoehePlanen = function () { if (!hoeheGeplant) { hoeheGeplant = true; requestAnimationFrame(hoeheMelden); } };
+    if (typeof ResizeObserver === 'function') new ResizeObserver(hoehePlanen).observe(document.body);
+    window.addEventListener('load', hoehePlanen);
+    melden({ typ: 'seite' });
+    hoehePlanen();
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (ev.source !== window.parent || !d || d.quelle !== 'woelfe-live' || d.typ !== 'sicht') return;
+      var oben = Number(d.oben), hoehe = Number(d.hoehe);
+      if (!isFinite(oben) || !isFinite(hoehe) || oben < 0 || hoehe < 100 || hoehe > 10000) return;
+      var wurzel = document.documentElement;
+      wurzel.style.setProperty('--sicht-oben', Math.round(oben) + 'px');
+      wurzel.style.setProperty('--sicht-hoehe', Math.round(hoehe) + 'px');
+      if (!wurzel.classList.contains('eingebettet')) wurzel.classList.add('eingebettet');
     });
   }
 
@@ -517,6 +562,7 @@ export const SITE_APP_JS = `(function () {
   }
   var themeWahl = 'auto';
   try { var gespeichert = localStorage.getItem(THEME_KEY); if (gespeichert === 'light' || gespeichert === 'dark') themeWahl = gespeichert; } catch (e) {}
+  if (farbeVorgabe) themeWahl = farbeVorgabe[1] === 'dunkel' ? 'dark' : 'light';
   themeZeigen(themeWahl);
   if (themeKnopf) {
     themeKnopf.hidden = false;
@@ -1005,8 +1051,19 @@ export const SITE_APP_JS = `(function () {
       document.title = k.length === 0 ? titelOriginal : k.length === 1 ? '● ' + s[k[0]].text + ' · ' + titelOriginal : '● ' + k.length + ' Spiele live · ' + titelOriginal;
     };
     titelSetzen();
-    var liveTakt = setInterval(function () {
-      if (document.hidden) return;
+    // PRF-4: Im Rahmen der Vereinsseite zählt auch, ob der Rahmen gerade zu sehen ist; weggescrollt ruht die Abfrage.
+    var imBild = true;
+    if (typeof IntersectionObserver === 'function') {
+      new IntersectionObserver(function (eintraege) {
+        var vorher = imBild;
+        imBild = eintraege[eintraege.length - 1].isIntersecting;
+        if (imBild && !vorher) liveHolen();
+      }).observe(document.body);
+    }
+    var liveAus = false;
+    var liveTakt = setInterval(function () { liveHolen(); }, 30000);
+    function liveHolen() {
+      if (liveAus || document.hidden || !imBild) return;
       // Bedingt nachfragen: Ohne neuen Stand antwortet der Server mit 304 statt der ganzen Seite (PRF-1-002).
       fetch(location.pathname + location.search, { cache: 'no-cache', credentials: 'omit' })
         .then(function (res) { return res.ok ? res.text() : null; })
@@ -1038,10 +1095,10 @@ export const SITE_APP_JS = `(function () {
           countdown();
           steuerungAnwenden();
           titelSetzen();
-          if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); clearInterval(liveTakt); titelSetzen(); }
+          if (!doc.body.hasAttribute('data-live')) { document.body.removeAttribute('data-live'); liveAus = true; clearInterval(liveTakt); titelSetzen(); }
         })
         .catch(function () {});
-    }, 30000);
+    }
   }
 
   // Als App installieren. Im iFrame der Vereinsseite bietet kein Browser die Installation an:

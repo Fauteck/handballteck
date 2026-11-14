@@ -1010,6 +1010,44 @@ describe('Handball-Microsite', () => {
       expect((await get(`/${TEAM}/site.css`)).body).toContain('html.kompakt .mini{display:none}');
     });
 
+    it('passt sich im Rahmen der Vereinsseite an: Höhe, Seitenwechsel, sichtbarer Ausschnitt (UXA-1)', async () => {
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("melden({ typ: 'hoehe', hoehe: hoehe })");
+      expect(js).toContain("melden({ typ: 'seite' })");
+      expect(js).toContain('new ResizeObserver(hoehePlanen)');
+      // Nur die Vereinsseite selbst darf den Ausschnitt melden, und nur mit plausiblen Zahlen.
+      expect(js).toContain("ev.source !== window.parent || !d || d.quelle !== 'woelfe-live' || d.typ !== 'sicht'");
+      expect(js).toContain("wurzel.classList.add('eingebettet')");
+      const css = (await get(`/${TEAM}/site.css`)).body;
+      expect(css).toContain('html.eingebettet dialog.popup[open]{position:absolute;top:calc(var(--sicht-oben,0px) + 16px)');
+      expect(css).toContain('html.eingebettet .toast{bottom:auto;');
+      expect(css).toContain('html.eingebettet .sprung{top:var(--sicht-oben,0px)}');
+    });
+
+    it('lässt die Live-Abfrage ruhen, solange der Rahmen weggescrollt ist (PRF-4)', async () => {
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain('if (liveAus || document.hidden || !imBild) return;');
+      expect(js).toContain('if (imBild && !vorher) liveHolen();');
+    });
+
+    it('übernimmt das Farbschema der Vereinsseite aus ?farbe= und reicht es an Verweise weiter (UXA-2)', async () => {
+      const { SITE_THEME_JS } = await import('../lib/handballSite');
+      const lauf = (suche: string, gespeichert: string | null) => {
+        const attr: Record<string, string> = {};
+        const wurzel = { className: '', setAttribute: (k: string, v: string) => { attr[k] = v; } };
+        new Function('location', 'document', 'localStorage', SITE_THEME_JS)(
+          { search: suche }, { documentElement: wurzel }, { getItem: () => gespeichert });
+        return { theme: attr['data-theme'], klasse: wurzel.className };
+      };
+      expect(lauf('?kompakt=1&farbe=dunkel', 'light')).toEqual({ theme: 'dark', klasse: ' kompakt' });
+      expect(lauf('?farbe=hell', 'dark').theme).toBe('light');
+      expect(lauf('?farbe=lila', 'dark').theme).toBe('dark');
+      expect(lauf('', null).theme).toBeUndefined();
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("if (farbeVorgabe) mitnehmen.push('farbe=' + farbeVorgabe[1]);");
+      expect(js).toContain("if (farbeVorgabe) themeWahl = farbeVorgabe[1] === 'dunkel' ? 'dark' : 'light';");
+    });
+
     it('zeigt den Spielplan zusätzlich als Monatskalender mit Heim/Auswärts-Buchstaben', async () => {
       const html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('data-ansicht="kalender"');
