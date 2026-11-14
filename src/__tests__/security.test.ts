@@ -90,6 +90,25 @@ describe('Sicherheit', () => {
     }
   });
 
+  it('öffnet mit SITE_FRAME_ANCESTORS=* die Microsite für jede Seite — Einstellungen, API und Webhook nicht', async () => {
+    const { buildServer } = await import('../server');
+    process.env.SITE_FRAME_ANCESTORS = '*';
+    const offen = await buildServer({ logger: false });
+    try {
+      const res = await offen.inject({ method: 'GET', url: '/?kompakt=1' });
+      expect(String(res.headers['content-security-policy'])).toContain('frame-ancestors *;');
+      expect(res.headers['x-frame-options']).toBeUndefined();
+      for (const url of ['/settings', '/api/health', '/telegram/webhook/x']) {
+        const zu = await offen.inject({ method: 'GET', url });
+        expect(String(zu.headers['content-security-policy']), url).toContain("frame-ancestors 'none'");
+        expect(zu.headers['x-frame-options'], url).toBe('DENY');
+      }
+    } finally {
+      delete process.env.SITE_FRAME_ANCESTORS;
+      await offen.close();
+    }
+  });
+
   it('erlaubt keine Skripte außer den eigenen', async () => {
     const csp = String((await fastify.inject({ method: 'GET', url: '/healthz' })).headers['content-security-policy']);
     const script = /script-src ([^;]*)/.exec(csp)?.[1] ?? '';

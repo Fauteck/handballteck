@@ -53,6 +53,11 @@ describe('SITE_FRAME_ANCESTORS', () => {
     expect(siteFrameAncestors()).toEqual([]);
     process.env.SITE_FRAME_ANCESTORS = 'https://woelfevoreifel.clubdesk.com/spielbetrieb, http://unsicher.example, kein-link, https://woelfevoreifel.clubdesk.com';
     expect(siteFrameAncestors()).toEqual(['https://woelfevoreifel.clubdesk.com']);
+    // Der Stern öffnet für alle (nur zum Testen) und schlägt die Liste; als Teil einer Adresse zählt er nicht.
+    process.env.SITE_FRAME_ANCESTORS = 'https://woelfe-voreifel.de, *';
+    expect(siteFrameAncestors()).toEqual(['*']);
+    process.env.SITE_FRAME_ANCESTORS = 'https://*.clubdesk.com';
+    expect(siteFrameAncestors()).toEqual([]);
   });
 });
 

@@ -76,6 +76,7 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   // Seite bliebe bei „Lädt …“. Am öffentlichen Anschluss (https über den Proxy) bleibt beides.
   // Einbetten darf man nur die Microsite — nie den eigenen Anschluss der Einstellungsseite.
   const einbetter = opts.adminOnly ? [] : siteFrameAncestors();
+  if (einbetter[0] === '*') fastify.log.warn('SITE_FRAME_ANCESTORS=* — jede fremde Seite darf die Microsite einbetten. Nur zum Testen; danach die Herkünfte der Vereinsseite eintragen.');
   await fastify.register(helmet, {
     strictTransportSecurity: opts.adminOnly ? false : undefined,
     contentSecurityPolicy: {
@@ -90,7 +91,7 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
         manifestSrc: ["'self'"],
         workerSrc: ["'self'"],
         // Die Vereinsseite darf die Microsite einbetten (SITE_FRAME_ANCESTORS); sonst niemand.
-        frameAncestors: einbetter.length > 0 ? ["'self'", ...einbetter] : ["'none'"],
+        frameAncestors: einbetter.length === 0 ? ["'none'"] : einbetter[0] === '*' ? ['*'] : ["'self'", ...einbetter],
       },
     },
     // X-Frame-Options kennt keine Liste erlaubter Herkünfte: SAMEORIGIN sperrte die Vereinsseite
