@@ -53,6 +53,62 @@ describe('Sicherheit', () => {
     }
   });
 
+  it('setzt ohne SITE_FRAME_ANCESTORS zusätzlich X-Frame-Options', async () => {
+    expect((await fastify.inject({ method: 'GET', url: '/96254/' })).headers['x-frame-options']).toBe('SAMEORIGIN');
+  });
+
+  it('lässt mit SITE_FRAME_ANCESTORS nur die Vereinsseite einbetten — und nur die Microsite', async () => {
+    const { buildServer } = await import('../server');
+    process.env.SITE_FRAME_ANCESTORS = 'https://woelfe-voreifel.de, https://www.woelfe-voreifel.de/seite, http://fremd.example';
+    process.env.ADMIN_PASSWORD = 'ein-langes-passwort-fuer-den-test';
+    const offen = await buildServer({ logger: false });
+    const admin = await buildServer({ logger: false, adminOnly: true });
+    try {
+      const ohne = String((await fastify.inject({ method: 'GET', url: '/96254/' })).headers['content-security-policy']);
+      for (const url of ['/96254/', '/?kompakt=1', '/healthz']) {
+        const res = await offen.inject({ method: 'GET', url });
+        const csp = String(res.headers['content-security-policy']);
+        expect(csp, url).toContain("frame-ancestors 'self' https://woelfe-voreifel.de https://www.woelfe-voreifel.de;");
+        expect(csp, url).not.toContain('fremd.example');
+        expect(res.headers['x-frame-options'], url).toBeUndefined();
+        // Der Rest der CSP bleibt, wie er ohne Liste ist.
+        expect(csp.replace(/frame-ancestors [^;]*/, "frame-ancestors 'none'"), url).toBe(ohne);
+      }
+      for (const url of ['/settings', '/settings/login', '/api/health', '/telegram/webhook/x']) {
+        const res = await offen.inject({ method: 'GET', url });
+        expect(String(res.headers['content-security-policy']), url).toContain("frame-ancestors 'none'");
+        expect(res.headers['x-frame-options'], url).toBe('DENY');
+      }
+      const res = await admin.inject({ method: 'GET', url: '/settings' });
+      expect(String(res.headers['content-security-policy'])).toContain("frame-ancestors 'none'");
+      expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
+    } finally {
+      delete process.env.SITE_FRAME_ANCESTORS;
+      delete process.env.ADMIN_PASSWORD;
+      await offen.close();
+      await admin.close();
+    }
+  });
+
+  it('öffnet mit SITE_FRAME_ANCESTORS=* die Microsite für jede Seite — Einstellungen, API und Webhook nicht', async () => {
+    const { buildServer } = await import('../server');
+    process.env.SITE_FRAME_ANCESTORS = '*';
+    const offen = await buildServer({ logger: false });
+    try {
+      const res = await offen.inject({ method: 'GET', url: '/?kompakt=1' });
+      expect(String(res.headers['content-security-policy'])).toContain('frame-ancestors *;');
+      expect(res.headers['x-frame-options']).toBeUndefined();
+      for (const url of ['/settings', '/api/health', '/telegram/webhook/x']) {
+        const zu = await offen.inject({ method: 'GET', url });
+        expect(String(zu.headers['content-security-policy']), url).toContain("frame-ancestors 'none'");
+        expect(zu.headers['x-frame-options'], url).toBe('DENY');
+      }
+    } finally {
+      delete process.env.SITE_FRAME_ANCESTORS;
+      await offen.close();
+    }
+  });
+
   it('erlaubt keine Skripte außer den eigenen', async () => {
     const csp = String((await fastify.inject({ method: 'GET', url: '/healthz' })).headers['content-security-policy']);
     const script = /script-src ([^;]*)/.exec(csp)?.[1] ?? '';

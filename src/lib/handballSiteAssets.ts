@@ -1048,11 +1048,11 @@ export const SITE_APP_JS = `(function () {
   // Dort öffnet der Knopf die volle Seite in einem eigenen Tab (?installieren=1), und die
   // zeigt gleich das Fenster. Chrome und Co. melden mit beforeinstallprompt, dass sie
   // installieren können; Safari auf iPhone und iPad kann das nur über „Teilen“.
+  var eingebettet = true;
+  try { eingebettet = window.top !== window.self; } catch (e) {}
   var installKnopf = document.querySelector('[data-install]');
   var installFenster = document.getElementById('installieren');
   if (installKnopf && installFenster && document.querySelector('link[rel=manifest]')) {
-    var eingebettet = true;
-    try { eingebettet = window.top !== window.self; } catch (e) {}
     var installiert = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
     var apfel = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     var angebot = null;
@@ -1108,12 +1108,27 @@ export const SITE_APP_JS = `(function () {
   var root = document.getElementById('push');
   if (!root) return;
   var glocke = document.querySelector('[data-dialog-open=push]');
+  var pushOeffnen = function () {
+    if (typeof root.showModal === 'function') root.showModal(); else root.setAttribute('open', '');
+  };
   if (glocke) {
     glocke.hidden = false;
+    // Im iFrame der Vereinsseite fragt kein Browser nach der Erlaubnis für Benachrichtigungen:
+    // Dort öffnet die Glocke die volle Seite in einem eigenen Tab (?benachrichtigungen=1),
+    // und die zeigt gleich das Fenster.
     glocke.addEventListener('click', function () {
-      if (typeof root.showModal === 'function') root.showModal(); else root.setAttribute('open', '');
+      if (!eingebettet) { pushOeffnen(); return; }
+      window.open(location.pathname + '?benachrichtigungen=1', '_blank', 'noopener');
     });
   }
+  try {
+    var seite = new URL(location.href);
+    if (seite.searchParams.get('benachrichtigungen') === '1' && !eingebettet) {
+      seite.searchParams.delete('benachrichtigungen');
+      history.replaceState(null, '', seite.pathname + seite.search + seite.hash);
+      pushOeffnen();
+    }
+  } catch (e) {}
   root.addEventListener('click', function (ev) { if (ev.target === root && typeof root.close === 'function') root.close(); });
   var status = root.querySelector('[data-status]');
   var form = root.querySelector('[data-form]');

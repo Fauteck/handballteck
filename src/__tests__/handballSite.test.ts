@@ -544,6 +544,9 @@ describe('Handball-Microsite', () => {
     expect(app.body).toContain("addEventListener('beforeinstallprompt'");
     expect(app.body).toContain('window.top !== window.self');
     expect(app.body).toContain("searchParams.get('installieren') === '1'");
+    // Die Glocke: im iFrame fragt kein Browser nach der Erlaubnis — dort öffnet sie die volle Seite in einem eigenen Tab.
+    expect(app.body).toContain("window.open(location.pathname + '?benachrichtigungen=1', '_blank', 'noopener')");
+    expect(app.body).toContain("searchParams.get('benachrichtigungen') === '1' && !eingebettet");
     // Der Kompaktmodus wandert nicht in den Install-Link: Die installierte App zeigt die volle Ansicht.
     expect(app.body).toContain("a.hasAttribute('data-install')");
   });
