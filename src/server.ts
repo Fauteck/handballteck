@@ -44,6 +44,9 @@ export function logUrl(url: string): string {
  */
 export const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
 
+/** Was sich auch mit `SITE_FRAME_ANCESTORS` nie einbetten lässt: Einstellungsseite, API, Webhook. */
+const NIE_IM_RAHMEN = /^\/(settings|api|telegram)(\/|\?|$)/;
+
 export async function buildServer(opts: { logger?: boolean | object; onRoute?: (route: RouteOptions) => void; adminOnly?: boolean } = {}): Promise<FastifyInstance> {
   // Die auf der Einstellungsseite gespeicherten Werte gehen der Umgebung vor.
   if (!opts.adminOnly) ladeEinstellungen();
@@ -71,6 +74,8 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   // `upgrade-insecure-requests` und HSTS von sich aus: Der Browser machte dann aus
   // http://<NAS>:3411/settings/settings.js ein https-Ziel, das es dort nicht gibt, und die
   // Seite bliebe bei „Lädt …“. Am öffentlichen Anschluss (https über den Proxy) bleibt beides.
+  // Einbetten darf man nur die Microsite — nie den eigenen Anschluss der Einstellungsseite.
+  const einbetter = opts.adminOnly ? [] : siteFrameAncestors();
   await fastify.register(helmet, {
     strictTransportSecurity: opts.adminOnly ? false : undefined,
     contentSecurityPolicy: {
@@ -85,15 +90,24 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
         manifestSrc: ["'self'"],
         workerSrc: ["'self'"],
         // Die Vereinsseite darf die Microsite einbetten (SITE_FRAME_ANCESTORS); sonst niemand.
-        frameAncestors: siteFrameAncestors().length > 0 ? siteFrameAncestors() : ["'none'"],
+        frameAncestors: einbetter.length > 0 ? ["'self'", ...einbetter] : ["'none'"],
       },
     },
+    // X-Frame-Options kennt keine Liste erlaubter Herkünfte: SAMEORIGIN sperrte die Vereinsseite
+    // in Browsern aus, die den Kopf neben `frame-ancestors` noch auswerten. Ohne Liste bleibt er.
+    xFrameOptions: einbetter.length > 0 ? false : undefined,
     // Die Microsite wird per Link in WhatsApp und Telegram geteilt; deren
     // Vorschau holt `og:image` über denselben Host — kein Cross-Origin-Zwang.
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
-  fastify.addHook('onSend', async (_request, reply) => {
+  fastify.addHook('onSend', async (request, reply) => {
     reply.header('Permissions-Policy', PERMISSIONS_POLICY);
+    // Einstellungsseite, API und Webhook bleiben auch mit SITE_FRAME_ANCESTORS ohne Rahmen (Clickjacking).
+    if (einbetter.length > 0 && NIE_IM_RAHMEN.test(request.url)) {
+      const csp = reply.getHeader('content-security-policy');
+      if (typeof csp === 'string') reply.header('Content-Security-Policy', csp.replace(/frame-ancestors [^;]*/, "frame-ancestors 'none'"));
+      reply.header('X-Frame-Options', 'DENY');
+    }
   });
   // SEC-3-005: IPv6 zählt je /64 — sonst wählt, wer ein Präfix hat, für jede Anfrage eine neue Adresse.
   await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute', keyGenerator: request => rateLimitSchluessel(request.ip) });

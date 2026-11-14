@@ -243,13 +243,9 @@ export function siteEnabled(): boolean {
 }
 
 /**
- * Die Wurzel, unter der ein Proxy die Seiten von außen ausliefert — ohne
- * Schrägstrich am Ende; null, wenn keine gesetzt oder unbrauchbar ist (dann
- * gilt `PUBLIC_URL`). Nur eine vollständige https-Adresse ohne Parameter.
- */
-/**
  * Herkünfte, die die Microsite in einen Rahmen (iframe) einbetten dürfen —
  * die Vereinsseite. Nur https-Herkünfte ohne Pfad, durch Komma. Leer: keine.
+ * Die eigene Herkunft (`'self'`) setzt der Server dazu, sobald eine eingetragen ist.
  */
 export function siteFrameAncestors(): string[] {
   const out: string[] = [];
@@ -261,6 +257,11 @@ export function siteFrameAncestors(): string[] {
   return out;
 }
 
+/**
+ * Die Wurzel, unter der ein Proxy die Seiten von außen ausliefert — ohne
+ * Schrägstrich am Ende; null, wenn keine gesetzt oder unbrauchbar ist (dann
+ * gilt `PUBLIC_URL`). Nur eine vollständige https-Adresse ohne Parameter.
+ */
 export function siteUrl(): string | null {
   const v = env('SITE_URL');
   if (!v) return null;
