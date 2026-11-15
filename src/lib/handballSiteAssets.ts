@@ -128,6 +128,9 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .livetore li.eigen{font-weight:600}
 .plan .stumm{margin-top:6px;padding:4px 10px;border-radius:999px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-size:.85rem;cursor:pointer;opacity:.85}
 .plan .stumm[aria-pressed="false"]{opacity:.55}
+#live .plan li{position:relative;cursor:pointer}
+#live .plan a.titel::after{content:"";position:absolute;inset:0}
+#live .plan .stumm{position:relative;z-index:1}
 .result .stand{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:700;line-height:1}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
 th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
