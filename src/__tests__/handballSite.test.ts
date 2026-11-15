@@ -369,6 +369,11 @@ describe('Handball-Microsite', () => {
       expect(start.body).toContain('<body data-live="1">');
       expect(start.body.indexOf('id="live"')).toBeLessThan(start.body.indexOf('id="heimspiele"'));
       expect(start.headers['cache-control']).toBe('public, max-age=15');
+      // Ein Tipp auf die ganze Zeile führt zum Live-Ticker der Partie; „Tore melden“ bleibt eigener Knopf.
+      expect(start.body).toContain(`<a class="titel" href="./${TEAM}/#naechstes">`);
+      const css = (await get(`/${TEAM}/site.css`)).body;
+      expect(css).toContain('#live .plan a.titel::after{content:"";position:absolute;inset:0}');
+      expect(css).toContain('#live .plan .stumm{position:relative;z-index:1}');
       expect(res.body).toContain('Läuft gerade');
       expect(res.body).toContain('class="tore-gross">7:5<');
       expect(res.body).toContain('19:40 Min. · 1. Halbzeit');
