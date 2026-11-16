@@ -8,7 +8,9 @@
 # Servers und ist nur per SSH-Tunnel erreichbar, nie über Caddy.
 services:
   handballteck:
-    image: ghcr.io/fauteck/handballteck:latest
+    # Standard `latest` (Dispatch auf main). Rückweg: IMAGE_TAG=<sha> in .env,
+    # ohne diese Datei auf dem Server zu ändern (README.md, „Betrieb“).
+    image: ghcr.io/fauteck/handballteck:${IMAGE_TAG:-latest}
     container_name: handballteck
     restart: unless-stopped
     env_file: .env

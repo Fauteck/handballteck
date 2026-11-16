@@ -45,7 +45,10 @@ decisions go to the wiki.
   and keep old fields until Todoteck no longer reads them.
 - **Images only by manual dispatch** of `.github/workflows/publish.yml`. Never add an
   automatic trigger; new checks go as steps into its `quality` job, not into a second
-  workflow. Production runs on the club's own VPS (`app.woelfe-voreifel.de`, decided
+  workflow. The tag follows the branch: a feature branch builds `:dev` (test instance on
+  NAS1, rolled out by Home Assistant), `main` builds `:latest` (production, rolled out by
+  hand); both also get the commit SHA tag. Try a feature as `:dev` before the merge; no
+  long-lived `dev` branch. Production runs on the club's own VPS (`app.woelfe-voreifel.de`, decided
   2026-11-16; it replaces the Komodo stack on NAS1): `deploy/vps/` holds compose file,
   Caddyfile and runbook, and the server runs exactly those files. Change them here first,
   then copy them over; never edit them only on the server. Only one instance with data

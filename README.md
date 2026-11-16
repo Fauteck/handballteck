@@ -354,8 +354,16 @@ npm run build        # dist/
 
 Images are built only by the manual workflow **Publish Docker Image**
 (`.github/workflows/publish.yml`, `workflow_dispatch`). Its `quality` job runs
-typecheck and tests; the image job needs it and pushes
-`ghcr.io/fauteck/handballteck:latest` plus the short commit SHA. `gates_only = true`
+typecheck and tests; the image job needs it. The tag follows the branch chosen under
+„Use workflow from“:
+
+| Dispatch on | Tags | Rolled out |
+|---|---|---|
+| a feature branch | `:dev` + short commit SHA | by Home Assistant to the test instance (Komodo, NAS1) |
+| `main` (after the merge) | `:latest` + short commit SHA | by hand on the VPS ([`deploy/vps/`](deploy/vps/README.md#betrieb)) |
+
+So a feature is tried as `:dev` first, then merged, then dispatched on `main`. There is no
+long-lived `dev` branch. The SHA tag never moves and is the way back. `gates_only = true`
 runs the checks without publishing. No git tags, no releases.
 
 ## License

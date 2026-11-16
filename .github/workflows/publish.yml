@@ -7,6 +7,13 @@ name: Publish Docker Image
 # Schritt in diesen Job, nicht in eine zweite Workflow-Datei (CLAUDE.md).
 #
 # `gates_only = true` lässt nur die Prüfungen laufen, ohne zu veröffentlichen.
+#
+# Der Tag folgt dem Branch, der beim Dispatch unter „Use workflow from“
+# gewählt wird (Vorbild: Fauteck/pruefteck):
+#   - Feature-Branch → `:dev` (Testinstanz auf NAS1, rollt Home Assistant aus)
+#   - `main`         → `:latest` (Produktion auf dem VPS, von Hand ausgerollt)
+# Dazu immer der unveränderliche SHA-Tag (`:abc1234`) für den Rückweg.
+# Kein langlebiger `dev`-Branch.
 on:
   workflow_dispatch:
     inputs:
@@ -109,7 +116,8 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/handballteck
           tags: |
             type=sha,prefix=,format=short
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=dev,enable=${{ github.ref != 'refs/heads/main' }}
 
       # Commit-SHA und Bauzeitpunkt wandern als Build-Args ins Image und
       # erscheinen in /healthz und /api/health — und damit in der
@@ -138,14 +146,19 @@ jobs:
   # Ergebnis-Meldung an Home Assistant.
   #
   # Kein Gate, sondern das Bindeglied der Release-Kette: Home Assistant
-  # erfährt hier, ob der Dispatch durchgelaufen ist, und stößt danach den
-  # Komodo-Redeploy an (script.komodo_deploy: `DeployStack`, danach Prüfung
-  # auf healthy und Image-Label). Komodo ist nur im LAN erreichbar, ein GitHub-Runner
-  # kann es nicht aufrufen — deshalb endet der Repo-Anteil hier.
+  # erfährt hier, ob der Dispatch durchgelaufen ist, und stößt bei `:dev`
+  # den Komodo-Redeploy der Testinstanz an (script.komodo_deploy:
+  # `DeployStack`, danach Prüfung auf healthy und Image-Label). Komodo ist nur
+  # im LAN erreichbar, ein GitHub-Runner kann es nicht aufrufen — deshalb
+  # endet der Repo-Anteil hier.
   #
   # Läuft per `if: always()` auch dann, wenn ein Job rot ist, sonst gäbe
   # es für den Fehlerpfad keine Meldung. `repository` in der Nutzlast ist
-  # der Schlüssel, mit dem Home Assistant den Komodo-Stack auswählt.
+  # der Schlüssel, mit dem Home Assistant den Komodo-Stack auswählt;
+  # `image_tag` (`dev` oder `latest`) entscheidet, ob ausgerollt wird: Die
+  # Zeile für dieses Repo trägt `nur_tag: dev`, ein `main`-Dispatch meldet
+  # sich also nur, rollt aber nichts aus. Produktion (VPS) geht von Hand,
+  # siehe deploy/vps/README.md.
   # Vorbild und Nutzlast-Vertrag: Repo Fauteck/todo, publish.yml (notify).
   notify:
     name: Ergebnis an Home Assistant melden
@@ -163,6 +176,7 @@ jobs:
           RESULT_GATE: ${{ needs.quality.result }}
           RESULT_BUILD: ${{ needs.build-and-push.result }}
           GATES_ONLY: ${{ inputs.gates_only }}
+          IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
         run: |
           set -euo pipefail
 
@@ -194,6 +208,7 @@ jobs:
             --arg     failed_jobs      "$failed" \
             --arg     sha              "$GITHUB_SHA" \
             --arg     sha_short        "${GITHUB_SHA::7}" \
+            --arg     image_tag        "$IMAGE_TAG" \
             --arg     ref              "$GITHUB_REF_NAME" \
             --arg     repository       "$GITHUB_REPOSITORY" \
             --arg     actor            "$GITHUB_ACTOR" \
@@ -207,6 +222,7 @@ jobs:
               failed_jobs:      ($failed_jobs | split(",") | map(select(length > 0))),
               sha:              $sha,
               sha_short:        $sha_short,
+              image_tag:        $image_tag,
               ref:              $ref,
               repository:       $repository,
               actor:            $actor,
