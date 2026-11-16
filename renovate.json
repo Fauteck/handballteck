@@ -6,6 +6,7 @@
   ],
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "Renovate-Dashboard (handballteck)",
+  "dependencyDashboardHeader": "**Zurückgehalten (Stand 2026-11-12):** better-sqlite3 13 wird hier nicht angeboten. `npm ci` startet für v13 aus der Lockdatei `node-gyp rebuild`, und im Alpine-Image gibt es kein Python; der Image-Bau bräche ab. Sobald `npm ci` mit v13 in `node:26-alpine` ohne Build-Werkzeuge durchläuft, die `allowedVersions`-Regel entfernen.",
   "timezone": "Europe/Berlin",
   "schedule": [
     "before 7am on the first day of the month"
@@ -21,6 +22,16 @@
   ],
   "rangeStrategy": "bump",
   "packageRules": [
+    {
+      "description": "better-sqlite3 bleibt unter 13: npm (10.9.9 in node:22-alpine, 11.20.0 in node:26-alpine) startet bei `npm ci` aus der Lockdatei `node-gyp rebuild`, obwohl v13 fertige Binaries mitbringt (`gypfile: false` steht nicht in der Lockdatei); im Alpine-Image fehlt Python, der Image-Bau bricht ab (geprüft 2026-11-12). Regel entfernen, sobald `npm ci` mit better-sqlite3 13 in node:26-alpine ohne Build-Werkzeuge durchläuft.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "better-sqlite3"
+      ],
+      "allowedVersions": "<13"
+    },
     {
       "description": "npm, Laufzeit: minor und patch gesammelt in einem PR, major einzeln",
       "matchManagers": [

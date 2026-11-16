@@ -170,6 +170,8 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       && tage.includes(TAG_ISO.format(new Date(x.m.starts_at))))
     .sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
 
+  // Die ganze Zeile führt zum Live-Ticker der Partie: Der Link im Titel spannt sich per
+  // Stil über die Zeile (`#live .plan a.titel::after`), „Tore melden“ liegt darüber.
   const liveHtml = live.length > 0 ? `<section class="card dark live" id="live">
   <h2>Läuft gerade <span class="badge live">Live</span></h2>
   <ul class="plan">${live.map(({ t, m }) => {

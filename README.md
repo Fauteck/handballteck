@@ -1,6 +1,6 @@
 # Handballteck
 
-![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen) ![Fastify](https://img.shields.io/badge/fastify-5-black) ![SQLite](https://img.shields.io/badge/sqlite-better--sqlite3-blue) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Node](https://img.shields.io/badge/node-%3E%3D26-brightgreen) ![Fastify](https://img.shields.io/badge/fastify-5-black) ![SQLite](https://img.shields.io/badge/sqlite-better--sqlite3-blue) ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 Follow the handball teams of one club from [handball.net](https://www.handball.net): a public
 microsite in the club's colours, a Telegram bot, browser push, a calendar subscription
@@ -43,7 +43,7 @@ All state is one SQLite file under `DATA_DIR`. Configuration is the environment 
 
 ## Prerequisites
 
-- Node.js 22 (local) or Docker
+- Node.js 26 (local) or Docker
 - A public `https://` address for the Telegram webhook and the microsite
 - Optional: a bot token from BotFather, and a Todoteck instance that wants the cockpit
 
@@ -159,7 +159,7 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `BOT_AUTO_DESCRIPTION` | `true` | Keep the bot's profile texts in sync with standings and next match. |
 | `SITE_ENABLED` | `true` | Serve the microsite. |
 | `SITE_URL` | – | Root under which a proxy serves the pages. |
-| `SITE_FRAME_ANCESTORS` | – (none) | https origins allowed to embed the microsite in an iframe (the club website). Append `?kompakt=1` to the embedded URL: the page then drops logo and club name from its header, since the club site shows them already. Browsers never offer to install a page inside an iframe, so the embedded page shows an install icon that opens the full page in a new tab with `?installieren=1`; a `sandbox` on the iframe needs `allow-popups allow-popups-to-escape-sandbox` for that. The club site can link to `<PUBLIC_URL>/?installieren=1` (or a team's `/<team-id>/?installieren=1`) itself: the page opens with the install window (install button in Chrome/Edge/Samsung, „Teilen → Zum Home-Bildschirm“ steps on iPhone and iPad). The installed app always starts in the full view. |
+| `SITE_FRAME_ANCESTORS` | – (none) | https origins allowed to embed the microsite in an iframe (the club website), comma-separated, e.g. `https://woelfe-voreifel.de,https://www.woelfe-voreifel.de` (with and without `www` are two origins). Set: the CSP carries `frame-ancestors 'self' <origins>` and `X-Frame-Options` is dropped (it knows no list of origins). Empty: `frame-ancestors 'none'` plus `X-Frame-Options: SAMEORIGIN`. For testing only, a single `*` lets any site embed the microsite (`frame-ancestors *`; the service logs a warning at start) — replace it with the club's origins afterwards. A leading wildcard covers all subdomains (`https://*.example.com`). `/settings`, `/api/*` and the Telegram webhook can never be framed. Read at start: restart the container after a change. Append `?kompakt=1` to the embedded URL: the page then drops logo and club name from its header, since the club site shows them already; `&farbe=dunkel` or `&farbe=hell` fixes the colour scheme. The block to paste into the club site, with the script that sizes the frame to its content, is under „Embedding in the club website“ below. Browsers never offer to install a page inside an iframe, so the embedded page shows an install icon that opens the full page in a new tab with `?installieren=1`; a `sandbox` on the iframe needs `allow-popups allow-popups-to-escape-sandbox` for that. The same goes for the bell: browsers block the notification permission prompt inside a foreign iframe, so there the bell opens the full page in a new tab with `?benachrichtigungen=1`, which shows the notification window right away. The club site can link to `<PUBLIC_URL>/?installieren=1` (or a team's `/<team-id>/?installieren=1`) itself: the page opens with the install window (install button in Chrome/Edge/Samsung, „Teilen → Zum Home-Bildschirm“ steps on iPhone and iPad). The installed app always starts in the full view. |
 | `SITE_OPERATOR` / `SITE_FEEDBACK_MAIL` | – | Footer of the microsite. |
 | `SITE_PREVIEW_TOKEN` | – (off) | Secret (≥ 32 chars) for `/<team>/?vorab=<token>`: the page then also shows what is not public yet (ClubDesk photos). Responses are `private, no-store`; the token is masked in logs. |
 | `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_1`). Daily fetch (and right after a changed release on `/settings`) of the group photo (youth only with a released group photo) and the squad portraits (youth only when released); stored downscaled as JPEG. Always in the preview; public per `SITE_PHOTOS`. |
@@ -169,6 +169,56 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | `DATA_DIR` / `DATABASE_PATH` | `./data` | Where the SQLite file lives. |
 | `TRUST_PROXY` | – | Proxy addresses (IP/CIDR list) whose `X-Forwarded-For` is trusted. |
 | `IMPORT_TODOTECK_DB` | – | One-time import from a Todoteck database at startup. |
+
+### Embedding in the club website
+
+Allow the club site in `SITE_FRAME_ANCESTORS`, then paste this block into one HTML element of
+the club site — iframe, fallback link and script belong together on the same page. Replace
+`https://handball.fauteck.eu` (three times) with the address the microsite runs under.
+`?kompakt=1` drops logo and club name, `&farbe=dunkel` (or `hell`) fixes the colour scheme
+regardless of the visitor's device; both are carried along by every link inside the frame.
+
+```html
+<!-- Wölfe live: Rahmen, Ausweichlink und Skript gehören zusammen in denselben HTML-Block. -->
+<iframe id="woelfe-live" src="https://handball.fauteck.eu/?kompakt=1&farbe=dunkel"
+  title="Wölfe live - Handball im Revier" loading="lazy"
+  style="display:block;width:100%;height:1400px;border:0"></iframe>
+<p style="text-align:center;font-size:.9em">Die Übersicht lädt nicht? <a href="https://handball.fauteck.eu/" target="_blank" rel="noopener">Wölfe live direkt öffnen</a></p>
+<script>
+(function () {
+  var HERKUNFT = 'https://handball.fauteck.eu'; // Adresse der Microsite, ohne Pfad und ohne Schrägstrich am Ende
+  var KOPF = 60; // Höhe einer fest stehenden Kopfleiste der Vereinsseite in Pixeln (ohne: 0)
+  var rahmen = document.getElementById('woelfe-live');
+  if (!rahmen) return;
+  var seiten = 0, geplant = false;
+  // Welcher Teil des Rahmens gerade zu sehen ist: Danach richten sich Fenster und Hinweise im Rahmen.
+  function sicht() {
+    geplant = false;
+    var r = rahmen.getBoundingClientRect();
+    if (rahmen.contentWindow) rahmen.contentWindow.postMessage({ quelle: 'woelfe-live', typ: 'sicht', oben: Math.max(0, KOPF - r.top), hoehe: Math.max(100, window.innerHeight - KOPF) }, HERKUNFT);
+  }
+  function planen() { if (!geplant) { geplant = true; requestAnimationFrame(sicht); } }
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (ev.origin !== HERKUNFT || ev.source !== rahmen.contentWindow || !d || d.quelle !== 'woelfe-live') return;
+    // Die Höhe des Inhalts: Der Rahmen wächst mit, es gibt keinen zweiten Scrollbalken.
+    if (d.typ === 'hoehe' && d.hoehe > 0 && d.hoehe < 50000) rahmen.style.height = Math.ceil(d.hoehe) + 'px';
+    // Eine neue Seite im Rahmen (nicht die erste): zurück zum Anfang des Rahmens, falls er oben aus dem Bild ist.
+    if (d.typ === 'seite') {
+      seiten += 1;
+      var oben = rahmen.getBoundingClientRect().top;
+      if (seiten > 1 && oben < KOPF) window.scrollTo(0, window.pageYOffset + oben - KOPF);
+    }
+    planen();
+  });
+  window.addEventListener('scroll', planen, { passive: true });
+  window.addEventListener('resize', planen);
+})();
+</script>
+```
+
+Without the script the frame keeps its fixed height and scrolls inside; everything else works.
+`src/__tests__/einbettung.e2e.ts` runs this exact block in Chromium.
 
 ## API reference
 
@@ -264,7 +314,7 @@ Adding a host: write the client (addresses from input or foreign answers through
 
 ## Technology stack
 
-Node 22 · TypeScript · Fastify 5 (`@fastify/helmet`, `@fastify/rate-limit`) · better-sqlite3 + drizzle-orm ·
+Node 26 · TypeScript · Fastify 5 (`@fastify/helmet`, `@fastify/rate-limit`) · better-sqlite3 + drizzle-orm ·
 sharp (SVG → PNG/JPEG/GIF) · web-push · zod · vitest · esbuild.
 
 ## Project structure

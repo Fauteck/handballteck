@@ -33,12 +33,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '26'
           cache: 'npm'
 
       - name: Install dependencies
@@ -47,8 +47,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm test
+      # Mit Coverage: Die Untergrenzen stehen in vitest.config.mts; fällt die
+      # Abdeckung darunter, ist der Lauf rot.
+      - name: Test (mit Coverage-Untergrenzen)
+        run: npm run test:coverage
 
       - name: Browser-Test der Einstellungsseite
         run: |
@@ -68,7 +70,7 @@ jobs:
       # Auf den Commit gepinnt, nicht auf den Tag: Tags einer Fremd-Action lassen
       # sich umhängen, und dieser Job teilt den GHA-Cache mit dem Image-Bau.
       - name: Trivy (Abhängigkeiten und Geheimnisse)
-        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret
@@ -88,7 +90,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4

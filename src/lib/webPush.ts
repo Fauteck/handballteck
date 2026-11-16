@@ -9,7 +9,7 @@
  * von dort — sonst wären alle Browser-Anmeldungen der Microsite auf einen
  * Schlag ungültig (der Push-Dienst antwortet dann 403).
  */
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 import { getSetting, setSetting } from './settings';
 import { serviceLog } from './serviceLogger';
 import { publicUrl } from '../config';

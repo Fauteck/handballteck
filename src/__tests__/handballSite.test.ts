@@ -369,6 +369,11 @@ describe('Handball-Microsite', () => {
       expect(start.body).toContain('<body data-live="1">');
       expect(start.body.indexOf('id="live"')).toBeLessThan(start.body.indexOf('id="heimspiele"'));
       expect(start.headers['cache-control']).toBe('public, max-age=15');
+      // Ein Tipp auf die ganze Zeile führt zum Live-Ticker der Partie; „Tore melden“ bleibt eigener Knopf.
+      expect(start.body).toContain(`<a class="titel" href="./${TEAM}/#naechstes">`);
+      const css = (await get(`/${TEAM}/site.css`)).body;
+      expect(css).toContain('#live .plan a.titel::after{content:"";position:absolute;inset:0}');
+      expect(css).toContain('#live .plan .stumm{position:relative;z-index:1}');
       expect(res.body).toContain('Läuft gerade');
       expect(res.body).toContain('class="tore-gross">7:5<');
       expect(res.body).toContain('19:40 Min. · 1. Halbzeit');
@@ -544,6 +549,9 @@ describe('Handball-Microsite', () => {
     expect(app.body).toContain("addEventListener('beforeinstallprompt'");
     expect(app.body).toContain('window.top !== window.self');
     expect(app.body).toContain("searchParams.get('installieren') === '1'");
+    // Die Glocke: im iFrame fragt kein Browser nach der Erlaubnis — dort öffnet sie die volle Seite in einem eigenen Tab.
+    expect(app.body).toContain("window.open(location.pathname + '?benachrichtigungen=1', '_blank', 'noopener')");
+    expect(app.body).toContain("searchParams.get('benachrichtigungen') === '1' && !eingebettet");
     // Der Kompaktmodus wandert nicht in den Install-Link: Die installierte App zeigt die volle Ansicht.
     expect(app.body).toContain("a.hasAttribute('data-install')");
   });
@@ -1007,6 +1015,44 @@ describe('Handball-Microsite', () => {
       expect((await get(`/${TEAM}/site.css`)).body).toContain('html.kompakt .mini{display:none}');
     });
 
+    it('passt sich im Rahmen der Vereinsseite an: Höhe, Seitenwechsel, sichtbarer Ausschnitt (UXA-1)', async () => {
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("melden({ typ: 'hoehe', hoehe: hoehe })");
+      expect(js).toContain("melden({ typ: 'seite' })");
+      expect(js).toContain('new ResizeObserver(hoehePlanen)');
+      // Nur die Vereinsseite selbst darf den Ausschnitt melden, und nur mit plausiblen Zahlen.
+      expect(js).toContain("ev.source !== window.parent || !d || d.quelle !== 'woelfe-live' || d.typ !== 'sicht'");
+      expect(js).toContain("wurzel.classList.add('eingebettet')");
+      const css = (await get(`/${TEAM}/site.css`)).body;
+      expect(css).toContain('html.eingebettet dialog.popup[open]{position:absolute;top:calc(var(--sicht-oben,0px) + 16px)');
+      expect(css).toContain('html.eingebettet .toast{bottom:auto;');
+      expect(css).toContain('html.eingebettet .sprung{top:var(--sicht-oben,0px)}');
+    });
+
+    it('lässt die Live-Abfrage ruhen, solange der Rahmen weggescrollt ist (PRF-4)', async () => {
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain('if (liveAus || document.hidden || !imBild) return;');
+      expect(js).toContain('if (imBild && !vorher) liveHolen();');
+    });
+
+    it('übernimmt das Farbschema der Vereinsseite aus ?farbe= und reicht es an Verweise weiter (UXA-2)', async () => {
+      const { SITE_THEME_JS } = await import('../lib/handballSite');
+      const lauf = (suche: string, gespeichert: string | null) => {
+        const attr: Record<string, string> = {};
+        const wurzel = { className: '', setAttribute: (k: string, v: string) => { attr[k] = v; } };
+        new Function('location', 'document', 'localStorage', SITE_THEME_JS)(
+          { search: suche }, { documentElement: wurzel }, { getItem: () => gespeichert });
+        return { theme: attr['data-theme'], klasse: wurzel.className };
+      };
+      expect(lauf('?kompakt=1&farbe=dunkel', 'light')).toEqual({ theme: 'dark', klasse: ' kompakt' });
+      expect(lauf('?farbe=hell', 'dark').theme).toBe('light');
+      expect(lauf('?farbe=lila', 'dark').theme).toBe('dark');
+      expect(lauf('', null).theme).toBeUndefined();
+      const js = (await get(`/${TEAM}/app.js`)).body;
+      expect(js).toContain("if (farbeVorgabe) mitnehmen.push('farbe=' + farbeVorgabe[1]);");
+      expect(js).toContain("if (farbeVorgabe) themeWahl = farbeVorgabe[1] === 'dunkel' ? 'dark' : 'light';");
+    });
+
     it('zeigt den Spielplan zusätzlich als Monatskalender mit Heim/Auswärts-Buchstaben', async () => {
       const html = (await get(`/${TEAM}/`)).body;
       expect(html).toContain('data-ansicht="kalender"');
@@ -1362,7 +1408,12 @@ describe('Handball-Microsite', () => {
       // m2 (Endstand) war ein Auswärtsspiel — für den Verein kein Push. m3 (Heimspiel) wird in 30 Minuten angekündigt.
       const kurzVorAnwurf = new Date(Date.now() + 7 * 24 * 3600 * 1000 - 30 * 60 * 1000);
       await sitePush.pushHandballSite(kurzVorAnwurf, deps);
-      const payloads = sendPush.mock.calls.filter(c => c[0].endpoint === verein.endpoint).map(c => c[1] as { title: string; url?: string; image?: string });
+      // Die Wochenvorschau zählt hier nicht mit: Der Verein hat `preview` gewählt, und fällt „in sieben Tagen“
+      // auf einen Freitagvormittag, liegt `kurzVorAnwurf` im Vorschau-Fenster (Do 17 Uhr bis Fr 12 Uhr) und m3
+      // auf dem Freitag dieses Wochenendes. Die Vorschau prüft der nächste Test mit festem Datum.
+      const payloads = sendPush.mock.calls.filter(c => c[0].endpoint === verein.endpoint)
+        .map(c => c[1] as { title: string; url?: string; image?: string; tag?: string })
+        .filter(p => p.tag !== 'handball-wochenende');
       expect(payloads).toHaveLength(1);
       expect(payloads[0].title).not.toContain('Niederlage');
       expect(payloads[0].url).toBe('96254/');
