@@ -977,16 +977,24 @@ function kalenderHtml(team: HandballTeamView, now: Date): string {
     for (let t = 1; t <= anzahl; t++) {
       const iso = `${mon}-${String(t).padStart(2, '0')}`;
       const spiele = nachTag.get(iso) ?? [];
+      const mitStand = (m: HandballMatchView) => m.score_home !== null && m.score_away !== null && (m.status === 'finished' || m.rated);
+      const spielLink = (m: HandballMatchView) => `./spiel/${encodeURIComponent(m.match_id)}`;
+      const label = (m: HandballMatchView) => `${DATUM_KURZ.format(new Date(m.starts_at))}, ${m.is_home ? 'Heimspiel gegen' : 'Auswärtsspiel bei'} ${gegnerVon(m)}${mitStand(m) ? `, ${standHeimGast(m)}` : `, ${ZEIT.format(new Date(m.starts_at))} Uhr`}`;
+      // Ein Tag mit genau einem gespielten Spiel ist als ganze Zelle der Link: Der Chip allein wäre
+      // auf dem Telefon kaum 17 px hoch. Mehrere Spiele an einem Tag behalten je einen Chip-Link.
+      const zelleIstLink = spiele.length === 1 && mitStand(spiele[0]!);
       const chips = spiele.map(m => {
-        const mitStand = m.score_home !== null && m.score_away !== null && (m.status === 'finished' || m.rated);
-        const inhalt = `${m.is_home ? 'H' : 'A'} ${mitStand ? `${standHeimGast(m)}` : ZEIT.format(new Date(m.starts_at))}`;
-        const klasse = `chip ${m.is_home ? 'heim' : 'aus'} ${mitStand ? (m.won === true ? 'w' : m.won === false ? 'l' : '') : ''}`.trim();
-        const label = `${DATUM_KURZ.format(new Date(m.starts_at))}, ${m.is_home ? 'Heimspiel gegen' : 'Auswärtsspiel bei'} ${gegnerVon(m)}${mitStand ? `, ${standHeimGast(m)}` : `, ${ZEIT.format(new Date(m.starts_at))} Uhr`}`;
-        return mitStand
-          ? `<a class="${klasse}" href="${h(`./spiel/${encodeURIComponent(m.match_id)}`)}" title="${h(label)}" aria-label="${h(label)}">${h(inhalt)}</a>`
-          : `<span class="${klasse}" title="${h(label)}" aria-label="${h(label)}" role="img">${h(inhalt)}</span>`;
+        const inhalt = `${m.is_home ? 'H' : 'A'} ${mitStand(m) ? `${standHeimGast(m)}` : ZEIT.format(new Date(m.starts_at))}`;
+        const klasse = `chip ${m.is_home ? 'heim' : 'aus'} ${mitStand(m) ? (m.won === true ? 'w' : m.won === false ? 'l' : '') : ''}`.trim();
+        if (zelleIstLink) return `<span class="${klasse}">${h(inhalt)}</span>`;
+        return mitStand(m)
+          ? `<a class="${klasse}" href="${h(spielLink(m))}" title="${h(label(m))}" aria-label="${h(label(m))}">${h(inhalt)}</a>`
+          : `<span class="${klasse}" title="${h(label(m))}" aria-label="${h(label(m))}" role="img">${h(inhalt)}</span>`;
       }).join('');
-      zellen.push(`<div class="tag${iso === heute ? ' heute' : ''}${spiele.length > 0 ? ' mit' : ''}"><span class="n">${t}</span>${chips}</div>`);
+      const klasseTag = `tag${iso === heute ? ' heute' : ''}${spiele.length > 0 ? ' mit' : ''}`;
+      zellen.push(zelleIstLink
+        ? `<a class="${klasseTag}" href="${h(spielLink(spiele[0]!))}" title="${h(label(spiele[0]!))}" aria-label="${h(label(spiele[0]!))}"><span class="n" aria-hidden="true">${t}</span>${chips}</a>`
+        : `<div class="${klasseTag}"><span class="n">${t}</span>${chips}</div>`);
     }
     return `<div class="monat" data-monat="${mon}"${mon === aktuell ? ' data-aktuell' : ''} hidden>
       <div class="monatskopf"><button type="button" data-monat-zurueck aria-label="Vorheriger Monat">‹</button><b>${h(MONAT.format(erster))}</b><button type="button" data-monat-weiter aria-label="Nächster Monat">›</button></div>

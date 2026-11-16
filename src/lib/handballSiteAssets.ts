@@ -101,9 +101,9 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .card h2{margin-bottom:10px}
 .card img.bild{display:block;width:100%;height:auto;border-radius:12px;background:#0b2a33}
 @keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
-.card img.bild:not(.fertig){min-height:140px;color:transparent;background:linear-gradient(100deg,#0b2a33 30%,#16424e 50%,#0b2a33 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
+.card img.bild.laedt{min-height:140px;color:transparent;background:linear-gradient(100deg,#0b2a33 30%,#16424e 50%,#0b2a33 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
 .card img.bild.fehler{animation:none;background:#0b2a33}
-.portraets img:not(.fertig){color:transparent;background:linear-gradient(100deg,var(--line) 30%,color-mix(in srgb,var(--line) 50%,transparent) 50%,var(--line) 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
+.portraets img.laedt{color:transparent;background:linear-gradient(100deg,var(--line) 30%,color-mix(in srgb,var(--line) 50%,transparent) 50%,var(--line) 70%);background-size:200% 100%;animation:skel 1.6s linear infinite}
 .portraets img.fehler{animation:none;background:var(--line)}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;background:var(--a);color:var(--g);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;letter-spacing:.04em;text-transform:uppercase}
 .badge.live{background:var(--loss);color:#fff;animation:puls 1.6s ease-in-out infinite}
@@ -126,7 +126,7 @@ main.wrap{display:grid;gap:18px;padding-top:18px;grid-template-columns:minmax(0,
 .livetore .min{display:inline-block;min-width:2.4em;opacity:.7}
 .livetore .werfer{opacity:.8}
 .livetore li.eigen{font-weight:600}
-.plan .stumm{margin-top:6px;padding:4px 10px;border-radius:999px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-size:.85rem;cursor:pointer;opacity:.85}
+.plan .stumm{display:inline-flex;align-items:center;gap:6px;min-height:44px;margin-top:6px;padding:4px 12px;border-radius:999px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-size:.85rem;cursor:pointer;opacity:.85}
 .plan .stumm[aria-pressed="false"]{opacity:.55}
 .result .stand{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:700;line-height:1}
 table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
@@ -146,7 +146,7 @@ td.pkt{font-weight:700}
 .plan .d{font-family:'Barlow Condensed',sans-serif;font-weight:600;color:var(--muted);line-height:1.1}
 .plan .d small{display:block;font-weight:500}
 .plan .g{min-width:0}
-.plan .g a.titel{display:inline-block;padding:4px 0;color:inherit;text-decoration:none}
+.plan .g a.titel{display:inline-flex;align-items:center;min-height:44px;color:inherit;text-decoration:none}
 .plan .g a.spielseite{display:inline-flex;align-items:center;min-height:44px;padding:0 4px;font-weight:600}
 .plan .g .ha{color:var(--muted);font-size:.85rem}
 .plan .e{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.35rem;padding:2px 10px;border-radius:8px;background:var(--bg);color:var(--text)}
@@ -198,6 +198,7 @@ dialog.popup .schliessen{margin:14px 0 0}
 .hero .verpassen{position:absolute;top:10px;right:68px;margin:0;z-index:2}
 .hero .teaminfo{grid-column:1/-1;min-width:0}
 .hero .verein{min-width:0}
+.hero .verein a.heim{display:flex;align-items:center;min-height:44px}
 .hero .verein .kicker{font-size:1.15rem}
 html.kompakt .hero .verein{display:none}
 html.kompakt .hero .verpassen{position:static;grid-column:1/-1;justify-self:end}
@@ -241,7 +242,7 @@ main.wrap.breit{grid-template-columns:minmax(0,1fr)}
 table.heim th,table.heim td{text-align:left;white-space:normal;vertical-align:top;padding:10px 8px}
 table.heim small{display:block;color:var(--muted);font-size:.8rem;font-weight:500}
 table.heim td.wann{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.1rem;white-space:nowrap}
-table.heim td.team a{font-weight:700;text-decoration:none}
+table.heim td.team a{display:inline-flex;align-items:center;min-height:44px;font-weight:700;text-decoration:none}
 table.heim td.ort b{display:block}
 table.stand tr.bereich th{text-align:left;padding-top:14px;font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--hd);border-bottom:2px solid var(--line)}
 table.stand td b{font-family:'Barlow Condensed',sans-serif;font-size:1.2rem;font-weight:700;color:var(--hd)}
@@ -282,13 +283,14 @@ table.heim tr.neu td{border-top:0}
 .kal .tag.leer{border:0}
 .kal .tag .n{font-size:.75rem;color:var(--muted);line-height:1}
 .kal .tag.heute{border-color:var(--p);box-shadow:inset 0 0 0 1px var(--p)}
+.kal a.tag{color:inherit;text-decoration:none}
+.kal a.tag:hover{border-color:var(--p)}
 .kal .chip{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;padding:1px 3px;border-radius:6px;background:var(--bg);color:var(--text);text-decoration:none;text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:clip}
 .kal .chip.aus{border:1px dashed var(--muted)}
 .kal .chip.w{background:color-mix(in srgb,var(--win) 16%,#fff);color:var(--wint)}
 .kal .chip.l{background:color-mix(in srgb,var(--loss) 14%,#fff);color:var(--losst)}
 .livehinweis{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;font-size:.95rem;line-height:1.4}
-.livehinweis .punkt{flex:none;width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--loss);animation:puls 1.8s ease-in-out infinite}
-@keyframes puls{0%,100%{opacity:1}50%{opacity:.3}}
+.livehinweis .punkt{flex:none;width:10px;height:10px;margin-top:6px;border-radius:50%;background:var(--loss)}
 .card.live-leer{border-style:dashed}
 .geltung{margin:0 0 8px;font-size:.88rem;line-height:1.4;color:rgba(255,255,255,.8)}
 .geltung a{color:var(--a)}
@@ -298,6 +300,7 @@ table.heim tr.neu td{border-top:0}
 .kenn dd{margin:0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.4rem;line-height:1.1}
 .kenn dd small{font-size:.9rem;font-weight:600;color:var(--muted);margin-left:5px}
 tr[data-sb]{cursor:pointer}
+tr[data-sb] td{padding-top:10px;padding-bottom:10px}
 tr[data-sb]:hover td{background:color-mix(in srgb,var(--p) 6%,transparent)}
 tr[data-sb]:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
 dialog.steckbrief .gegner{margin-top:0}
@@ -308,7 +311,7 @@ dialog.steckbrief .gegner{margin-top:0}
 #spielplan.zu .filter,#spielplan.zu .kal{display:none}
 #spielplan.zu .plan li:not([data-kurz]){display:none}
 #spielplan.zu[data-ansicht=kalender] .plan{display:grid}
-.sprung{position:sticky;top:var(--oben,0px);z-index:25;background:var(--bg);border-bottom:1px solid var(--line);transition:top .2s}
+.sprung{position:sticky;top:var(--oben,0px);z-index:25;background:var(--bg);border-bottom:1px solid var(--line)}
 .sprung .wrap{padding-top:8px;padding-bottom:8px}
 .sprung ul{list-style:none;margin:0;padding:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
 .sprung ul::-webkit-scrollbar{display:none}
@@ -319,7 +322,7 @@ section[id]{scroll-margin-top:72px}
 html.mit-mini section[id]{scroll-margin-top:124px}
 .mini{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;gap:10px;padding:calc(6px + env(safe-area-inset-top)) 16px 6px;background:var(--g);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,.3);transform:translateY(-110%);transition:transform .2s}
 .mini.sichtbar{transform:none}
-.mini .mlogo{display:grid;place-items:center;width:34px;height:34px;flex:none;border-radius:50%;background:rgba(255,255,255,.14);text-decoration:none}
+.mini .mlogo{display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:50%;background:rgba(255,255,255,.14);text-decoration:none}
 .mini .mlogo img{width:26px;height:26px;object-fit:contain}
 .mini .ini{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--a);font-size:.85rem}
 .mini b{font-family:'Barlow Condensed',sans-serif;font-size:1.15rem;text-transform:uppercase;white-space:nowrap}
@@ -907,11 +910,13 @@ export const SITE_APP_JS = `(function () {
     markieren();
   })();
 
-  // Bilder laden mit einem ruhigen Platzhalter statt mit Alt-Text: Die Fläche pulsiert, bis das Bild da ist; geht es schief, bleibt sie still und leer.
+  // Bilder laden mit einem ruhigen Platzhalter statt mit Alt-Text: Die Fläche schimmert, bis das Bild da ist; geht es schief, bleibt sie still und leer.
+  // Den Schimmer schaltet erst dieses Skript ein (Klasse „laedt“) — ohne Skript läuft nichts endlos.
   Array.prototype.forEach.call(document.querySelectorAll('.card img.bild, .portraets img'), function (img) {
-    var fertig = function () { img.classList.add('fertig'); };
-    var fehler = function () { img.classList.add('fehler'); };
+    var fertig = function () { img.classList.remove('laedt'); img.classList.add('fertig'); };
+    var fehler = function () { img.classList.remove('laedt'); img.classList.add('fehler'); };
     if (img.complete) { if (img.naturalWidth > 0) fertig(); else fehler(); return; }
+    img.classList.add('laedt');
     img.addEventListener('load', fertig);
     img.addEventListener('error', fehler);
   });
