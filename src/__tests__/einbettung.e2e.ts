@@ -29,8 +29,8 @@ function readmeBlock(microsite: string): string {
   const block = /```html\n([\s\S]*?)```/.exec(abschnitt)?.[1];
   if (!block) throw new Error('README: HTML-Block zum Einbetten fehlt');
   return block
-    .split('https://handball.fauteck.eu/?kompakt=1').join(`${microsite}/${TEAM}/?kompakt=1`)
-    .split('https://handball.fauteck.eu').join(microsite);
+    .split('https://app.woelfe-voreifel.de/?kompakt=1').join(`${microsite}/${TEAM}/?kompakt=1`)
+    .split('https://app.woelfe-voreifel.de').join(microsite);
 }
 
 describe('Einbettung in die Vereinsseite im Browser', () => {

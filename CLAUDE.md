@@ -19,8 +19,9 @@ API for the Todoteck cockpit. It was carved out of
 **Heimat-Regel (gilt für jedes Fauteck-Repo, entschieden 2026-10-07).** Wissen lebt im Todoteck-Wiki `llm-wiki`. Im Repo liegt **nur**, was im selben PR wie der Code geändert oder von einem Guard oder Test geprüft wird: README, `CLAUDE.md`, Architektur-, Muster- und Konventions-Doku, API-Vertrag, Schema, Setup, Checklisten, Mechanik der Guards und Jobs. **Konzepte, Entscheidungen, Phasenverläufe, Befund-Berichte und Wissen über fremde Dienste gehören ins Wiki** — nicht in `docs/`, nicht als Notiz ins Projekt Home Lab. **Todoteck-Inhalte außerhalb von `llm-wiki` sind keine Wissensquelle** — Aufgaben, Unteraufgaben und Notizen in anderen Projekten (auch wenn dort Vibecoding-Projekte geplant werden) sind Momentaufnahmen für Menschen. Weder Claude Code noch ein Repo noch das Wiki stützt sich auf sie oder verweist auf sie als Beleg; was dort an Wissen entsteht, wird ins Wiki übernommen. Jede Datei in `docs/` trägt in ihrer ersten Zeile `<!-- heimat: repo — ändert sich mit: <Code-Pfad oder Guard> -->`; ein Konzept, das gerade gebaut wird, trägt stattdessen `<!-- heimat: repo — in Arbeit bis: JJJJ-MM-TT -->` und zieht bis dahin ins Wiki um. Aus Code und Doku wird auf Wiki-Seiten mit `Wiki „Seitentitel“ §n` verwiesen. Prüffrage vor jeder neuen Datei in `docs/`: *Muss sie sich ändern, wenn sich der Code ändert, oder prüft sie ein Guard?* Wenn nein, ist sie eine Wiki-Seite. Der Guard dieses Repos und der Todoteck-Job `wiki_repo_check` prüfen das.
 <!-- /heimat-regel -->
 
-In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; there is no
-`docs/` folder, and concepts and decisions go to the wiki.
+In this repo that leaves code, `README.md`, `CLAUDE.md`, `.env.example` and the operating
+files with their runbook in `deploy/vps/`; there is no `docs/` folder, and concepts and
+decisions go to the wiki.
 
 ## Binding rules
 
@@ -44,8 +45,11 @@ In this repo that leaves code, `README.md`, `CLAUDE.md` and `.env.example`; ther
   and keep old fields until Todoteck no longer reads them.
 - **Images only by manual dispatch** of `.github/workflows/publish.yml`. Never add an
   automatic trigger; new checks go as steps into its `quality` job, not into a second
-  workflow. Production is deployed from `docker-configs`, never by `docker compose up`
-  on a server, never by hand in Komodo (stack `handballteck` on NAS1).
+  workflow. Production runs on the club's own VPS (`app.woelfe-voreifel.de`, decided
+  2026-11-16; it replaces the Komodo stack on NAS1): `deploy/vps/` holds compose file,
+  Caddyfile and runbook, and the server runs exactly those files. Change them here first,
+  then copy them over; never edit them only on the server. Only one instance with data
+  and bot token may run at a time.
 - **Blockierte Updates sperren, nicht nur aufschieben.** Kann ein Renovate-Update nicht
   übernommen werden, weil ein anderes Paket es noch nicht erlaubt (Peer-Bereich, Laufzeit),
   bekommt es in `renovate.json` eine Regel mit `allowedVersions`, deren `description` den

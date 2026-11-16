@@ -54,8 +54,9 @@ cp .env.example .env        # fill in TEAM_IDS, PUBLIC_URL, tokens
 docker compose up --build   # http://localhost:3010/ — local development only
 ```
 
-Production runs the published image `ghcr.io/fauteck/handballteck` (see *Versioning*),
-deployed from `docker-configs` like every other stack.
+Production runs the published image `ghcr.io/fauteck/handballteck` (see *Versioning*) on the
+club's own VPS under `https://app.woelfe-voreifel.de`, behind Caddy, with Docker Compose.
+Files, setup, move from NAS1, updates, backup and rollback: [`deploy/vps/`](deploy/vps/README.md).
 
 Local development without Docker:
 
@@ -73,8 +74,7 @@ re-fetched; they are copied once from the Todoteck database (its tables are call
 The copy also takes the VAPID key pair from Todoteck's `app_settings` — without it every
 browser subscription would silently fail with HTTP 403.
 
-In production the import runs **at startup**, because operations go through the Komodo
-stack `handballteck` (from `docker-configs`), not `docker exec`:
+The import runs **at startup**, not via `docker exec`:
 
 1. Mount a Todoteck backup snapshot (or its database file) read-only into the container.
 2. Set `IMPORT_TODOTECK_DB` to its path inside the container and redeploy.
@@ -174,19 +174,19 @@ See `.env.example` for every variable with its default. Values saved on the sett
 
 Allow the club site in `SITE_FRAME_ANCESTORS`, then paste this block into one HTML element of
 the club site — iframe, fallback link and script belong together on the same page. Replace
-`https://handball.fauteck.eu` (three times) with the address the microsite runs under.
+`https://app.woelfe-voreifel.de` (three times) with the address the microsite runs under.
 `?kompakt=1` drops logo and club name, `&farbe=dunkel` (or `hell`) fixes the colour scheme
 regardless of the visitor's device; both are carried along by every link inside the frame.
 
 ```html
 <!-- Wölfe live: Rahmen, Ausweichlink und Skript gehören zusammen in denselben HTML-Block. -->
-<iframe id="woelfe-live" src="https://handball.fauteck.eu/?kompakt=1&farbe=dunkel"
+<iframe id="woelfe-live" src="https://app.woelfe-voreifel.de/?kompakt=1&farbe=dunkel"
   title="Wölfe live - Handball im Revier" loading="lazy"
   style="display:block;width:100%;height:1400px;border:0"></iframe>
-<p style="text-align:center;font-size:.9em">Die Übersicht lädt nicht? <a href="https://handball.fauteck.eu/" target="_blank" rel="noopener">Wölfe live direkt öffnen</a></p>
+<p style="text-align:center;font-size:.9em">Die Übersicht lädt nicht? <a href="https://app.woelfe-voreifel.de/" target="_blank" rel="noopener">Wölfe live direkt öffnen</a></p>
 <script>
 (function () {
-  var HERKUNFT = 'https://handball.fauteck.eu'; // Adresse der Microsite, ohne Pfad und ohne Schrägstrich am Ende
+  var HERKUNFT = 'https://app.woelfe-voreifel.de'; // Adresse der Microsite, ohne Pfad und ohne Schrägstrich am Ende
   var KOPF = 60; // Höhe einer fest stehenden Kopfleiste der Vereinsseite in Pixeln (ohne: 0)
   var rahmen = document.getElementById('woelfe-live');
   if (!rahmen) return;
