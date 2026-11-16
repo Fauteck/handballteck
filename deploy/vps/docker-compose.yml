@@ -1,0 +1,98 @@
+# Handballteck auf dem eigenen VPS der HSG Wölfe Voreifel (IONOS, Ubuntu 24.04),
+# eigenständig betrieben: kein Komodo, kein Homelab. Auf dem Server liegt diese
+# Datei unter /opt/handballteck neben Caddyfile, backup.sh, .env und data/.
+# Einrichtung, Umzug, Update und Rückweg: README.md daneben.
+#
+# Aufbau: Internet → Caddy (80/443, Let's Encrypt) → handballteck:3000.
+# Die Einstellungsseite (ADMIN_PORT 3001) hängt nur an 127.0.0.1:3411 des
+# Servers und ist nur per SSH-Tunnel erreichbar, nie über Caddy.
+services:
+  handballteck:
+    image: ghcr.io/fauteck/handballteck:latest
+    container_name: handballteck
+    restart: unless-stopped
+    env_file: .env
+    # Was hier steht, gilt vor .env: Diese Werte hängen am Aufbau dieser Datei.
+    environment:
+      TZ: "Europe/Berlin"
+      PORT: "3000"
+      DATA_DIR: /data
+      ADMIN_PORT: "3001"
+      # Nur Caddy (feste Adresse unten) darf X-Forwarded-For setzen. Caddy
+      # selbst glaubt keinem vorgeschalteten Proxy und trägt die echte
+      # Absenderadresse ein.
+      TRUST_PROXY: "10.34.20.10"
+    volumes:
+      # Besitzer muss der Nutzer im Image sein (appuser), siehe README.
+      - ./data:/data
+    ports:
+      # Nur lokal: /settings per SSH-Tunnel (ssh -L 3411:127.0.0.1:3411 …).
+      - "127.0.0.1:3411:3001"
+    networks:
+      default:
+        ipv4_address: 10.34.20.20
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/appuser/.cache
+    mem_limit: 512m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://localhost:3000/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    depends_on:
+      - handballteck
+    environment:
+      # Domain und Kontakt für Let's Encrypt aus .env (SITE_DOMAIN, ACME_EMAIL).
+      SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN muss in .env stehen}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL muss in .env stehen}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      default:
+        ipv4_address: 10.34.20.10
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: 128m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+# Festes Subnetz, damit TRUST_PROXY (Caddys Adresse) über Neustarts stimmt.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.34.20.0/24
