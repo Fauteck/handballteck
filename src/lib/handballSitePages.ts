@@ -6,7 +6,7 @@
 
 import { vervollstaendigePalette } from './handballTableImage';
 import { readPalette, vereinsName, playerGames } from './handballTeam';
-import { h, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad } from './handballSite';
+import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad } from './handballSite';
 import { inhaltsHash, SITE_THEME_JS, SITE_APP_JS } from './handballSiteAssets';
 import { type HandballTeamView, HANDBALL_GROUPS } from './handballSicht';
 import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
@@ -113,12 +113,12 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
   <div class="info">
     <span>${h(DATUM_LANG.format(start))}, ${h(ZEIT.format(start))} Uhr · ${m.is_home ? 'Heimspiel' : 'Auswärts'}</span>
     <span class="muted small">${h(wettbewerb)}${ausgang ? ` · ${ausgang}${m.rated ? ' (gewertet)' : ''}` : ''}${hz ? ` · ${hz}` : ''}</span>
-    ${halle ? `<span>📍 ${h(halle)}</span>` : ''}
+    ${halle ? `<span>${ico('pin')} ${h(halle)}</span>` : ''}
   </div>
   ${bild ? `<img class="bild" style="margin-top:14px" src="${h(bild)}" width="800" height="450" alt="${h(`Endstand ${m.home_name} ${m.score_home}:${m.score_away} ${m.away_name}`)}" loading="lazy">` : ''}
   <div class="row" style="margin-top:14px">
     ${teilenHtml({ url: `${opts.baseUrl}spiel/${encodeURIComponent(m.match_id)}`, titel, text: stand ? `Endstand: ${m.home_name} ${stand} ${m.away_name}` : `${paarung} · ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr`, bild })}
-    ${routen.map(r => `<a class="btn" href="${h(r.href)}" target="_blank" rel="noopener noreferrer">🧭 ${h(r.label)}</a>`).join('')}
+    ${routen.map(r => `<a class="btn" href="${h(r.href)}" target="_blank" rel="noopener noreferrer">${ico('route')} ${h(r.label)}</a>`).join('')}
     ${m.report_url ? `<a class="btn" href="${h(m.report_url)}" target="_blank" rel="noopener noreferrer">Spielberichtsbogen (PDF)</a>` : ''}
     <a class="btn" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">Auf handball.net</a>
   </div>
@@ -178,7 +178,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
     const stand = m.live && m.live.home !== null && m.live.away !== null ? `${m.live.home}:${m.live.away}` : standHeimGast(m) ?? '–:–';
     return `<li>
       <span class="d">${h(ZEIT.format(new Date(m.starts_at)))} Uhr</span>
-      <span class="g"><a class="titel" href="${h(link(t, '#naechstes'))}">${h(t.label)}</a><div class="ha">${m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(m))}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}</div><button type="button" class="stumm" data-stumm="${h(t.team_id)}" aria-pressed="false" hidden>🔔 Tore melden</button></span>
+      <span class="g"><a class="titel" href="${h(link(t, '#naechstes'))}">${h(t.label)}</a><div class="ha">${m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(m))}${m.venue_name ? ` · ${h(m.venue_name)}` : ''}</div><button type="button" class="stumm" data-stumm="${h(t.team_id)}" aria-pressed="false" hidden><span data-an>${ico('bell')} Tore melden</span><span data-aus hidden>${ico('bellOff')} Tore stumm</span></button></span>
       <span class="e" data-key="${h(t.team_id)}" data-label="${h(t.label)}" data-heim="${m.is_home ? '1' : '0'}" data-stand="${/^\d+:\d+$/.test(stand) ? stand : ''}">${stand}</span>
     </li>`;
   }).join('')}</ul>
@@ -220,7 +220,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       <td class="wann" data-label="Datum">${h(DATUM_KURZ.format(start))}<small>${h(ZEIT.format(start))} Uhr</small></td>
       <td class="team" data-label="Mannschaft"><a href="${h(link(t, '#naechstes'))}">${h(t.label)}</a>${t.group ? `<small>${h(GRUPPEN_KURZ[t.group])}</small>` : ''}</td>
       <td class="geg" data-label="Gegner">${h(gegnerVon(m))}${ergebnis}<small>${h(m.competition_name)}</small></td>
-      <td class="ort" data-label="Spielort">${name || adresse ? `<b>📍 ${name ? h(name) : h(adresse)}</b>${name && adresse ? `<small>${h(adresse)}</small>` : ''}${routen.length > 0 ? `<a href="${h(routen[0].href)}" target="_blank" rel="noopener noreferrer">🧭 Route</a>` : ''}` : '<span class="muted">Halle noch nicht bekannt</span>'}</td>
+      <td class="ort" data-label="Spielort">${name || adresse ? `<b>${ico('pin')} ${name ? h(name) : h(adresse)}</b>${name && adresse ? `<small>${h(adresse)}</small>` : ''}${routen.length > 0 ? `<a href="${h(routen[0].href)}" target="_blank" rel="noopener noreferrer">${ico('route')} Route</a>` : ''}` : '<span class="muted">Halle noch nicht bekannt</span>'}</td>
     </tr>`;
     });
     const sortierung = [['datum', 'Datum'], ['ort', 'Spielort'], ['gruppe', 'Herren · Damen · Jugend']] as const;

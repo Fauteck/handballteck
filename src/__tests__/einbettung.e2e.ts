@@ -23,7 +23,8 @@ const KOPF = 60;
 
 /** Der Block aus der README, mit der Adresse der Test-Microsite statt der echten. */
 function readmeBlock(microsite: string): string {
-  const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+  // Unter Windows checkt Git die README mit CRLF aus; der Block wird mit LF gesucht.
+  const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const abschnitt = readme.split('### Embedding in the club website')[1] ?? '';
   const block = /```html\n([\s\S]*?)```/.exec(abschnitt)?.[1];
   if (!block) throw new Error('README: HTML-Block zum Einbetten fehlt');
@@ -93,9 +94,14 @@ describe('Einbettung in die Vereinsseite im Browser', () => {
   });
 
   it('wächst mit dem Inhalt, ohne zweiten Scrollbalken', async () => {
-    const inhalt = await rahmen.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
-    const hoehe = await page.evaluate(() => document.getElementById('woelfe-live')!.getBoundingClientRect().height);
-    expect(Math.abs(hoehe - inhalt)).toBeLessThanOrEqual(2);
+    // Die Seite meldet ihre Höhe mehrmals (vor und nach dem Laden der Schriften); gemessen wird,
+    // wenn der Rahmen der letzten Meldung gefolgt ist, nicht zwischen zwei Meldungen.
+    const abstand = async () => {
+      const inhalt = await rahmen.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height));
+      const hoehe = await page.evaluate(() => document.getElementById('woelfe-live')!.getBoundingClientRect().height);
+      return Math.abs(hoehe - inhalt);
+    };
+    await expect.poll(abstand, { timeout: 5_000 }).toBeLessThanOrEqual(2);
     expect(await rahmen.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 2)).toBe(true);
   });
 

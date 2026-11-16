@@ -9,3 +9,6 @@ coverage/
 
 # Claude Code lokale Einstellungen
 .claude/settings.local.json
+
+# Vorher/Nachher-Bilder aus site.e2e.ts (SHOTS=…)
+shots/

@@ -71,7 +71,7 @@ describe('Kontrast der Microsite', () => {
     const css = siteCss({ ...DEFAULT_PALETTE });
     for (const [k, v] of Object.entries(KONTRAST.hell)) expect(css).toContain(`--${k}:${v}`);
     for (const [k, v] of Object.entries(KONTRAST.dunkel)) expect(css).toContain(`--${k}:${v}`);
-    expect(css).toContain('color-mix(in srgb,var(--a) 16%,#12262c)');
+    expect(css).toContain('color-mix(in srgb,var(--a) 16%,var(--card))');
     // Keine Überschrift und keine Platznummer mehr in der Rohfarbe — die verschwindet im Dunklen.
     expect(css).toMatch(/h2\{[^}]*color:var\(--hd\)/);
     expect(css).toMatch(/td\.pos\{[^}]*color:var\(--hd\)/);
@@ -87,7 +87,8 @@ describe('Tippflächen der Microsite', () => {
     return css.slice(i, css.indexOf('}', i));
   };
 
-  it.each(['.btn', '.filter button', '.opts label', '.sortieren button', 'details.more summary'])('%s ist mindestens 44 px hoch', selektor => {
+  it.each(['.btn', '.filter button', '.opts label', '.sortieren button', 'details.more summary',
+    '.plan .g a.titel', '.plan .stumm', 'table.heim td.team a', '.hero .verein a.heim'])('%s ist mindestens 44 px hoch', selektor => {
     expect(regel(selektor)).toContain('min-height:44px');
   });
 
@@ -96,5 +97,18 @@ describe('Tippflächen der Microsite', () => {
     expect(regel('.vicon')).toMatch(/width:44px;height:44px/);
     expect(regel('.kasten .liste a')).toContain('min-height:44px');
     expect(regel('.kasten summary')).toContain('min-height:84px');
+    expect(regel('.mini .mlogo')).toMatch(/width:44px;height:44px/);
+  });
+
+  it('nimmt Schriftgrößen, Radien und Abstände aus den Tokens', () => {
+    const groessen = [...css.matchAll(/font-size:([^;}]+)/g)].map(m => m[1]);
+    expect(groessen.filter(g => !/^var\(--fs-[a-z0-9]+\)$|^clamp\(/.test(g))).toEqual([]);
+    const radien = [...css.matchAll(/border-radius:([^;}]+)/g)].map(m => m[1]);
+    expect(radien.filter(r => !/^var\(--r-[a-z]+\)$|^50%$/.test(r))).toEqual([]);
+    const abstaende = [...css.matchAll(/(?<![-\w])gap:([^;}]+)/g)].map(m => m[1]);
+    expect(abstaende.filter(g => !/^(var\(--space-\d+\) ?)+$/.test(g))).toEqual([]);
+    // Nur eine Mobil-Schwelle, und keine Sperrung über .04em.
+    expect([...new Set([...css.matchAll(/max-width:(\d+)px\)/g)].map(m => m[1]))]).toEqual(['640']);
+    expect(css).not.toMatch(/letter-spacing:(\.0[5-9]|\.[1-9])em|letter-spacing:-/);
   });
 });
