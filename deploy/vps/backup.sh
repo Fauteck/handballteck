@@ -3,6 +3,8 @@
 # sqlite3 ".backup" liest im laufenden Betrieb einen stimmigen Stand, auch mit
 # WAL — kein Stoppen des Containers nötig. Behalten werden 14 Tage.
 set -eu
+# Die Sicherung enthält Abonnenten und Push-Anmeldungen: nur für root lesbar.
+umask 077
 
 BASIS=/opt/handballteck
 ZIEL="$BASIS/backup"

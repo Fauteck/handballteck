@@ -119,10 +119,20 @@ Dann umziehen:
 
 ## Betrieb
 
-- **Update** nach einem Image-Dispatch in GitHub (`Publish Docker Image`):
+- **Weg einer Änderung:** Feature-Branch per Dispatch (`Publish Docker Image`) als `:dev`
+  bauen; Home Assistant rollt es auf die Testinstanz (NAS1) aus. Dort prüfen, dann mergen
+  und den Dispatch auf `main` starten: Er baut `:latest` und den SHA-Tag. Home Assistant
+  meldet ihn nur, ausgerollt wird hier von Hand.
+- **Update** nach dem Dispatch auf `main`:
   ```bash
   cd /opt/handballteck && docker compose pull && docker compose up -d && docker image prune -f
   ```
+  Danach `/healthz` prüfen: `sha` muss der SHA des Dispatches sein.
+- **Rückweg auf einen älteren Stand:** in `.env` `IMAGE_TAG=<sha>` setzen (die sieben
+  Zeichen aus dem Dispatch oder `ghcr.io/fauteck/handballteck` → Packages), dann
+  `docker compose up -d`. Zurück auf den laufenden Stand: Zeile entfernen, `docker compose
+  pull && docker compose up -d`. Ein Rückweg über ein Datenbank-Schema hinweg geht nur mit
+  der Sicherung von vorher.
 - **Sicherung:** `crontab -e` → `15 3 * * * /opt/handballteck/backup.sh`. Die Dateien
   liegen auf demselben Server. Mindestens eine Kopie gehört woandershin (IONOS-Backup oder
   regelmäßig abholen).
