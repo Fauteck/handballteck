@@ -129,6 +129,13 @@ describe('Microsite im Browser', () => {
         if (breiter > 0) befunde.push(`${name}: ${breiter} px zu breit`);
         for (const z of await zuKleineZiele(page)) befunde.push(`${name}: ${z}`);
       }
+      // Der Monatskalender ist erst nach Aufklappen und Umschalten zu sehen.
+      await page.goto(`${basis}/${TEAM}/`, { waitUntil: 'networkidle' });
+      if (await page.isVisible('#spielplan .klappe')) await page.click('#spielplan .klappe');
+      await page.click('#spielplan [data-ansicht=kalender]');
+      await page.waitForSelector('#spielplan .kal .monat:not([hidden])');
+      if (SHOTS) await page.locator('#spielplan').screenshot({ path: join(process.cwd(), 'shots', SHOTS, `kalender-${breite}.png`) });
+      for (const z of await zuKleineZiele(page)) befunde.push(`kalender: ${z}`);
       await ctx.close();
       expect(fehler).toEqual([]);
       expect(befunde).toEqual([]);

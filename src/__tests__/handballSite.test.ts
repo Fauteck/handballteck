@@ -725,7 +725,7 @@ describe('Handball-Microsite', () => {
     const css = (await get(`/${TEAM}/site.css`)).body;
     expect(css).toContain(':root[data-theme=dark]{--bg:#0c1a1f');
     expect(css).toContain('@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0c1a1f');
-    expect(css).toContain(':root[data-theme=dark] .btn{background:#12262c');
+    expect(css).toContain(':root[data-theme=dark] .btn{background:var(--card);color:var(--text)}');
     expect((await get(`/${TEAM}/app.js`)).body).toContain("themeWahl === 'auto' ? 'light'");
   });
 
@@ -863,7 +863,7 @@ describe('Handball-Microsite', () => {
     expect(html).not.toContain('Zu spät');
     expect(html).not.toContain('Zu früh');
     // Spielort mit Adresse und Route; Sortier-Chips mit den drei Arten, Datum zuerst gewählt.
-    expect(html).toContain('<b>📍 Halle Süd</b><small>Hauptstr. 1, 53332 Bornheim</small>');
+    expect(html).toMatch(/<b><svg class="ico" [^]*?<\/svg> Halle Süd<\/b><small>Hauptstr\. 1, 53332 Bornheim<\/small>/);
     expect(html).toContain('https://www.google.com/maps/search/?api=1&amp;query=Hauptstr.');
     expect(html).toContain('data-sort="datum" aria-pressed="true"');
     expect(html).toContain('data-sort="ort" aria-pressed="false"');
@@ -1013,9 +1013,9 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<div class="kal" data-kalender>');
       // m1: Heimsieg 30:22 vor einer Woche, m2: Auswärtsniederlage 20:25 — klassisch Heim:Gast, also 25:20.
       // Ein Tag mit einem gespielten Spiel ist als ganze Zelle der Link (Tippfläche), der Chip steht darin.
-      expect(html).toMatch(/<a class="tag mit" href="\.\/spiel\/m1"[^>]*aria-label="[^"]*Heimspiel gegen HV Erftstadt, 30:22"><span class="n" aria-hidden="true">\d+<\/span><span class="chip heim w">H 30:22<\/span><\/a>/);
-      expect(html).toMatch(/<a class="tag mit" href="\.\/spiel\/m2"[^>]*><span class="n" aria-hidden="true">\d+<\/span><span class="chip aus l">A 25:20<\/span><\/a>/);
-      expect(html).toMatch(/<span class="chip heim"[^>]*>H \d\d:\d\d<\/span>/);
+      expect(html).toMatch(/<a class="tag mit" href="\.\/spiel\/m1"[^>]*aria-label="[^"]*Heimspiel gegen HV Erftstadt, 30:22"><span class="n" aria-hidden="true">\d+<\/span><span class="chip heim w"><span class="hide-sm">H <\/span>30:22<\/span><\/a>/);
+      expect(html).toMatch(/<a class="tag mit" href="\.\/spiel\/m2"[^>]*><span class="n" aria-hidden="true">\d+<\/span><span class="chip aus l"><span class="hide-sm">A <\/span>25:20<\/span><\/a>/);
+      expect(html).toMatch(/<span class="chip heim"[^>]*><span class="hide-sm">H <\/span>\d\d:\d\d<\/span>/);
       expect(html).toContain('data-monat-weiter');
       const js = (await get(`/${TEAM}/app.js`)).body;
       expect(js).toContain('handball-site-ansicht');

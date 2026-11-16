@@ -491,7 +491,12 @@ export function siteCssText(): { text: string; hash: string } {
 }
 
 /** Inline-Icons für die Kanäle — `currentColor`, damit sie die Farbe der Kachel nehmen. */
-const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share' | 'app', string> = {
+const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share' | 'app' | 'pin' | 'route' | 'vibrate' | 'vibrateOff' | 'bellOff', string> = {
+  pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 4.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>',
+  route: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 3 3 10.6l7.6 2.8L13.4 21z"/></svg>',
+  vibrate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 2v14h6V5zM3 8h2v8H3zm16 0h2v8h-2z"/></svg>',
+  vibrateOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 2v14h6V5zM3.4 2 22 20.6 20.6 22 2 3.4z"/></svg>',
+  bellOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M12 2a6 6 0 0 0-6 6v4.2L4 15v1h16v-1l-2-2.8V8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22zM3.4 2 22 20.6 20.6 22 2 3.4z"/></svg>',
   app: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M7 1h10a2 2 0 0 1 2 2v18a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zm0 3v14h10V4zm5 15.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM11 6h2v5h2.5L12 14.5 8.5 11H11z"/></svg>',
   share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2L8.9 13.7a3 3 0 0 0 0-3.4l6.7-3.5A3 3 0 1 0 15 5a3 3 0 0 0 .1.7L8.4 9.2a3 3 0 1 0 0 5.6l6.7 3.5A3 3 0 1 0 18 16z"/></svg>',
   bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a6 6 0 0 0-6 6v4.2L4 15v1h16v-1l-2-2.8V8a6 6 0 0 0-6-6zm0 20a2.6 2.6 0 0 0 2.5-2h-5A2.6 2.6 0 0 0 12 22z"/></svg>',
@@ -499,6 +504,11 @@ const ICON: Record<'bell' | 'send' | 'calendar' | 'rss' | 'share' | 'app', strin
   calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 2v2H4v18h16V4h-3V2h-2v2H9V2zm-1 8h12v10H6z"/></svg>',
   rss: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4a16 16 0 0 1 16 16h-3A13 13 0 0 0 4 7zm0 6a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7zm2 6a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></svg>',
 };
+
+/** Ein Icon aus `ICON` als Begleiter von Text: so groß wie die Schrift und in Textfarbe (Klasse `ico`). */
+export function ico(name: keyof typeof ICON): string {
+  return ICON[name].replace('<svg ', '<svg class="ico" ');
+}
 
 /**
  * Der Teilen-Knopf. Ohne Skript bleibt er verborgen; das Skript (`app.js`)
@@ -736,7 +746,7 @@ function werfer(e: { player_id?: string | null; number?: number | null }, eigene
 }
 
 /** Die Steuerung der Live-Meldungen: Vibration an oder aus — gilt nur für dieses Gerät, das Skript blendet sie ein. */
-export const VIBRATION_KNOPF = '<button type="button" class="btn ghost" data-vibration aria-pressed="true" hidden>📳 Vibration an</button>';
+export const VIBRATION_KNOPF = `<button type="button" class="btn ghost" data-vibration aria-pressed="true" hidden><span data-an>${ico('vibrate')} Vibration an</span><span data-aus hidden>${ico('vibrateOff')} Vibration aus</span></button>`;
 
 /**
  * Die Live-Ansicht anstelle von „Nächstes Spiel": Spielstand klassisch (Heim
@@ -779,7 +789,7 @@ function liveSpielHtml(team: HandballTeamView, m: HandballMatchView, now: Date):
   </div>
   <div class="info">
     <span>${uhr ? h(uhr) : 'Anwurf war um ' + h(ZEIT.format(start)) + ' Uhr'}${hz ? ` · ${h(hz)}` : ''}</span>
-    <span>${m.is_home ? 'Heimspiel' : 'Auswärts'}${halle ? ` · 📍 ${h(halle)}` : ''}</span>
+    <span>${m.is_home ? 'Heimspiel' : 'Auswärts'}${halle ? ` · ${ico('pin')} ${h(halle)}` : ''}</span>
     <span class="muted small">${h(m.competition_name)}${m.round ? `, ${m.round}. Spieltag` : ''}</span>
   </div>
   ${tore ? `<ol class="livetore" aria-label="Letzte Tore">${tore}</ol>` : ''}
@@ -808,14 +818,14 @@ function naechstesSpielHtml(team: HandballTeamView, now: Date, baseUrl: string):
   <div class="info">
     <b>${m.is_home ? `gegen ${h(gegnerVon(m))}` : `bei ${h(gegnerVon(m))}`}</b>
     <span>${heute ? 'Heute' : h(DATUM_LANG.format(start))}, ${h(ZEIT.format(start))} Uhr · ${m.is_home ? 'Heimspiel' : 'Auswärts'}</span>
-    ${halle ? `<span>📍 ${h(halle)}</span>` : ''}
+    ${halle ? `<span>${ico('pin')} ${h(halle)}</span>` : ''}
     <span class="muted small">${h(m.competition_name)}${m.round ? `, ${m.round}. Spieltag` : ''}</span>
   </div>
   <p class="livehinweis"><span class="punkt" aria-hidden="true"></span><span><b>Live ab Anwurf:</b> Ab ${h(ZEIT.format(start))} Uhr zeigt diese Seite hier den Spielstand und die Tore. Sie aktualisiert sich alle 30 Sekunden, meldet Tore mit Vibration und schaltet sich 20 Minuten vorher selbst um.</span></p>
   ${gegnerSteckbriefHtml(team, m, now)}
   <div class="row" style="margin-top:14px">
     ${teilenHtml({ url: baseUrl, titel: `${m.home_name} gegen ${m.away_name}`, text: `${m.home_name} gegen ${m.away_name} · ${DATUM_LANG.format(start)}, ${ZEIT.format(start)} Uhr${halle ? ` · ${halle}` : ''}`, bild: './bild/spiel.png' }).replace('class="btn teilen"', 'class="btn ghost teilen"')}
-    ${routen.map(r => `<a class="btn ghost" href="${h(r.href)}" target="_blank" rel="noopener noreferrer">🧭 ${h(r.label)}</a>`).join('')}
+    ${routen.map(r => `<a class="btn ghost" href="${h(r.href)}" target="_blank" rel="noopener noreferrer">${ico('route')} ${h(r.label)}</a>`).join('')}
     <a class="btn ghost" href="${h(m.url)}" target="_blank" rel="noopener noreferrer">Spielseite auf handball.net</a>
   </div>
 </section>`;
@@ -984,12 +994,13 @@ function kalenderHtml(team: HandballTeamView, now: Date): string {
       // auf dem Telefon kaum 17 px hoch. Mehrere Spiele an einem Tag behalten je einen Chip-Link.
       const zelleIstLink = spiele.length === 1 && mitStand(spiele[0]!);
       const chips = spiele.map(m => {
-        const inhalt = `${m.is_home ? 'H' : 'A'} ${mitStand(m) ? `${standHeimGast(m)}` : ZEIT.format(new Date(m.starts_at))}`;
+        // H/A fällt auf dem Telefon weg (die Zelle ist zu schmal); Auswärts zeigt dort der gestrichelte Rand.
+        const inhalt = `<span class="hide-sm">${m.is_home ? 'H' : 'A'} </span>${h(mitStand(m) ? `${standHeimGast(m)}` : ZEIT.format(new Date(m.starts_at)))}`;
         const klasse = `chip ${m.is_home ? 'heim' : 'aus'} ${mitStand(m) ? (m.won === true ? 'w' : m.won === false ? 'l' : '') : ''}`.trim();
-        if (zelleIstLink) return `<span class="${klasse}">${h(inhalt)}</span>`;
+        if (zelleIstLink) return `<span class="${klasse}">${inhalt}</span>`;
         return mitStand(m)
-          ? `<a class="${klasse}" href="${h(spielLink(m))}" title="${h(label(m))}" aria-label="${h(label(m))}">${h(inhalt)}</a>`
-          : `<span class="${klasse}" title="${h(label(m))}" aria-label="${h(label(m))}" role="img">${h(inhalt)}</span>`;
+          ? `<a class="${klasse}" href="${h(spielLink(m))}" title="${h(label(m))}" aria-label="${h(label(m))}">${inhalt}</a>`
+          : `<span class="${klasse}" title="${h(label(m))}" aria-label="${h(label(m))}" role="img">${inhalt}</span>`;
       }).join('');
       const klasseTag = `tag${iso === heute ? ' heute' : ''}${spiele.length > 0 ? ' mit' : ''}`;
       zellen.push(zelleIstLink
