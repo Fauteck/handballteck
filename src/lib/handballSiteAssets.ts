@@ -190,7 +190,7 @@ dialog.popup legend{font-family:'Barlow Condensed',sans-serif;font-weight:600;te
 svg.ico{width:1.15em;height:1.15em;fill:currentColor;flex:none;vertical-align:-.2em}
 .teilen{gap:var(--space-2)}.teilen svg{width:18px;height:18px;fill:currentColor}
 .teilen.klein{min-height:44px;padding:6px 12px;font-size:var(--fs-sm);margin-left:auto;text-transform:none;font-family:'Barlow',sans-serif}
-.card:not(.dark) .btn.teilen{color:var(--p)}
+.card:not(.dark) .btn.teilen{color:var(--hd)}
 dialog.popup .teilziele{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--space-2);margin:12px 0}
 dialog.popup .teilziele .btn{justify-content:center}
 dialog.popup .schliessen{margin:14px 0 0}

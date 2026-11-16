@@ -1059,8 +1059,8 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<div class="kal" data-kalender>');
       // m1: Heimsieg 30:22 vor einer Woche, m2: Auswärtsniederlage 20:25 — klassisch Heim:Gast, also 25:20.
       // Ein Tag mit einem gespielten Spiel ist als ganze Zelle der Link (Tippfläche), der Chip steht darin.
-      expect(html).toMatch(/<a class="tag mit" href="\.\/spiel\/m1"[^>]*aria-label="[^"]*Heimspiel gegen HV Erftstadt, 30:22"><span class="n" aria-hidden="true">\d+<\/span><span class="chip heim w"><span class="hide-sm">H <\/span>30:22<\/span><\/a>/);
-      expect(html).toMatch(/<a class="tag mit" href="\.\/spiel\/m2"[^>]*><span class="n" aria-hidden="true">\d+<\/span><span class="chip aus l"><span class="hide-sm">A <\/span>25:20<\/span><\/a>/);
+      expect(html).toMatch(/<a class="tag(?: heute)? mit" href="\.\/spiel\/m1"[^>]*aria-label="[^"]*Heimspiel gegen HV Erftstadt, 30:22"><span class="n" aria-hidden="true">\d+<\/span><span class="chip heim w"><span class="hide-sm">H <\/span>30:22<\/span><\/a>/);
+      expect(html).toMatch(/<a class="tag(?: heute)? mit" href="\.\/spiel\/m2"[^>]*><span class="n" aria-hidden="true">\d+<\/span><span class="chip aus l"><span class="hide-sm">A <\/span>25:20<\/span><\/a>/);
       expect(html).toMatch(/<span class="chip heim"[^>]*><span class="hide-sm">H <\/span>\d\d:\d\d<\/span>/);
       expect(html).toContain('data-monat-weiter');
       const js = (await get(`/${TEAM}/app.js`)).body;

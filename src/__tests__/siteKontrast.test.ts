@@ -75,6 +75,8 @@ describe('Kontrast der Microsite', () => {
     // Keine Überschrift und keine Platznummer mehr in der Rohfarbe — die verschwindet im Dunklen.
     expect(css).toMatch(/h2\{[^}]*color:var\(--hd\)/);
     expect(css).toMatch(/td\.pos\{[^}]*color:var\(--hd\)/);
+    // Der Teilen-Knopf auf heller Karte schlägt die Dunkel-Regel für .btn — also keine Rohfarbe.
+    expect(css).toContain('.card:not(.dark) .btn.teilen{color:var(--hd)}');
     expect(css).toMatch(/\ba\{color:var\(--lk\)\}/);
   });
 });
