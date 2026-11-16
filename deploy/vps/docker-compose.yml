@@ -20,6 +20,9 @@ services:
       PORT: "3000"
       DATA_DIR: /data
       ADMIN_PORT: "3001"
+      # Die Adresse von außen folgt aus der Domain von Caddy; nichts doppelt pflegen.
+      PUBLIC_URL: "https://${SITE_DOMAIN:?SITE_DOMAIN muss in .env stehen}"
+      VAPID_SUBJECT: "https://${SITE_DOMAIN}"
       # Nur Caddy (feste Adresse unten) darf X-Forwarded-For setzen. Caddy
       # selbst glaubt keinem vorgeschalteten Proxy und trägt die echte
       # Absenderadresse ein.

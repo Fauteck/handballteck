@@ -59,12 +59,12 @@ describe('Sicherheit', () => {
 
   it('lässt mit SITE_FRAME_ANCESTORS nur die Vereinsseite einbetten — und nur die Microsite', async () => {
     const { buildServer } = await import('../server');
+    const ohne = String((await fastify.inject({ method: 'GET', url: '/96254/' })).headers['content-security-policy']);
     process.env.SITE_FRAME_ANCESTORS = 'https://woelfe-voreifel.de, https://www.woelfe-voreifel.de/seite, http://fremd.example';
     process.env.ADMIN_PASSWORD = 'ein-langes-passwort-fuer-den-test';
     const offen = await buildServer({ logger: false });
     const admin = await buildServer({ logger: false, adminOnly: true });
     try {
-      const ohne = String((await fastify.inject({ method: 'GET', url: '/96254/' })).headers['content-security-policy']);
       for (const url of ['/96254/', '/?kompakt=1', '/healthz']) {
         const res = await offen.inject({ method: 'GET', url });
         const csp = String(res.headers['content-security-policy']);
@@ -74,7 +74,7 @@ describe('Sicherheit', () => {
         // Der Rest der CSP bleibt, wie er ohne Liste ist.
         expect(csp.replace(/frame-ancestors [^;]*/, "frame-ancestors 'none'"), url).toBe(ohne);
       }
-      for (const url of ['/settings', '/settings/login', '/api/health', '/telegram/webhook/x']) {
+      for (const url of ['/settings', '/settings/login', '/telegram/webhook/x']) {
         const res = await offen.inject({ method: 'GET', url });
         expect(String(res.headers['content-security-policy']), url).toContain("frame-ancestors 'none'");
         expect(res.headers['x-frame-options'], url).toBe('DENY');
@@ -90,7 +90,21 @@ describe('Sicherheit', () => {
     }
   });
 
-  it('öffnet mit SITE_FRAME_ANCESTORS=* die Microsite für jede Seite — Einstellungen, API und Webhook nicht', async () => {
+  it('liest SITE_FRAME_ANCESTORS je Anfrage — eine Änderung auf der Einstellungsseite gilt ohne Neustart', async () => {
+    const vorher = await fastify.inject({ method: 'GET', url: '/96254/' });
+    expect(String(vorher.headers['content-security-policy'])).toContain("frame-ancestors 'none'");
+    expect(vorher.headers['x-frame-options']).toBe('SAMEORIGIN');
+    process.env.SITE_FRAME_ANCESTORS = 'https://woelfe-voreifel.de';
+    try {
+      const nachher = await fastify.inject({ method: 'GET', url: '/96254/' });
+      expect(String(nachher.headers['content-security-policy'])).toContain("frame-ancestors 'self' https://woelfe-voreifel.de;");
+      expect(nachher.headers['x-frame-options']).toBeUndefined();
+    } finally {
+      delete process.env.SITE_FRAME_ANCESTORS;
+    }
+  });
+
+  it('öffnet mit SITE_FRAME_ANCESTORS=* die Microsite für jede Seite — Einstellungen und Webhook nicht', async () => {
     const { buildServer } = await import('../server');
     process.env.SITE_FRAME_ANCESTORS = '*';
     const offen = await buildServer({ logger: false });
@@ -98,7 +112,7 @@ describe('Sicherheit', () => {
       const res = await offen.inject({ method: 'GET', url: '/?kompakt=1' });
       expect(String(res.headers['content-security-policy'])).toContain('frame-ancestors *;');
       expect(res.headers['x-frame-options']).toBeUndefined();
-      for (const url of ['/settings', '/api/health', '/telegram/webhook/x']) {
+      for (const url of ['/settings', '/telegram/webhook/x']) {
         const zu = await offen.inject({ method: 'GET', url });
         expect(String(zu.headers['content-security-policy']), url).toContain("frame-ancestors 'none'");
         expect(zu.headers['x-frame-options'], url).toBe('DENY');
@@ -126,8 +140,7 @@ describe('Sicherheit', () => {
         if (limit === false) {
           if (!OHNE_LIMIT.has(schluessel)) ohne.push(`${schluessel} (rateLimit: false ohne Eintrag)`);
         } else if (limit === undefined) {
-          // /api/* hängt am Token (401 ohne), das globale Limit gilt zusätzlich.
-          if (!r.url.startsWith('/api/') && !(schluessel in GLOBAL_GENUEGT)) ohne.push(schluessel);
+          if (!(schluessel in GLOBAL_GENUEGT)) ohne.push(schluessel);
         } else {
           const max = (limit as { max?: number }).max;
           if (typeof max !== 'number' || max > 600) ohne.push(`${schluessel} (max ${String(max)})`);

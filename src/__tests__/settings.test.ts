@@ -47,6 +47,28 @@ describe('Register', () => {
     expect(p('TEAM_GROUPS', '96254=Jungen; 75796=herren')).toEqual({ ok: true, wert: '96254=jungen,75796=herren' });
     expect(p('TEAM_GROUPS', '96254=senioren').ok).toBe(false);
     expect(p('TEAM_GROUPS', '')).toEqual({ ok: true, wert: '' });
+    // Vereinsseiten: der eingefügte Link wird zu id:fed_id; ohne fed_id liefert handball.net keine Mannschaften.
+    expect(p('HANDBALL_CLUBS', 'https://www.handball.net/club/01ufb4b?fed_id=142\nabc12:7, 01ufb4b:142')).toEqual({ ok: true, wert: '01ufb4b:142,abc12:7' });
+    expect(p('HANDBALL_CLUBS', 'https://www.handball.net/club/01ufb4b').ok).toBe(false);
+    expect(p('TELEGRAM_BOT_TOKEN', '123456789:' + 'A'.repeat(35)).ok).toBe(true);
+    expect(p('TELEGRAM_BOT_TOKEN', 'kein-token').ok).toBe(false);
+    expect(p('SITE_FRAME_ANCESTORS', 'https://woelfe-voreifel.de/seite, https://www.woelfe-voreifel.de')).toEqual({ ok: true, wert: 'https://woelfe-voreifel.de,https://www.woelfe-voreifel.de' });
+    expect(p('SITE_FRAME_ANCESTORS', 'http://fremd.example').ok).toBe(false);
+    expect(p('SITE_FRAME_ANCESTORS', '*')).toEqual({ ok: true, wert: '*' });
+    expect(p('LOG_LEVEL', 'DEBUG')).toEqual({ ok: true, wert: 'debug' });
+    expect(p('LOG_LEVEL', 'laut').ok).toBe(false);
+  });
+
+  it('gibt jeder Einstellung einen Hinweis, wo man sie sieht', async () => {
+    const { EINSTELLUNGEN } = await import('../lib/settingsRegistry');
+    const ohne = EINSTELLUNGEN.filter(e => !e.versteckt && !e.sichtbar).map(e => e.key);
+    expect(ohne).toEqual([]);
+  });
+
+  it('zeigt auf der Seite denselben Block zum Einbetten wie die README', async () => {
+    const { einbettungsBlock } = await import('../lib/einbettung');
+    const readme = readFileSync('README.md', 'utf8').replace(/\r\n/g, '\n');
+    expect(readme).toContain(einbettungsBlock('https://app.woelfe-voreifel.de', { farbe: 'dunkel' }));
   });
 
   it('steht vollständig in .env.example und README', async () => {
@@ -180,7 +202,9 @@ describe('Einstellungsseite', () => {
     expect(feld.wert).toBe('');
     const exp = await fastify.inject({ method: 'GET', url: '/settings/api/export', headers: { cookie } });
     expect(exp.body).not.toContain(token);
-    expect(state.json().geheimnisse.map((g: { key: string }) => g.key)).toContain('TELEGRAM_BOT_TOKEN');
+    // Nur noch das VAPID-Paar ist reine Umgebung; der Bot-Token ist ein geheimes Feld der Seite.
+    expect(state.json().geheimnisse.map((g: { key: string }) => g.key)).toEqual(['VAPID_PRIVATE_KEY']);
+    expect(state.json().felder.find((f: { key: string }) => f.key === 'TELEGRAM_BOT_TOKEN')).toMatchObject({ art: 'geheim', wert: '', erzeugbar: false });
     // Für die Mannschaftszeilen: die Bereiche der Seite und je Mannschaft der automatisch gelesene.
     expect(state.json().bereiche.map((b: { id: string }) => b.id)).toEqual(['herren', 'frauen', 'jungen', 'maedchen', 'kinder']);
     expect(Object.keys(state.json().bereichAutomatisch)).toContain('96254');
@@ -255,8 +279,10 @@ describe('Einstellungsseite', () => {
     const takt = state.felder.find((f: { key: string }) => f.key === 'SYNC_INTERVAL_MS');
     expect([takt.min, takt.max, takt.nullErlaubt]).toEqual([300_000, 86_400_000, false]);
     expect(state.felder.find((f: { key: string }) => f.key === 'SYNC_LIVE_INTERVAL_MS').nullErlaubt).toBe(true);
-    const bot = state.geheimnisse.find((g: { key: string }) => g.key === 'TELEGRAM_BOT_TOKEN');
-    expect(bot).toMatchObject({ gesetzt: false, herkunft: null });
+    const bot = state.felder.find((f: { key: string }) => f.key === 'TELEGRAM_BOT_TOKEN');
+    expect(bot).toMatchObject({ gesetzt: false, quelle: 'standard' });
+    expect(state.checkliste.find((p: { key: string }) => p.key === 'bot')).toMatchObject({ ok: false, tab: 'telegram' });
+    expect(state.siteBasis).toBe('https://handball.test.local');
     // Früher stand hier immer „gesetzt“ — jetzt nur mit Schlüssel und mit seiner Herkunft.
     const vapid = state.geheimnisse.find((g: { key: string }) => g.key === 'VAPID_PRIVATE_KEY');
     expect(typeof vapid.gesetzt).toBe('boolean');
@@ -315,6 +341,57 @@ describe('Einstellungsseite', () => {
     const sw = await fastify.inject({ method: 'GET', url: '/settings/sw.js' });
     expect(sw.statusCode).toBe(200);
     expect(sw.body).toContain('showNotification');
+  });
+
+  it('nimmt den Bot-Token auf der Seite an, gibt ihn nie zurück und maskiert ihn im Protokoll', async () => {
+    const { cookie, csrf } = await anmelden();
+    const token = '123456789:' + 'B'.repeat(35);
+    const falsch = await fastify.inject({ method: 'PUT', url: '/settings/api/values', headers: { cookie, 'x-csrf-token': csrf }, payload: { aenderungen: [{ key: 'TELEGRAM_BOT_TOKEN', wert: 'falsch' }] } });
+    expect(falsch.statusCode).toBe(422);
+    const pruef = await fastify.inject({ method: 'POST', url: '/settings/api/test/token', headers: { cookie, 'x-csrf-token': csrf }, payload: { token: 'falsch' } });
+    expect(pruef.statusCode).toBe(422);
+    try {
+      expect((await fastify.inject({ method: 'PUT', url: '/settings/api/values', headers: { cookie, 'x-csrf-token': csrf }, payload: { aenderungen: [{ key: 'TELEGRAM_BOT_TOKEN', wert: token }] } })).statusCode).toBe(200);
+      expect(konfig.botToken()).toBe(token);
+      const state = await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } });
+      expect(state.body).not.toContain(token);
+      expect(store.protokoll(5).find(z => z.key === 'TELEGRAM_BOT_TOKEN')?.new_value).toBe('●●●');
+      expect((await fastify.inject({ method: 'GET', url: '/settings/api/export', headers: { cookie } })).body).not.toContain(token);
+    } finally {
+      store.speichere([{ key: 'TELEGRAM_BOT_TOKEN', wert: null }], 'test');
+    }
+    expect(konfig.botToken()).toBeNull();
+  });
+
+  it('übernimmt Werte aus der Umgebung auf die Seite', async () => {
+    const { cookie, csrf } = await anmelden();
+    process.env.SITE_OPERATOR = 'Förderverein';
+    let uebernommen: string[] = [];
+    try {
+      expect(store.nurAusDerUmgebung()).toContain('SITE_OPERATOR');
+      expect((await fastify.inject({ method: 'GET', url: '/settings/api/state', headers: { cookie } })).json().umgebung.map((u: { key: string }) => u.key)).toContain('SITE_OPERATOR');
+      const r = await fastify.inject({ method: 'POST', url: '/settings/api/uebernehmen', headers: { cookie, 'x-csrf-token': csrf }, payload: {} });
+      expect(r.statusCode).toBe(200);
+      uebernommen = r.json().geaendert;
+      expect(uebernommen).toContain('SITE_OPERATOR');
+      expect(store.quelleVon('SITE_OPERATOR')).toBe('seite');
+      delete process.env.SITE_OPERATOR;
+      expect(konfig.siteOperator()).toBe('Förderverein');
+      expect(store.nurAusDerUmgebung()).toEqual([]);
+    } finally {
+      delete process.env.SITE_OPERATOR;
+      store.speichere(uebernommen.map(key => ({ key, wert: null })), 'test');
+    }
+  });
+
+  it('liefert den Block zum Einbetten mit der eigenen Adresse und die Vereinsliste erst mit Vereinsseite', async () => {
+    const { cookie } = await anmelden();
+    const e = await fastify.inject({ method: 'GET', url: '/settings/api/einbettung?farbe=hell', headers: { cookie } });
+    expect(e.statusCode).toBe(200);
+    expect(e.json().block).toContain('src="https://handball.test.local/?kompakt=1&farbe=hell"');
+    expect(e.json().erlaubt).toEqual([]);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/vereine' })).statusCode).toBe(401);
+    expect((await fastify.inject({ method: 'GET', url: '/settings/api/vereine', headers: { cookie } })).statusCode).toBe(409);
   });
 
   it('gibt es ohne ADMIN_PASSWORD nicht', async () => {

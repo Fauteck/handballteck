@@ -347,18 +347,39 @@ export function siteFeedbackMail(): string | null {
   return env('SITE_FEEDBACK_MAIL') ?? null;
 }
 
-// --- API für Todoteck -------------------------------------------------------
+// --- Vereine bei handball.net ---------------------------------------------
 
-export function apiToken(): string | null {
-  return env('API_TOKEN') ?? null;
-}
+export interface HandballClubRef { id: string; fedId: string }
 
 /**
- * Pfad zu einer Todoteck-Datenbank (Kopie oder Backup), aus der beim Start
- * einmalig übernommen wird — siehe `src/import/todoteck.ts`. Leer: kein Import.
+ * Die Vereinsseiten auf handball.net (`HANDBALL_CLUBS`), aus denen der
+ * Saisonwechsel-Assistent der Einstellungsseite die Mannschaften liest:
+ * `01ufb4b:142` — Vereins-ID und Kreis (`fed_id`). Bei einer
+ * Spielvereinigung stehen hier auch die Stammvereine, unter deren Namen
+ * Mannschaften noch antreten. Ohne `fed_id` liefert handball.net die Seite
+ * ohne Mannschaften aus, deshalb gehört er dazu.
  */
-export function importTodoteckDb(): string | null {
-  return env('IMPORT_TODOTECK_DB') ?? null;
+export function parseHandballClubs(roh: string | undefined): HandballClubRef[] {
+  const out: HandballClubRef[] = [];
+  for (const teil of (roh ?? '').split(/[\s,;]+/)) {
+    const m = /^([a-z0-9]{3,20}):(\d{1,6})$/i.exec(teil.trim());
+    if (m && !out.some(c => c.id === m[1])) out.push({ id: m[1], fedId: m[2] });
+  }
+  return out;
+}
+
+export function handballClubs(): HandballClubRef[] {
+  return parseHandballClubs(env('HANDBALL_CLUBS'));
+}
+
+// --- Betrieb ------------------------------------------------------------------
+
+export const LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+
+/** Wie gesprächig das Log ist — Standard `info`; auf der Einstellungsseite ohne Neustart umschaltbar. */
+export function logLevel(): string {
+  const v = env('LOG_LEVEL')?.toLowerCase();
+  return v && (LOG_LEVELS as readonly string[]).includes(v) ? v : 'info';
 }
 
 // --- Einstellungsseite ----------------------------------------------------------

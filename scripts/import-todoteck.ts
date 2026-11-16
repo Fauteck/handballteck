@@ -2,9 +2,8 @@
  * Lokaler Aufruf der Übernahme aus Todoteck, für die Entwicklung:
  * `npm run import:todoteck -- /pfad/zur/familytodo.db`
  *
- * Im Betrieb läuft dieselbe Übernahme beim Start, gesteuert über
- * `IMPORT_TODOTECK_DB` (src/import/todoteck.ts). Hier ohne den Merker, damit
- * man lokal beliebig oft gegen eine frische Datenbank probieren kann.
+ * Der Aufruf beim Start ist entfernt (src/import/todoteck.ts). Hier ohne den
+ * Merker, damit man beliebig oft gegen eine frische Datenbank probieren kann.
  */
 function main(): void {
   const quelle = process.argv[2];

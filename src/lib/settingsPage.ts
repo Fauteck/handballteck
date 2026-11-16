@@ -85,6 +85,19 @@ dialog li{margin:4px 0;word-break:break-word}
 .meldung button{margin-left:10px;min-height:32px;padding:4px 10px}
 .qr{width:180px;height:180px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px;display:block;margin:8px 0}
 code{word-break:break-all}
+.check{list-style:none;padding:0;margin:0}
+.check li{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line)}
+.check li:first-child{border-top:0}
+.check .zeichen{flex:0 0 1.4em;font-weight:700}
+.check .text{flex:1 1 auto}
+.check button{min-height:32px;padding:4px 10px}
+.schritte{margin:6px 0 0;padding-left:20px}
+.schritte li{margin:4px 0}
+.vliste td button{min-height:32px;padding:4px 10px;margin:2px 4px 2px 0}
+.vliste a,.check a{color:var(--accent)}
+.vliste .fremd{font-size:.8rem;color:var(--warn)}
+textarea.block{font:12px/1.4 ui-monospace,monospace;min-height:220px}
+.sichtbar{color:var(--muted);font-size:.8rem}
 </style>
 </head>
 <body>
@@ -119,6 +132,12 @@ export const SETTINGS_JS = String.raw`(function () {
   var farbenAktualisieren = null;
   var refs = {};
   var MANNSCHAFT_KEYS = ['TEAM_IDS', 'CLUBDESK_TEAMS', 'TEAM_GROUPS', 'SITE_PHOTOS'];
+  // Der Mannschafts-Editor meldet hier, wie er nach einer Änderung von außen (Assistent) neu zeichnet.
+  var editorAktualisieren = null;
+  // Saisonwechsel-Assistent: zuletzt geholte Saisonprüfung und Vereinsliste — überleben das Neuzeichnen.
+  var saisonStand = null;
+  var vereinsStand = null;
+  var saisonGeholt = false;
 
   function el(tag, attrs) {
     var e = document.createElement(tag);
@@ -354,6 +373,21 @@ export const SETTINGS_JS = String.raw`(function () {
   function bereicheText(liste) {
     return liste.filter(function (m) { return m.id && m.bereich; }).map(function (m) { return m.id + '=' + m.bereich; }).join(',');
   }
+  /** Ein eingefügter Link der Mannschaftsseite (…/team/96254?season_id=…) wird zur Team-ID. */
+  function teamIdAusEingabe(t) {
+    var m = /\/team\/(\d{1,12})/.exec(t);
+    return m ? m[1] : t.replace(/\s+/g, '');
+  }
+  /** Ein eingefügter Link der ClubDesk-Teamseite wird zu ihrem letzten Pfadteil (woelfe_1). */
+  function slugAusEingabe(t) {
+    var m = /\/teams-und-tabellen\/([a-z0-9_-]{1,40})/i.exec(t) || /^https?:\/\/[^/]+\/(?:[^?#]*\/)?([a-z0-9_-]{1,40})\/?(?:[?#].*)?$/i.exec(t);
+    return m ? m[1] : t.trim();
+  }
+  function istJugend(m) {
+    var b = m.bereich || (state.bereichAutomatisch || {})[m.id] || '';
+    return b === 'jungen' || b === 'maedchen' || b === 'kinder';
+  }
+
   function leereMannschaft() { return { id: '', name: '', bereich: '', slug: '', gruppe: false, spieler: false }; }
 
   /** Die Zeilen aus vier Einstellungen — mit offenen Änderungen (z. B. aus dem Protokoll wiederhergestellt). */
@@ -479,9 +513,18 @@ export const SETTINGS_JS = String.raw`(function () {
         idFeld.value = m.id; nameFeld.value = m.name; slugFeld.value = m.slug; gruppeFeld.checked = m.gruppe; spielerFeld.checked = m.spieler;
         teamInfoZeigen(m, info);
         bereichWahl.addEventListener('change', function () { m.bereich = bereichWahl.value; sortieren(); neuZeichnen(); aenderung(); });
-        idFeld.addEventListener('input', function () { m.id = idFeld.value.trim(); aenderung(); teamInfoHolen(m, info); });
+        idFeld.addEventListener('input', function () {
+          var roh = idFeld.value.trim();
+          var id = /\D/.test(roh) ? teamIdAusEingabe(roh) : roh;
+          if (id !== roh && /^\d+$/.test(id)) { idFeld.value = id; zeigeMeldung('Team-ID ' + id + ' aus dem Link übernommen.', false); }
+          m.id = idFeld.value.trim(); aenderung(); teamInfoHolen(m, info);
+        });
         nameFeld.addEventListener('input', function () { m.name = nameFeld.value.trim(); aenderung(); });
-        slugFeld.addEventListener('input', function () { m.slug = slugFeld.value.trim(); aenderung(); });
+        slugFeld.addEventListener('input', function () {
+          var roh = slugFeld.value.trim();
+          if (/^https?:/i.test(roh)) { var slug = slugAusEingabe(roh); if (slug !== roh) slugFeld.value = slug; }
+          m.slug = slugFeld.value.trim(); aenderung();
+        });
         gruppeFeld.addEventListener('change', function () { m.gruppe = gruppeFeld.checked; aenderung(); });
         spielerFeld.addEventListener('change', function () {
           if (spielerFeld.checked && !window.confirm('Porträts mit Namen werden öffentlich gezeigt — bei Jugendmannschaften Fotos von Kindern. Nur, wenn die Bildrechte mit Verein und Eltern geklärt sind. Wirklich einschalten?')) { spielerFeld.checked = false; return; }
@@ -554,6 +597,7 @@ export const SETTINGS_JS = String.raw`(function () {
       geaendertMelden();
       nachMannschaften.forEach(function (fn) { fn(); });
     }
+    editorAktualisieren = function () { sortieren(); neuZeichnen(); aenderung(); };
     neuZeichnen();
     ziel.value = mannschaftenText(entwurf);
     // Offene Änderungen der versteckten Felder an den Entwurf angleichen (z. B. nach einem Wiederherstellen).
@@ -583,6 +627,12 @@ export const SETTINGS_JS = String.raw`(function () {
     } else if (f.zeilen === 'mannschaften') {
       start = mannschaftenText(mannschaftenLesen(f.wert));
       eingabe = el('input', { id: id, type: 'hidden' });
+      lesen = function () { return eingabe.value; };
+    } else if (f.optionen) {
+      start = f.wert || f.standard;
+      eingabe = el('select', { id: id });
+      f.optionen.forEach(function (o) { eingabe.appendChild(el('option', { value: o, text: o + (o === f.standard ? ' (Standard)' : '') })); });
+      eingabe.value = zurueck ? (f.umgebungWert || f.standard) : g ? g.wert : start;
       lesen = function () { return eingabe.value; };
     } else if (f.lang) {
       start = anzeigeWert(f, f.wert);
@@ -651,8 +701,19 @@ export const SETTINGS_JS = String.raw`(function () {
       eingabe.addEventListener('input', vorschau);
       zeile.appendChild(pick);
     }
+    if (f.key === 'TELEGRAM_BOT_TOKEN' && !zurueck) {
+      zeile.appendChild(el('button', { type: 'button', text: 'Token prüfen', onclick: function (ev) {
+        var knopf = ev.currentTarget;
+        knopf.disabled = true;
+        api('POST', '/settings/api/test/token', { token: eingabe.value.trim() }).then(function (r) {
+          knopf.disabled = false;
+          if (r.status === 200) zeigeMeldung('Der Token gehört zum Bot ' + (r.body.username ? '@' + r.body.username : r.body.name || '(ohne Namen)') + (eingabe.value.trim() ? ' — jetzt speichern, dann meldet er sich an.' : ' (gespeicherter Token).'), false);
+          else zeigeMeldung(r.body.message || 'Token-Prüfung gescheitert.', true);
+        });
+      } }));
+    }
     if (f.art === 'geheim' && !zurueck) {
-      zeile.appendChild(el('button', { type: 'button', text: 'Erzeugen', onclick: function () {
+      if (f.erzeugbar) zeile.appendChild(el('button', { type: 'button', text: 'Erzeugen', onclick: function () {
         var b = new Uint8Array(24); crypto.getRandomValues(b);
         eingabe.value = Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
         eingabe.type = 'text';
@@ -704,7 +765,7 @@ export const SETTINGS_JS = String.raw`(function () {
     if (teile[1]) hinweis.appendChild(el('details', { class: 'mehr' }, el('summary', { text: 'Mehr' }), el('p', { class: 'hint', text: teile[1] })));
     var wirk = { 'sofort': 'Wirkt sofort', 'abruf': 'Wirkt beim nächsten Abruf (wird beim Speichern angestoßen)', 'naechster-takt': 'Wirkt ab dem nächsten Takt' }[f.wirkung];
     var standard = f.art === 'schalter' ? schalterText(f.standard) : f.standard ? anzeigeWert(f, f.standard) + (f.einheit ? ' ' + f.einheit : '') : '';
-    hinweis.appendChild(el('p', { class: 'hint', text: (standard ? 'Standard: ' + standard + ' · ' : '') + wirk + '.' }));
+    hinweis.appendChild(el('p', { class: 'hint', text: (standard ? 'Standard: ' + standard + ' · ' : '') + wirk + '.' + (f.sichtbar ? ' Zu sehen: ' + f.sichtbar + '.' : '') }));
     box.appendChild(hinweis);
     if (doppelt) { box.appendChild(doppelt); doppeltPruefen(); }
 
@@ -834,6 +895,165 @@ export const SETTINGS_JS = String.raw`(function () {
         else fertig(r.body.message || 'Test-Push gescheitert.', true);
       });
     }).catch(function (err) { fertig('Test-Push gescheitert: ' + (err && err.message ? err.message : err), true); });
+  }
+
+  function einbettenZusatz() {
+    var farbe = el('select', { 'aria-label': 'Farbschema der eingebetteten Seite' },
+      el('option', { value: '', text: 'wie das Gerät des Besuchers' }), el('option', { value: 'dunkel', text: 'immer dunkel' }), el('option', { value: 'hell', text: 'immer hell' }));
+    var block = el('textarea', { class: 'block', readonly: 'readonly', spellcheck: 'false', 'aria-label': 'Block zum Einfügen in die Vereinsseite' });
+    var warnung = el('p', { class: 'hint warn' });
+    function holen() {
+      api('GET', '/settings/api/einbettung' + (farbe.value ? '?farbe=' + farbe.value : '')).then(function (r) {
+        if (r.status !== 200) return;
+        block.value = r.body.block;
+        warnung.textContent = r.body.erlaubt.length ? '' : 'Noch keine Vereinsseite unter „Einbetten erlauben“ gespeichert — bis dahin zeigt der Rahmen nichts.';
+      });
+    }
+    farbe.addEventListener('change', holen);
+    holen();
+    var kopieren = el('button', { type: 'button', text: 'Block kopieren', onclick: function () {
+      block.select();
+      if (navigator.clipboard) navigator.clipboard.writeText(block.value).then(function () { zeigeMeldung('Block kopiert — in einen HTML-Baustein der Vereinsseite einfügen.', false); }, function () { zeigeMeldung('Kopieren nicht erlaubt — bitte von Hand markieren.', true); });
+    } });
+    return el('div', { class: 'feld' }, el('label', { text: 'Einbetten in die Vereinsseite' }),
+      el('p', { class: 'hint', text: 'Diesen Block als HTML-Baustein in die Vereinsseite einfügen (Rahmen, Ausweichlink und Skript gehören zusammen). Er zeigt die Microsite kompakt ohne eigenes Logo; das Skript passt die Höhe an.' }),
+      el('div', { class: 'zeile' }, farbe, kopieren), block, warnung);
+  }
+
+  function fortgeschrittenHinweis() {
+    return el('p', { class: 'hint', text: 'Diese Werte passen für fast jeden Verein. Nur ändern, wenn es einen Grund gibt — etwa bei Fehlersuche oder wenn handball.net zu oft gefragt wird.' });
+  }
+
+  // ---------------------------------------------------------------- Saisonwechsel-Assistent
+
+  function saisonText(n) { return /^saison/i.test(n || '') ? n : 'Saison ' + n; }
+  function geschlechtText(g) { return g === 'M' ? 'männlich' : g === 'F' ? 'weiblich' : ''; }
+  function klasseText(t) { return [t.age ? t.age.charAt(0) + t.age.slice(1).toLowerCase() : '', geschlechtText(t.gender)].filter(Boolean).join(' · '); }
+
+  function saisonHolen(danach) {
+    saisonGeholt = true;
+    return api('GET', '/settings/api/saison', undefined, true).then(function (r) {
+      saisonStand = r.status === 200 ? r.body : { fehler: r.body.message || 'Saisonprüfung gescheitert.' };
+      if (danach) danach();
+    });
+  }
+
+  function vereineHolen(danach) {
+    return api('GET', '/settings/api/vereine').then(function (r) {
+      vereinsStand = r.status === 200 ? r.body : { fehler: r.body.message || 'Vereinsliste gescheitert.' };
+      if (danach) danach();
+    });
+  }
+
+  function clubTeamIdsKuenftig() { return String(kuenftigRoh('CLUB_TEAM_IDS') || '').split(/[^\d]+/).filter(Boolean); }
+
+  function alsFremdVormerken(id) {
+    var f = feldVon('CLUB_TEAM_IDS');
+    var liste = clubTeamIdsKuenftig().filter(function (x) { return x !== id; });
+    liste.push(id);
+    geaendert[f.key] = { f: f, wert: liste.join(',') };
+    neuZeichnen();
+    zeigeMeldung('Mannschaft ' + id + ' erscheint künftig unter dem Vereinsnamen — noch nicht gespeichert.', false);
+  }
+
+  function mannschaftHinzufuegen(t) {
+    if (!editorAktualisieren || !entwurf) { zeigeMeldung('Die Mannschaften werden gerade zurückgesetzt — erst speichern oder „Doch nicht“.', true); return; }
+    if (entwurf.some(function (m) { return m.id === t.id; })) return;
+    for (var i = entwurf.length - 1; i >= 0; i--) if (!entwurf[i].id && !entwurf[i].name) entwurf.splice(i, 1);
+    entwurf.push({ id: t.id, name: '', bereich: '', slug: '', gruppe: false, spieler: false });
+    teamInfo[t.id] = teamInfo[t.id] || { ok: true, name: t.name, liga: klasseText(t) };
+    editorAktualisieren();
+    zeigeMeldung((t.name || t.id) + ' (' + klasseText(t) + ') hinzugefügt — noch nicht gespeichert.', false);
+  }
+
+  /** Alte Team-ID durch die neue ersetzen: Name, Bereich und ClubDesk-Seite bleiben; Fotos der Jugend neu freigeben. */
+  function mannschaftErsetzen(altId, t) {
+    if (!editorAktualisieren || !entwurf) return;
+    var m = entwurf.filter(function (x) { return x.id === altId; })[0];
+    if (!m) return;
+    var jugend = istJugend(m);
+    m.id = t.id;
+    var fotosWeg = jugend && (m.gruppe || m.spieler);
+    if (jugend) { m.gruppe = false; m.spieler = false; }
+    teamInfo[t.id] = teamInfo[t.id] || { ok: true, name: t.name, liga: klasseText(t) };
+    editorAktualisieren();
+    zeigeMeldung('Team-ID ' + altId + ' → ' + t.id + ' vorgemerkt (Name, Bereich und ClubDesk-Seite bleiben).' + (fotosWeg ? ' Die Foto-Freigabe der Jugend bitte für die neue Saison neu setzen.' : '') + ' Noch nicht gespeichert.', false);
+  }
+
+  function saisonAssistent() {
+    var box = el('div', { class: 'card', id: 'saisonwechsel' }, el('h2', { text: 'Saisonwechsel und Vereinsliste' }));
+    box.appendChild(el('details', { class: 'mehr' }, el('summary', { text: 'So geht der Saisonwechsel (5 Schritte)' }),
+      el('ol', { class: 'schritte' },
+        el('li', { text: 'Einmalig: oben unter „Vereinsseiten bei handball.net“ den Link der Vereinsseite eintragen (bei einer Spielvereinigung auch die der Stammvereine) und speichern.' }),
+        el('li', { text: '„Prüfen und Vereinsliste laden“ drücken. Rot markierte Mannschaften haben in der neuen Saison keine Spiele mehr unter ihrer Team-ID.' }),
+        el('li', { text: 'Für jede rote Mannschaft in der Liste die passende neue wählen und „Ersetzen“ — Name, Bereich und ClubDesk-Seite bleiben erhalten. Neue Mannschaften mit „Hinzufügen“ übernehmen, alte mit ✕ entfernen.' }),
+        el('li', { text: 'Bei Jugendmannschaften die Foto-Häkchen neu setzen, sobald die Freigaben für die neue Saison vorliegen.' }),
+        el('li', { text: 'Speichern. Der Abruf startet sofort; mit „Vorschau öffnen“ die Seite ansehen.' }))));
+    var knopf = el('button', { type: 'button', class: 'primary', text: 'Prüfen und Vereinsliste laden' });
+    var ausgabe = el('div', { 'aria-live': 'polite' });
+    knopf.addEventListener('click', function () {
+      knopf.disabled = true; knopf.textContent = 'handball.net wird gefragt …';
+      var fertig = function () { knopf.disabled = false; knopf.textContent = 'Erneut prüfen'; zeichneAusgabe(); };
+      saisonHolen(function () { if (state.vereine > 0) vereineHolen(fertig); else { vereinsStand = null; fertig(); } });
+    });
+    box.appendChild(el('p', null, knopf));
+    if (state.vereine === 0) box.appendChild(el('p', { class: 'hint warn', text: 'Ohne eingetragene Vereinsseite prüft der Knopf nur die vorhandenen Mannschaften; die Liste zum Hinzufügen und Ersetzen fehlt dann.' }));
+    box.appendChild(ausgabe);
+
+    function zeichneAusgabe() {
+      ausgabe.textContent = '';
+      var vorgemerkt = (entwurf || []).map(function (m) { return m.id; });
+      var fremd = clubTeamIdsKuenftig();
+      var kandidaten = vereinsStand && vereinsStand.teams ? vereinsStand.teams.filter(function (t) { return vorgemerkt.indexOf(t.id) < 0; }) : [];
+      if (saisonStand) {
+        if (saisonStand.fehler) ausgabe.appendChild(el('p', { class: 'err', text: saisonStand.fehler }));
+        else {
+          var schlecht = saisonStand.teams.filter(function (t) { return !t.ok; });
+          ausgabe.appendChild(el('p', { class: schlecht.length ? 'warn' : 'ok', text: 'Laufend bei handball.net: ' + saisonText(saisonStand.saison) + '. ' + (schlecht.length ? schlecht.length + ' von ' + saisonStand.teams.length + ' Mannschaften ohne Spiele.' : 'Alle ' + saisonStand.teams.length + ' Mannschaften haben Spiele.') }));
+          var tab = el('table');
+          tab.appendChild(el('tr', null, el('th', { text: 'Eingetragen' }), el('th', { text: 'handball.net sagt' }), el('th', { text: '' })));
+          saisonStand.teams.forEach(function (t) {
+            var aktion = null;
+            if (!t.ok && vorgemerkt.indexOf(t.id) >= 0 && kandidaten.length) {
+              var wahl = el('select', { 'aria-label': 'Neue Mannschaft für ' + (t.name || t.id) }, el('option', { value: '', text: 'ersetzen durch …' }));
+              kandidaten.forEach(function (k) { wahl.appendChild(el('option', { value: k.id, text: k.name + ' · ' + klasseText(k) + ' (' + k.id + ')' })); });
+              aktion = el('span', { class: 'zeile' }, wahl, el('button', { type: 'button', text: 'Ersetzen', onclick: function () {
+                var k = kandidaten.filter(function (x) { return x.id === wahl.value; })[0];
+                if (k) { mannschaftErsetzen(t.id, k); zeichneAusgabe(); }
+              } }));
+            } else if (!t.ok && vorgemerkt.indexOf(t.id) < 0) aktion = el('span', { class: 'hint', text: 'vorgemerkt: ersetzt oder entfernt' });
+            tab.appendChild(el('tr', null, el('td', { text: (t.name || '') + ' (' + t.id + ')' }), el('td', { class: t.ok ? 'ok' : 'warn', text: t.ok ? t.info : 'keine Spiele in dieser Saison' }), el('td', null, aktion)));
+          });
+          ausgabe.appendChild(tab);
+        }
+      }
+      if (vereinsStand) {
+        if (vereinsStand.fehler && !vereinsStand.teams) { ausgabe.appendChild(el('p', { class: 'err', text: vereinsStand.fehler })); return; }
+        (vereinsStand.fehler || []).forEach(function (f) { ausgabe.appendChild(el('p', { class: 'err', text: 'Verein ' + f.verein + ': ' + f.message })); });
+        ausgabe.appendChild(el('h3', { text: 'Mannschaften der Vereinsseiten (' + vereinsStand.teams.length + ')', style: 'font-size:1rem;margin:16px 0 6px' }));
+        var liste = el('table', { class: 'vliste' });
+        liste.appendChild(el('tr', null, el('th', { text: 'Mannschaft' }), el('th', { text: 'Klasse' }), el('th', { text: 'Team-ID' }), el('th', { text: '' })));
+        vereinsStand.teams.forEach(function (t) {
+          var drin = vorgemerkt.indexOf(t.id) >= 0;
+          var alsFremd = fremd.indexOf(t.id) >= 0;
+          var aktionen = el('span');
+          if (drin) aktionen.appendChild(el('span', { class: 'ok', text: '✓ verfolgt' }));
+          else {
+            aktionen.appendChild(el('button', { type: 'button', text: 'Hinzufügen', title: 'Handballteck verfolgt diese Mannschaft (Seite, Bot, Kalender)', onclick: function () { mannschaftHinzufuegen(t); zeichneAusgabe(); } }));
+            if (t.fremderName && !alsFremd) aktionen.appendChild(el('button', { type: 'button', text: 'Nur Vereinsnamen geben', title: 'Nicht verfolgen, aber in Tabellen und Spielplänen unter dem Vereinsnamen zeigen', onclick: function () { alsFremdVormerken(t.id); } }));
+            if (alsFremd) aktionen.appendChild(el('span', { class: 'hint', text: 'trägt den Vereinsnamen' }));
+          }
+          liste.appendChild(el('tr', null,
+            el('td', null, t.name, t.fremderName ? el('div', { class: 'fremd', text: 'tritt an als ' + (t.clubName || t.clubId) }) : null),
+            el('td', { text: klasseText(t) }),
+            el('td', null, el('a', { href: 'https://www.handball.net/team/' + t.id, target: '_blank', rel: 'noopener noreferrer', text: t.id })),
+            el('td', null, aktionen)));
+        });
+        ausgabe.appendChild(liste);
+      }
+    }
+    zeichneAusgabe();
+    return box;
   }
 
   function micrositeZusatz() {
@@ -1037,8 +1257,57 @@ export const SETTINGS_JS = String.raw`(function () {
     return behaelter;
   }
 
+  function checklisteKarte() {
+    var liste = el('ul', { class: 'check' });
+    var punkte = state.checkliste.slice();
+    if (saisonStand && !saisonStand.fehler && saisonStand.teams.length) {
+      var schlecht = saisonStand.teams.filter(function (t) { return !t.ok; }).length;
+      punkte.splice(1, 0, { key: 'saison', ok: schlecht === 0, pflicht: true, tab: 'mannschaften', text: schlecht === 0 ? 'Alle Mannschaften haben Spiele in der ' + saisonText(saisonStand.saison) : schlecht + ' Mannschaft(en) ohne Spiele in der ' + saisonText(saisonStand.saison) + ' — Saisonwechsel?' });
+    }
+    punkte.forEach(function (p) {
+      var ziel = p.key === 'saison' ? 'mannschaften' : p.tab;
+      var knopf = p.ok || ziel === 'status' ? null : el('button', { type: 'button', text: 'Beheben', onclick: function () {
+        zeigeTab(ziel);
+        var anker = p.key === 'saison' || p.key === 'vereine' ? document.getElementById('saisonwechsel') : null;
+        if (anker) anker.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
+      } });
+      liste.appendChild(el('li', null,
+        el('span', { class: 'zeichen ' + (p.ok ? 'ok' : p.pflicht ? 'err' : 'warn'), 'aria-hidden': 'true', text: p.ok ? '✓' : p.pflicht ? '✕' : '!' }),
+        el('span', { class: 'text' }, p.text, p.ok || p.pflicht ? null : el('span', { class: 'hint', text: ' (empfohlen)' })), knopf));
+    });
+    return el('div', { class: 'card' }, el('h2', { text: 'Einrichtung' }), liste);
+  }
+
+  function umgebungKarte() {
+    var box = el('div', { class: 'card' }, el('h2', { text: 'Umgebung (.env)' }));
+    if (state.umgebung.length) {
+      box.appendChild(el('p', { class: 'hint', text: 'Diese Einstellungen kommen noch aus der Umgebung des Containers. Übernommen stehen sie hier und lassen sich ohne Neustart ändern; danach können sie aus der .env gelöscht werden.' }));
+      box.appendChild(el('ul', null, state.umgebung.map(function (u) { return el('li', { text: u.label + ' (' + u.key + ')' }); }).reduce(function (a, b) { a.appendChild(b); return a; }, document.createDocumentFragment())));
+      var knopf = el('button', { type: 'button', class: 'primary', text: 'Auf diese Seite übernehmen' });
+      knopf.addEventListener('click', function () {
+        if (anzahl() > 0) { zeigeMeldung('Erst die offenen Änderungen speichern oder verwerfen.', true); return; }
+        knopf.disabled = true;
+        api('POST', '/settings/api/uebernehmen').then(function (r) {
+          if (r.status !== 200) { knopf.disabled = false; zeigeMeldung(r.body.message || 'Übernahme gescheitert.', true); return; }
+          var abgelehnt = Object.keys(r.body.fehler || {});
+          ladeNeu(r.body.geaendert.length + ' Einstellung(en) übernommen.' + (abgelehnt.length ? ' Nicht übernommen (Wert ungültig): ' + abgelehnt.join(', ') + '.' : ''));
+        });
+      });
+      box.appendChild(el('p', null, knopf));
+    } else {
+      box.appendChild(el('p', { class: 'hint ok', text: 'Alle Einstellungen dieser Seite liegen in der Datenbank. In der .env braucht es nur noch Adresse, Anschlüsse und das Passwort dieser Seite.' }));
+    }
+    var geh = el('table');
+    state.geheimnisse.forEach(function (g) {
+      geh.appendChild(el('tr', null, el('th', { text: g.label }), el('td', { text: g.gesetzt ? 'gesetzt, ' + g.herkunft : 'noch nicht erzeugt', class: g.gesetzt ? null : 'hint' }), el('td', { class: 'hint', text: g.hinweis })));
+    });
+    box.appendChild(geh);
+    return box;
+  }
+
   function statusSeite() {
     var s = state.status;
+    if (!saisonGeholt && state.status.mannschaften > 0) saisonHolen(function () { if (state && refs.panels && refs.panels.status) { refs.panels.status.textContent = ''; refs.panels.status.appendChild(statusSeite()); } });
     var tab = el('table');
     function z(a, b, klasse) { tab.appendChild(el('tr', null, el('th', { text: a }), el('td', { text: b, class: klasse || null }))); }
     z('Mannschaften', String(s.mannschaften));
@@ -1048,18 +1317,15 @@ export const SETTINGS_JS = String.raw`(function () {
     z('Bot', s.bot.an ? ('an' + (s.bot.name ? ' (@' + s.bot.name + ')' : '') + ', ' + s.bot.abonnenten + ' Abonnenten') : 'aus (kein Token)');
     if (s.bot.webhook) z('Webhook', s.bot.webhook.ok ? 'in Ordnung (' + zeit(s.bot.webhook.at) + ')' : 'Fehler: ' + s.bot.webhook.error, s.bot.webhook.ok ? null : 'warn');
     z('Browser-Anmeldungen', String(s.push));
-    var geh = el('table');
-    state.geheimnisse.forEach(function (g) {
-      geh.appendChild(el('tr', null, el('th', { text: g.label }), el('td', { text: g.gesetzt ? 'gesetzt, ' + g.herkunft : 'nicht gesetzt', class: g.gesetzt ? null : 'warn' }), el('td', { class: 'hint', text: g.hinweis })));
-    });
     var knopf = el('button', { type: 'button', text: 'Jetzt abrufen' });
     knopf.addEventListener('click', function () { abrufen(knopf); });
     var sz = state.sitzung;
     return el('div', null,
+      checklisteKarte(),
       el('div', { class: 'card' }, el('h2', { text: 'Zustand' }), tab,
         el('p', { class: 'hint', text: 'Aktualisiert sich alle 30 Sekunden, solange dieser Tab offen ist.' }),
         el('p', null, knopf)),
-      el('div', { class: 'card' }, el('h2', { text: 'Nur in der Umgebung' }), geh),
+      umgebungKarte(),
       el('div', { class: 'card' }, el('h2', { text: 'Sitzung' }),
         el('p', { class: 'hint', text: 'Angemeldet bis spätestens ' + zeit(sz.bis, true) + ' Uhr; nach ' + sz.leerlaufMin + ' Minuten ohne Zutun früher (zurzeit ' + zeit(sz.leerlaufBis, true) + ' Uhr).' }),
         el('p', null, el('button', { type: 'button', text: 'Überall abmelden', onclick: function () {
@@ -1082,6 +1348,7 @@ export const SETTINGS_JS = String.raw`(function () {
     fehlerZiele = {};
     nachMannschaften = [];
     farbenAktualisieren = null;
+    editorAktualisieren = null;
     refs = { tabs: {}, panels: {}, zahlen: {} };
     var tabs = el('nav', { role: 'tablist', 'aria-label': 'Bereiche der Einstellungen' });
     var gruppen = reihe();
@@ -1121,8 +1388,10 @@ export const SETTINGS_JS = String.raw`(function () {
         state.felder.filter(function (f) { return f.gruppe === g && !f.versteckt; }).forEach(function (f) { karte.appendChild(feldZeile(f)); });
         if (g === 'aussehen') karte.appendChild(farbVorschau());
         if (g === 'telegram') karte.appendChild(telegramZusatz());
-        if (g === 'microsite') karte.appendChild(micrositeZusatz());
+        if (g === 'microsite') { karte.appendChild(einbettenZusatz()); karte.appendChild(micrositeZusatz()); }
+        if (g === 'fortgeschritten') karte.insertBefore(fortgeschrittenHinweis(), karte.children[1] || null);
         panel.appendChild(karte);
+        if (g === 'mannschaften') panel.appendChild(saisonAssistent());
       }
       refs.panels[g] = panel;
       app.appendChild(panel);

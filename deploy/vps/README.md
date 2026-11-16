@@ -52,9 +52,9 @@ Push-Nachrichten.
    ```
 7. **DNS** beim Anbieter von `woelfe-voreifel.de`: `A`-Eintrag `app` → `217.160.74.3`
    (TTL 300). Ohne ihn bekommt Caddy kein Zertifikat.
-8. **Probelauf mit leerem `data/` und ohne Bot:** In `.env` `SITE_DOMAIN`, `ACME_EMAIL`,
-   `PUBLIC_URL`, `TEAM_IDS` und ein beliebiges `API_TOKEN` setzen, `TELEGRAM_BOT_TOKEN`
-   **leer** lassen. Dann:
+8. **Probelauf mit leerem `data/` und ohne Bot:** In `.env` `SITE_DOMAIN`, `ACME_EMAIL`
+   und `ADMIN_PASSWORD` setzen. Nach dem Start auf der Einstellungsseite (SSH-Tunnel) eine
+   Mannschaft eintragen, aber **keinen** Bot-Token. Dann:
    ```bash
    docker compose up -d && docker compose logs -f
    ```
@@ -72,7 +72,9 @@ Vorbereiten, solange der alte Dienst noch läuft:
 - Auf der alten Einstellungsseite (`http://192.168.0.180:3411/`) „Als .env exportieren“.
   Notieren, ob dort `SITE_URL` gespeichert ist.
 - `.env` auf dem VPS fertig machen: die Werte aus dem alten Stack übernehmen, aber
-  `PUBLIC_URL=https://app.woelfe-voreifel.de`, kein `IMPORT_TODOTECK_DB`, kein `TRUST_PROXY`.
+  `PUBLIC_URL` und `TRUST_PROXY` setzt die Compose-Datei selbst. Nach dem Umzug auf der
+  Einstellungsseite „Auf diese Seite übernehmen“ (Tab Zustand) und die übrigen Werte aus der
+  `.env` löschen.
 
 Dann umziehen:
 

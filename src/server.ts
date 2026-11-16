@@ -1,8 +1,8 @@
 /**
  * Der HTTP-Server — für Besucher ohne Anmeldung, ohne Sitzungen, ohne Cookies. Drei
- * öffentliche Flächen (Microsite, Telegram-Webhook, Inline-Bilder) und eine
- * mit Token (`/api/*` für das Todoteck-Cockpit), dazu `/healthz` für den
- * Container-Healthcheck.
+ * öffentliche Flächen (Microsite, Telegram-Webhook, Inline-Bilder), dazu
+ * `/healthz` für den Container-Healthcheck. Die Token-API für das
+ * Todoteck-Cockpit (`/api/*`) ist seit dem 16.11.2026 entfernt.
  *
  * Dazu kommt die Einstellungsseite `/settings` (Konto aus der Umgebung, siehe
  * `routes/settings.ts`) — aus, solange `ADMIN_PASSWORD` fehlt.
@@ -14,10 +14,9 @@
 import Fastify, { type FastifyInstance, type RouteOptions } from 'fastify';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
-import { trustProxy, version, adminPort, siteFrameAncestors } from './config';
+import { trustProxy, version, adminPort, siteFrameAncestors, logLevel } from './config';
 import { siteRoutes } from './routes/site';
 import { telegramRoutes } from './routes/telegram';
-import { apiRoutes } from './routes/api';
 import { settingsRoutes } from './routes/settings';
 import { ladeEinstellungen } from './lib/settingsStore';
 import { setServiceLogger } from './lib/serviceLogger';
@@ -44,15 +43,27 @@ export function logUrl(url: string): string {
  */
 export const PERMISSIONS_POLICY = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
 
-/** Was sich auch mit `SITE_FRAME_ANCESTORS` nie einbetten lässt: Einstellungsseite, API, Webhook. */
-const NIE_IM_RAHMEN = /^\/(settings|api|telegram)(\/|\?|$)/;
+/** Was sich auch mit `SITE_FRAME_ANCESTORS` nie einbetten lässt: Einstellungsseite und Webhook. */
+const NIE_IM_RAHMEN = /^\/(settings|telegram)(\/|\?|$)/;
+
+/**
+ * `frame-ancestors` je Anfrage: Die Liste kommt von der Einstellungsseite und
+ * gilt ohne Neustart. Ohne Liste niemand; mit Liste die eigene Herkunft und
+ * die Vereinsseite; ein Stern jede Seite. Einstellungsseite und Webhook nie.
+ */
+export function frameAncestorsFuer(url: string, adminOnly: boolean): string {
+  const einbetter = adminOnly ? [] : siteFrameAncestors();
+  if (einbetter.length === 0 || NIE_IM_RAHMEN.test(url)) return "'none'";
+  if (einbetter[0] === '*') return '*';
+  return ["'self'", ...einbetter].join(' ');
+}
 
 export async function buildServer(opts: { logger?: boolean | object; onRoute?: (route: RouteOptions) => void; adminOnly?: boolean } = {}): Promise<FastifyInstance> {
   // Die auf der Einstellungsseite gespeicherten Werte gehen der Umgebung vor.
   if (!opts.adminOnly) ladeEinstellungen();
   const fastify = Fastify({
     logger: opts.logger ?? {
-      level: process.env.LOG_LEVEL || 'info',
+      level: logLevel(),
       serializers: {
         req: (request: { method: string; url: string; host?: string; ip?: string; socket?: { remotePort?: number } }) => ({
           method: request.method,
@@ -75,8 +86,8 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   // http://<NAS>:3411/settings/settings.js ein https-Ziel, das es dort nicht gibt, und die
   // Seite bliebe bei „Lädt …“. Am öffentlichen Anschluss (https über den Proxy) bleibt beides.
   // Einbetten darf man nur die Microsite — nie den eigenen Anschluss der Einstellungsseite.
-  const einbetter = opts.adminOnly ? [] : siteFrameAncestors();
-  if (einbetter[0] === '*') fastify.log.warn('SITE_FRAME_ANCESTORS=* — jede fremde Seite darf die Microsite einbetten. Nur zum Testen; danach die Herkünfte der Vereinsseite eintragen.');
+  if (!opts.adminOnly && siteFrameAncestors()[0] === '*') fastify.log.warn('SITE_FRAME_ANCESTORS=* — jede fremde Seite darf die Microsite einbetten. Nur zum Testen; danach die Herkünfte der Vereinsseite eintragen.');
+  const adminOnly = opts.adminOnly === true;
   await fastify.register(helmet, {
     strictTransportSecurity: opts.adminOnly ? false : undefined,
     contentSecurityPolicy: {
@@ -91,24 +102,24 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
         manifestSrc: ["'self'"],
         workerSrc: ["'self'"],
         // Die Vereinsseite darf die Microsite einbetten (SITE_FRAME_ANCESTORS); sonst niemand.
-        frameAncestors: einbetter.length === 0 ? ["'none'"] : einbetter[0] === '*' ? ['*'] : ["'self'", ...einbetter],
+        frameAncestors: [(req: { url?: string }) => frameAncestorsFuer(req.url ?? '/', adminOnly)],
       },
     },
-    // X-Frame-Options kennt keine Liste erlaubter Herkünfte: SAMEORIGIN sperrte die Vereinsseite
-    // in Browsern aus, die den Kopf neben `frame-ancestors` noch auswerten. Ohne Liste bleibt er.
-    xFrameOptions: einbetter.length > 0 ? false : undefined,
+    // X-Frame-Options setzt der onSend-Haken je Anfrage — er kennt keine Liste erlaubter
+    // Herkünfte, und die Liste kann sich auf der Einstellungsseite ändern.
+    xFrameOptions: false,
     // Die Microsite wird per Link in WhatsApp und Telegram geteilt; deren
     // Vorschau holt `og:image` über denselben Host — kein Cross-Origin-Zwang.
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
   fastify.addHook('onSend', async (request, reply) => {
     reply.header('Permissions-Policy', PERMISSIONS_POLICY);
-    // Einstellungsseite, API und Webhook bleiben auch mit SITE_FRAME_ANCESTORS ohne Rahmen (Clickjacking).
-    if (einbetter.length > 0 && NIE_IM_RAHMEN.test(request.url)) {
-      const csp = reply.getHeader('content-security-policy');
-      if (typeof csp === 'string') reply.header('Content-Security-Policy', csp.replace(/frame-ancestors [^;]*/, "frame-ancestors 'none'"));
-      reply.header('X-Frame-Options', 'DENY');
-    }
+    // Ohne Liste SAMEORIGIN wie bisher. Mit Liste fällt der Kopf weg (SAMEORIGIN sperrte die
+    // Vereinsseite in Browsern aus, die ihn neben `frame-ancestors` noch auswerten) —
+    // außer für Einstellungsseite und Webhook: die bleiben ohne Rahmen (Clickjacking).
+    const einbetter = adminOnly ? [] : siteFrameAncestors();
+    if (einbetter.length === 0) reply.header('X-Frame-Options', 'SAMEORIGIN');
+    else if (NIE_IM_RAHMEN.test(request.url)) reply.header('X-Frame-Options', 'DENY');
   });
   // SEC-3-005: IPv6 zählt je /64 — sonst wählt, wer ein Präfix hat, für jede Anfrage eine neue Adresse.
   await fastify.register(rateLimit, { global: true, max: 300, timeWindow: '1 minute', keyGenerator: request => rateLimitSchluessel(request.ip) });
@@ -138,7 +149,7 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
   fastify.get('/healthz', { logLevel: 'warn', config: { rateLimit: false } }, async (_request, reply) => {
     // `ok` bleibt wahr, solange der Prozess antwortet — ein Ausfall der Quelle ist
     // kein Grund, den Container neu zu starten. Wer ihn überwachen will, liest
-    // `sync` (ohne Fehlertext; der steht nur hinter dem Token in /api/health).
+    // `sync` (ohne Fehlertext; der steht auf der Einstellungsseite unter „Zustand“).
     const snapshot = getBackoffSnapshot('handball', 'team');
     const letzter = snapshot?.lastSuccessAt ?? null;
     return reply.header('Cache-Control', 'no-store').send({
@@ -156,7 +167,6 @@ export async function buildServer(opts: { logger?: boolean | object; onRoute?: (
     return reply.header('Content-Type', 'text/plain; charset=utf-8').send('User-agent: *\nDisallow: /\n');
   });
 
-  await fastify.register(apiRoutes);
   await fastify.register(telegramRoutes);
   // Mit ADMIN_PORT hängt die Einstellungsseite nur am eigenen Anschluss.
   if (adminPort() === null) await fastify.register(settingsRoutes);

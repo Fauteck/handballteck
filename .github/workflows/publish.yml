@@ -120,8 +120,7 @@ jobs:
             type=raw,value=dev,enable=${{ github.ref != 'refs/heads/main' }}
 
       # Commit-SHA und Bauzeitpunkt wandern als Build-Args ins Image und
-      # erscheinen in /healthz und /api/health — und damit in der
-      # Dienste-Zeile von Todoteck.
+      # erscheinen in /healthz.
       - name: Versionsinfo berechnen
         id: version
         run: |

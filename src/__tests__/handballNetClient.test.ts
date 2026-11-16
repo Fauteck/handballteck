@@ -335,3 +335,29 @@ describe('Torfolge und Spielbericht', () => {
     expect(await fetchMatchReport('577132')).toBe('## Erste Halbzeit\n\nLos.');
   });
 });
+
+describe('Vereinsseite', () => {
+  const zustand = (teams: unknown[]) => `<html><body><script id="serverApp-state" type="application/json">${JSON.stringify({
+    '1': { b: { data: [{ id: 1, title: 'Nachricht' }] }, u: 'http://127.0.0.1/api/new/news' },
+    '2': { b: { data: teams }, u: 'http://127.0.0.1/api/new/teams' },
+  })}</script></body></html>`;
+
+  it('liest die Mannschaften des Vereins aus dem Zustand der Seite', async () => {
+    const { parseClubTeams } = await import('../lib/handballNetClient');
+    const html = zustand([
+      { id: 75796, name: 'WÖLFE VOREIFEL II', club: { id: '01ufb4b', name: 'HSG Wölfe Voreifel' }, gender: { id: 'M' }, age_category: { name: 'ERWACHSENE' } },
+      { id: 96034, name: 'HSG WÖLFE VOREIFEL', club: { id: '01ufb4b', name: 'HSG Wölfe Voreifel' }, gender: { id: 'F' }, age_category: { name: 'C-JUGEND' } },
+      { id: 11111, name: 'FREMD', club: { id: 'andere', name: 'Anderer' }, gender: null, age_category: null },
+    ]);
+    expect(parseClubTeams(html, '01ufb4b')).toEqual([
+      { id: '75796', name: 'Wölfe Voreifel II', clubId: '01ufb4b', clubName: 'HSG Wölfe Voreifel', gender: 'M', age: 'ERWACHSENE' },
+      { id: '96034', name: 'HSG Wölfe Voreifel', clubId: '01ufb4b', clubName: 'HSG Wölfe Voreifel', gender: 'F', age: 'C-JUGEND' },
+    ]);
+  });
+
+  it('scheitert laut, wenn die Seite keinen Zustand oder keine Mannschaften hat', async () => {
+    const { parseClubTeams, HandballEmptyError } = await import('../lib/handballNetClient');
+    expect(() => parseClubTeams('<html></html>', '01ufb4b')).toThrow(HandballEmptyError);
+    expect(() => parseClubTeams(zustand([]), '01ufb4b')).toThrow(HandballEmptyError);
+  });
+});

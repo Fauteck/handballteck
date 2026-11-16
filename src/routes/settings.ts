@@ -17,16 +17,17 @@
 import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import qrcode from 'qrcode-generator';
-import { adminUser, adminPassword, adminPort, publicUrl, siteUrl, sitePreviewToken, botToken, apiToken, configOverride, teamIds } from '../config';
+import { adminUser, adminPassword, adminPort, publicUrl, siteUrl, sitePreviewToken, botToken, configOverride, teamIds, teamEntries, handballClubs, clubTeamIds, siteOperator, siteFeedbackMail, siteFrameAncestors } from '../config';
 import { EINSTELLUNGEN, GRUPPEN, STATUS_GEHEIMNISSE, findeEinstellung } from '../lib/settingsRegistry';
-import { speichere, protokoll, protokollAnzahl, alsEnvBlock, quelleVon, wirksamerText, syncJetzt, type Aenderung } from '../lib/settingsStore';
+import { speichere, protokoll, protokollAnzahl, alsEnvBlock, quelleVon, wirksamerText, syncJetzt, nurAusDerUmgebung, type Aenderung } from '../lib/settingsStore';
 import { settingsHtml, SETTINGS_JS, SETTINGS_SW } from '../lib/settingsPage';
 import { getBackoffSnapshot } from '../lib/pollerBackoff';
-import { getHandballNetStats, fetchActiveSeason, fetchTeamMatches, HandballEmptyError } from '../lib/handballNetClient';
+import { getHandballNetStats, fetchActiveSeason, fetchTeamMatches, fetchClubTeams, HandballEmptyError, type HandballClubTeam } from '../lib/handballNetClient';
 import { getHandballHealth } from '../lib/handballTeam';
 import { automatischeBereiche, HANDBALL_GROUPS } from '../lib/handballSicht';
 import { isHandballBotEnabled, getHandballBotUsername, getHandballWebhookState, listSubscribers, handballBotLink, adminChatIds } from '../lib/handballBotBasis';
-import { sendMessage } from '../lib/telegramClient';
+import { sendMessage, getMe } from '../lib/telegramClient';
+import { einbettungsBlock } from '../lib/einbettung';
 import { countSiteSubscribers } from '../lib/handballSitePush';
 import { getVapidPublicKey, sendPush, SETTING_PRIVATE_KEY } from '../lib/webPush';
 import { getSetting } from '../lib/settings';
@@ -116,7 +117,7 @@ function vapidHerkunft(): string | null {
   try { return getSetting(SETTING_PRIVATE_KEY) ? 'selbst erzeugt, in der Datenbank' : null; } catch { return null; }
 }
 
-interface TeamAuskunft { ok: boolean; name?: string; liga?: string; klasse?: string | null; message?: string }
+interface TeamAuskunft { ok: boolean; name?: string; liga?: string; klasse?: string | null; message?: string; saison?: string }
 const teamCache = new Map<string, { bis: number; antwort: TeamAuskunft }>();
 
 /** Nur für Tests. */
@@ -136,14 +137,70 @@ async function teamAuskunft(id: string): Promise<TeamAuskunft> {
     const spiele = await fetchTeamMatches(id, saison.id);
     const s = spiele[0];
     const name = s.homeId === id ? s.homeName : s.awayId === id ? s.awayName : '';
-    antwort = { ok: true, name, liga: s.competitionName, klasse: s.championshipName };
+    antwort = { ok: true, name, liga: s.competitionName, klasse: s.championshipName, saison: saison.name };
   } catch (err) {
     if (!(err instanceof HandballEmptyError)) throw err;
-    antwort = { ok: false, message: 'Keine Spiele in der laufenden Saison — Team-ID prüfen.' };
+    antwort = { ok: false, message: 'Keine Spiele in der laufenden Saison — Team-ID prüfen (neue Saison? Dann unten „Saisonwechsel und Vereinsliste“).' };
   }
   teamCache.set(id, { bis: Date.now() + (antwort.ok ? 3_600_000 : 600_000), antwort });
   if (teamCache.size > 500) teamCache.delete(teamCache.keys().next().value as string);
   return antwort;
+}
+
+interface VereinsAntwort { teams: (HandballClubTeam & { eingetragen: boolean; fremderName: boolean })[]; fehler: { verein: string; message: string }[]; saison: string | null }
+let vereinsCache: { schluessel: string; bis: number; antwort: VereinsAntwort } | null = null;
+
+/** Nur für Tests. */
+export function __resetVereinsCacheForTests(): void { vereinsCache = null; }
+
+/**
+ * Die Mannschaften aller eingetragenen Vereinsseiten (`HANDBALL_CLUBS`) — für den
+ * Saisonwechsel-Assistenten. Je Verein eine Anfrage, zehn Minuten zwischengespeichert.
+ * `eingetragen`: steht schon in TEAM_IDS; `fremderName`: tritt unter einem anderen
+ * Vereinsnamen an als der erste eingetragene Verein (Stammverein einer Spielvereinigung).
+ */
+async function vereinsAuskunft(): Promise<VereinsAntwort> {
+  const vereine = handballClubs();
+  const schluessel = vereine.map(v => `${v.id}:${v.fedId}`).join(',');
+  if (vereinsCache && vereinsCache.schluessel === schluessel && vereinsCache.bis > Date.now()) {
+    const eigene = new Set(teamIds());
+    return { ...vereinsCache.antwort, teams: vereinsCache.antwort.teams.map(t => ({ ...t, eingetragen: eigene.has(t.id) })) };
+  }
+  const fehler: VereinsAntwort['fehler'] = [];
+  const alle: HandballClubTeam[] = [];
+  for (const v of vereine) {
+    try {
+      for (const t of await fetchClubTeams(v.id, v.fedId)) if (!alle.some(x => x.id === t.id)) alle.push(t);
+    } catch (err) {
+      fehler.push({ verein: v.id, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  let saison: string | null = null;
+  try { saison = (await fetchActiveSeason()).name; } catch { /* nur zur Anzeige */ }
+  const hauptverein = vereine[0]?.id ?? null;
+  const eigene = new Set(teamIds());
+  const antwort: VereinsAntwort = { teams: alle.map(t => ({ ...t, eingetragen: eigene.has(t.id), fremderName: hauptverein !== null && t.clubId !== hauptverein })), fehler, saison };
+  if (fehler.length === 0) vereinsCache = { schluessel, bis: Date.now() + 600_000, antwort };
+  return antwort;
+}
+
+interface Punkt { key: string; ok: boolean; pflicht: boolean; text: string; tab: string }
+
+/** Die Einrichtungs-Checkliste auf „Zustand“ — was fehlt, mit dem Tab, in dem man es behebt. */
+function checkliste(letzterErfolg: number | null, fehlerInFolge: number): Punkt[] {
+  const bot = isHandballBotEnabled();
+  const webhook = getHandballWebhookState();
+  const umgebung = nurAusDerUmgebung();
+  return [
+    { key: 'teams', ok: teamIds().length > 0, pflicht: true, text: teamIds().length > 0 ? `${teamIds().length} Mannschaft(en) eingetragen` : 'Noch keine Mannschaft eingetragen', tab: 'mannschaften' },
+    { key: 'abruf', ok: letzterErfolg !== null && fehlerInFolge === 0, pflicht: true, text: letzterErfolg === null ? 'Noch kein erfolgreicher Abruf bei handball.net' : fehlerInFolge === 0 ? 'Abruf bei handball.net klappt' : `Abruf scheitert (${fehlerInFolge}× in Folge)`, tab: 'status' },
+    { key: 'vereine', ok: handballClubs().length > 0, pflicht: false, text: handballClubs().length > 0 ? 'Vereinsseite für den Saisonwechsel eingetragen' : 'Vereinsseite bei handball.net fehlt (für den Saisonwechsel-Assistenten)', tab: 'mannschaften' },
+    { key: 'bot', ok: bot && (webhook?.ok ?? false), pflicht: false, text: !bot ? 'Kein Telegram-Bot (Bot-Token fehlt)' : webhook?.ok ? 'Telegram-Bot verbunden' : webhook ? `Telegram meldet: ${webhook.error ?? 'Webhook nicht in Ordnung'}` : 'Telegram-Bot noch nicht angemeldet', tab: 'telegram' },
+    { key: 'admin', ok: !bot || adminChatIds().size > 0, pflicht: false, text: !bot ? 'Admin-Chat: erst mit Bot' : adminChatIds().size > 0 ? 'Admin-Chat eingetragen' : 'Kein Admin-Chat — Störungen meldet der Bot niemandem', tab: 'telegram' },
+    { key: 'footer', ok: siteOperator() !== null && siteFeedbackMail() !== null, pflicht: false, text: siteOperator() && siteFeedbackMail() ? 'Betreiber und Rückmelde-Adresse im Footer' : 'Betreiber oder Rückmelde-Adresse fehlt im Footer der Microsite', tab: 'microsite' },
+    { key: 'einbettung', ok: siteFrameAncestors().length > 0 && siteFrameAncestors()[0] !== '*', pflicht: false, text: siteFrameAncestors()[0] === '*' ? 'Einbetten für jede Seite offen (nur zum Testen)' : siteFrameAncestors().length > 0 ? 'Vereinsseite darf die Microsite einbetten' : 'Einbetten in die Vereinsseite nicht eingerichtet', tab: 'microsite' },
+    { key: 'umgebung', ok: umgebung.length === 0, pflicht: false, text: umgebung.length === 0 ? 'Alle Einstellungen liegen auf dieser Seite' : `${umgebung.length} Einstellung(en) kommen noch aus der Umgebung (.env)`, tab: 'status' },
+  ];
 }
 
 function cookieSetzen(reply: FastifyReply, request: FastifyRequest, wert: string, maxAgeS: number): void {
@@ -279,7 +336,7 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
         const wert = wirksamerText(e.key);
         return {
           key: e.key, gruppe: e.gruppe, art: e.art, label: e.label, hinweis: e.hinweis, standard: e.standard,
-          wirkung: e.wirkung, lang: e.lang ?? false, zeilen: e.zeilen ?? null, versteckt: e.versteckt ?? false, faktor: e.faktor ?? null, einheit: e.einheit ?? null,
+          wirkung: e.wirkung, sichtbar: e.sichtbar ?? null, optionen: e.optionen ?? null, erzeugbar: e.erzeugbar ?? false, lang: e.lang ?? false, zeilen: e.zeilen ?? null, versteckt: e.versteckt ?? false, faktor: e.faktor ?? null, einheit: e.einheit ?? null,
           min: e.min ?? null, max: e.max ?? null, nullErlaubt: e.nullErlaubt ?? false,
           quelle: quelleVon(e.key),
           umgebungWert: geheim ? null : (process.env[e.key]?.trim() ?? ''),
@@ -290,9 +347,7 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
         };
       }),
       geheimnisse: STATUS_GEHEIMNISSE.map(g => {
-        const herkunft = g.key === 'TELEGRAM_BOT_TOKEN' ? (botToken() !== null ? 'aus der Umgebung' : null)
-          : g.key === 'API_TOKEN' ? (apiToken() !== null ? 'aus der Umgebung' : null)
-          : vapidHerkunft();
+        const herkunft = vapidHerkunft();
         return { key: g.key, label: g.label, hinweis: g.hinweis, gesetzt: herkunft !== null, herkunft };
       }),
       status: {
@@ -307,6 +362,11 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
       // Zur Auswahl der Admin-Chats: wer den Bot abonniert hat.
       chats: isHandballBotEnabled() ? listSubscribers().map(a => ({ id: a.chatId, name: a.name })) : [],
       vapidKey: getVapidPublicKey(),
+      checkliste: checkliste(snapshot?.lastSuccessAt ?? null, snapshot?.consecutiveFailures ?? 0),
+      umgebung: nurAusDerUmgebung().map(k => ({ key: k, label: findeEinstellung(k)?.label ?? k })),
+      vereine: handballClubs().length,
+      // Für den Block zum Einbetten: die Adresse, unter der die Microsite von außen liegt.
+      siteBasis: siteUrl() ?? publicUrl(),
       protokoll: protokoll(PROTOKOLL_SEITE),
       protokollAnzahl: protokollAnzahl(),
     });
@@ -421,6 +481,78 @@ export async function settingsRoutes(fastify: FastifyInstance): Promise<void> {
     const team = typeof request.query.team === 'string' && ids.includes(request.query.team) ? request.query.team : ids[0];
     const basis = siteUrl() ?? publicUrl();
     return reply.header('Cache-Control', 'no-store').redirect(`${basis}/${team}/?vorab=${encodeURIComponent(token)}`);
+  });
+
+  // Der Bot-Token vor dem Speichern prüfen: welcher Bot gehört dazu? Ohne Token im Aufruf der gespeicherte.
+  fastify.post<{ Body: { token?: unknown } }>('/settings/api/test/token', limit(6), async (request, reply) => {
+    const s = await geschuetzt(request, reply);
+    if (!s) return reply;
+    const roh = typeof request.body?.token === 'string' ? request.body.token.trim() : '';
+    const token = roh || botToken();
+    if (!token) return sendeNein(reply, 409, 'no_bot', 'Kein Bot-Token eingegeben oder gespeichert.');
+    const p = findeEinstellung('TELEGRAM_BOT_TOKEN')!.pruefe(token);
+    if (!p.ok) return sendeNein(reply, 422, 'invalid', p.fehler);
+    try {
+      const ich = await getMe(token);
+      return reply.send({ ok: true, username: ich.username ?? null, name: ich.first_name ?? null });
+    } catch (err) {
+      serviceLog.warn({ err: err instanceof Error ? err.message.replace(/bot\d+:[\w-]+/g, 'bot***') : String(err) }, '[settings] Token-Prüfung gescheitert');
+      return sendeNein(reply, 502, 'telegram', 'Telegram kennt diesen Token nicht (oder ist nicht erreichbar).');
+    }
+  });
+
+  // Alles, was noch aus der Umgebung kommt, auf diese Seite übernehmen — danach kann die .env schrumpfen.
+  fastify.post('/settings/api/uebernehmen', limit(6), async (request, reply) => {
+    const s = await geschuetzt(request, reply);
+    if (!s) return reply;
+    const aenderungen: Aenderung[] = [];
+    const fehler: Record<string, string> = {};
+    for (const key of nurAusDerUmgebung()) {
+      const p = findeEinstellung(key)!.pruefe(process.env[key] ?? '');
+      if (p.ok) aenderungen.push({ key, wert: p.wert }); else fehler[key] = p.fehler;
+    }
+    const geaendert = aenderungen.length > 0 ? speichere(aenderungen, adminUser()) : [];
+    serviceLog.info({ keys: geaendert, abgelehnt: Object.keys(fehler) }, '[settings] Aus der Umgebung übernommen');
+    return reply.send({ ok: true, geaendert, fehler });
+  });
+
+  // Saisonwechsel: die Mannschaften der eingetragenen Vereinsseiten.
+  fastify.get('/settings/api/vereine', limit(10), async (request, reply) => {
+    const s = await geschuetzt(request, reply);
+    if (!s) return reply;
+    if (handballClubs().length === 0) return sendeNein(reply, 409, 'no_club', 'Erst eine Vereinsseite bei handball.net eintragen und speichern.');
+    try {
+      return reply.send(await vereinsAuskunft());
+    } catch (err) {
+      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[settings] Vereinsliste gescheitert');
+      return sendeNein(reply, 502, 'upstream', 'handball.net ist gerade nicht erreichbar.');
+    }
+  });
+
+  // Saisonwechsel: Hat jede eingetragene Mannschaft Spiele in der laufenden Saison?
+  fastify.get('/settings/api/saison', limit(10), async (request, reply) => {
+    const s = await geschuetzt(request, reply);
+    if (!s) return reply;
+    try {
+      const saison = await fetchActiveSeason();
+      const teams: { id: string; name: string | null; ok: boolean; info: string }[] = [];
+      for (const e of teamEntries()) {
+        const a = await teamAuskunft(e.id);
+        teams.push({ id: e.id, name: e.label, ok: a.ok, info: a.ok ? [a.name, a.liga, a.klasse].filter(Boolean).join(' · ') : (a.message ?? '') });
+      }
+      return reply.send({ saison: saison.name, teams, fremd: [...clubTeamIds()] });
+    } catch (err) {
+      serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[settings] Saisonprüfung gescheitert');
+      return sendeNein(reply, 502, 'upstream', 'handball.net ist gerade nicht erreichbar.');
+    }
+  });
+
+  // Der Block zum Einbetten in die Vereinsseite, mit der eigenen Adresse.
+  fastify.get<{ Querystring: { farbe?: string } }>('/settings/api/einbettung', limit(30), async (request, reply) => {
+    const s = await geschuetzt(request, reply);
+    if (!s) return reply;
+    const farbe = request.query.farbe === 'dunkel' || request.query.farbe === 'hell' ? request.query.farbe : null;
+    return reply.send({ block: einbettungsBlock(siteUrl() ?? publicUrl(), { farbe }), erlaubt: siteFrameAncestors() });
   });
 
   fastify.get('/settings/api/export', limit(20), async (request, reply) => {

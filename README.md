@@ -5,24 +5,23 @@
 Follow the handball teams of one club from [handball.net](https://www.handball.net): a public
 microsite in the club's colours, a Telegram bot, browser push, a calendar subscription
 and an RSS feed — in one container, without an account for anyone who just wants to
-know when the next match is. A small token-protected API feeds the Todoteck cockpit.
+know when the next match is. Nearly everything is set up in the browser on `/settings`.
 
 This service was carved out of [Todoteck](https://github.com/Fauteck/todo) on
 2026-09-28; Wiki „Handball-Verfolgung (handball.net)“ in the llm-wiki tells the story and the reasoning
-behind every feature (§8 covers the split). Todoteck keeps a cockpit that reads this
-service's `/api/*`.
+behind every feature (§8 covers the split). The token API `/api/*` for Todoteck's cockpit was
+removed on 2026-11-16; nothing reads this service from outside any more.
 
 ## Feature overview
 
 | Feature | What it does |
 |---|---|
 | Fetch | Once per calendar day: season, schedule, standings (with per-matchday history), roster, logos, opponent form. On match day: follow-up from throw-off + 45 min until the final score, then the standings once. Backfill of lineups, logos, event lists and match reports in small batches per tick. |
-| Microsite | `/<team-id>/` — next match with opponent profile, last result, standings with trend arrows, schedule with match timelines, season chart, squad with player names. In matches the club's own teams appear under their label from `/settings` (also as opponent of another own team); bot, its calendar and `/api` keep the club name. Five group boxes at the top (Herren, Damen, Jugend männlich, Jugend weiblich, Kinder) open the teams of the club; title and logo lead to the start page; a button switches the colour scheme (auto → light → dark, remembered per browser). Live countdown (to the second in the last hour), **live mode** (the page refreshes itself every 30 s while a match runs, shows a silent goal toast with vibration and a full goal ticker with the scorer — the name from the squad, otherwise the back number; scores read home:away throughout, the home team on the left; vibration can be switched off and, on the start page, single matches muted, both remembered per browser), a **match page** per played match (`/<team-id>/spiel/<match-id>`: score, half-time, final-score image, timeline, goal sequence, scorers), schedule filter (home/away/upcoming/played) with a jump to the next match, collapsible "Team-Infos nicht verpassen" tiles ("Alle Infos nicht verpassen" on the start page) that remember their state (push bell, Telegram, `webcal://` subscription, RSS feed), goal-scorer progression chart, installable PWA, one app per team named after the team (icons, shortcuts, offline fallback of the last loaded page; an install icon with the browser's install prompt or the iOS steps, `?installieren=1` opens it directly). Style and script are separate routes with a content hash in the URL (cacheable for a year) and an ETag. No inline JavaScript (CSP). |
+| Microsite | `/<team-id>/` — next match with opponent profile, last result, standings with trend arrows, schedule with match timelines, season chart, squad with player names. In matches the club's own teams appear under their label from `/settings` (also as opponent of another own team); bot and its calendar keep the club name. Five group boxes at the top (Herren, Damen, Jugend männlich, Jugend weiblich, Kinder) open the teams of the club; title and logo lead to the start page; a button switches the colour scheme (auto → light → dark, remembered per browser). Live countdown (to the second in the last hour), **live mode** (the page refreshes itself every 30 s while a match runs, shows a silent goal toast with vibration and a full goal ticker with the scorer — the name from the squad, otherwise the back number; scores read home:away throughout, the home team on the left; vibration can be switched off and, on the start page, single matches muted, both remembered per browser), a **match page** per played match (`/<team-id>/spiel/<match-id>`: score, half-time, final-score image, timeline, goal sequence, scorers), schedule filter (home/away/upcoming/played) with a jump to the next match, collapsible "Team-Infos nicht verpassen" tiles ("Alle Infos nicht verpassen" on the start page) that remember their state (push bell, Telegram, `webcal://` subscription, RSS feed), goal-scorer progression chart, installable PWA, one app per team named after the team (icons, shortcuts, offline fallback of the last loaded page; an install icon with the browser's install prompt or the iOS steps, `?installieren=1` opens it directly). Style and script are separate routes with a content hash in the URL (cacheable for a year) and an ETag. No inline JavaScript (CSP). |
 | Telegram bot | Match-day morning greeting (from 08:00, at least 4 h before throw-off, for chats that want announcements), announcement (lead time per chat), lineup, half-time, final score as an animated card, match report, postponements, season card; commands `/spiele` `/ergebnisse` `/tabelle` `/kader` `/torjaeger` `/spieler` `/saison` `/rekorde` `/bericht` `/live` `/kalender` `/halle` `/erinnerung` `/modus` `/teams` `/feedback`; inline mode; groups; admin chats with `/status`, `/rundruf`, `/erledigt`. **`/teams`** lets every subscriber pick which teams of the club they follow — messages and commands are filtered accordingly. A new chat starts with no team and is asked first (with more than one team configured); chats from before keep following all. |
 | Browser push | Subscriptions per team or, from the start page, for the whole club (home games only, plus a Thursday evening preview „Dieses Wochenende: N Heimspiele“ without venue). The subscriber ticks the topics (announcement with lead time, half-time, final score, changes; preview for the club); the confirmation push names them. One subscription per device. Capped by `SITE_PUSH_MAX`, same events and texts as the bot, dead subscriptions removed on 404/410/403; a win vibrates like a goal celebration. Topics are stored in `handball_site_subscription.topics` (migration 0005); rows without it fall back to the old mode. |
-| Todoteck API | `/api/overview`, `/api/teams/:id/details`, `/api/teams/:id/bild/:art`, `/api/sync`, `/api/health` — Bearer `API_TOKEN`. |
 | Source checks | Concurrent requests for the same path are coalesced, a shared league table is fetched once per run, and the three core responses (season, matches, standings) are shape-checked with zod — a changed format fails loudly (`HandballEmptyError`) instead of producing wrong numbers. `/healthz` reports the state of the fetch (last success, failures, request counters) without error text. |
-| Settings page | `/settings` (one admin account from the environment, optionally on its own port): teams, colours, fetch intervals, Telegram switches, microsite texts and switches, a status view, a change log and an `.env` export. See *Settings page*. |
+| Settings page | `/settings` (one admin account from the environment, optionally on its own port): teams with a season-change assistant that reads the club pages on handball.net, colours, bot token and Telegram switches, microsite texts, embedding block for the club website, advanced intervals and log level, a setup checklist, a status view, a change log and an `.env` export. See *Settings page*. |
 | Operator alerts | Fetch failures (auth immediately, transient from the third run) and a suspected time-zone misreading go to the admin chats once per state. |
 
 ## Architecture
@@ -34,9 +33,8 @@ service's `/api/*`.
                                              │  .db, WAL)                 │
  Browsers ◀──/<team>/ (HTML, PNG, ICS, RSS)──│  sharp renders SVG → PNG   │
           ◀──Web Push (VAPID)────────────────│  scheduler every 15 min    │
-                                             └──────────┬─────────────────┘
- Todoteck ──Bearer API_TOKEN──▶ /api/* ◀────────────────┘
-   (cockpit, widget, two notification events)
+ Admin ──/settings (own port, SSH tunnel)───▶│  settings page             │
+                                             └────────────────────────────┘
 ```
 
 All state is one SQLite file under `DATA_DIR`. Configuration is the environment plus the settings page `/settings`: what is saved there wins over the environment (see *Settings page*).
@@ -45,12 +43,12 @@ All state is one SQLite file under `DATA_DIR`. Configuration is the environment 
 
 - Node.js 26 (local) or Docker
 - A public `https://` address for the Telegram webhook and the microsite
-- Optional: a bot token from BotFather, and a Todoteck instance that wants the cockpit
+- Optional: a bot token from BotFather (entered on the settings page)
 
 ## Installation / Quick start
 
 ```bash
-cp .env.example .env        # fill in TEAM_IDS, PUBLIC_URL, tokens
+cp .env.example .env        # PUBLIC_URL and ADMIN_PASSWORD; the rest on /settings
 docker compose up --build   # http://localhost:3010/ — local development only
 ```
 
@@ -74,17 +72,11 @@ re-fetched; they are copied once from the Todoteck database (its tables are call
 The copy also takes the VAPID key pair from Todoteck's `app_settings` — without it every
 browser subscription would silently fail with HTTP 403.
 
-The import runs **at startup**, not via `docker exec`:
-
-1. Mount a Todoteck backup snapshot (or its database file) read-only into the container.
-2. Set `IMPORT_TODOTECK_DB` to its path inside the container and redeploy.
-3. Read the log (`Übernahme aus Todoteck fertig: …`), then remove the variable.
-
-The import runs **once**: a marker in `settings` makes every later start skip it, so a
-chat that sent `/stop` after the move is not re-added. The source is copied to
-`DATA_DIR` before reading (a WAL database cannot be opened on a read-only mount) and the
-copy is deleted afterwards. Locally, `npm run import:todoteck -- /path/to/familytodo.db`
-runs the same import without the marker.
+The move happened on 2026-09-28; the import at startup (`IMPORT_TODOTECK_DB`) was removed on
+2026-11-16. `npm run import:todoteck -- /path/to/familytodo.db` still runs the same import
+by hand (without the marker that made the startup import run once). The source is copied
+to `DATA_DIR` before reading (a WAL database cannot be opened on a read-only mount) and the
+copy is deleted afterwards.
 
 Configuration (team IDs, colours, bot token, microsite switches) does **not** migrate —
 it lives in the environment and on the settings page now.
@@ -99,8 +91,11 @@ Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies 
 
 ## Settings page
 
-`/settings` edits part of the configuration without a redeploy. It is off until
+`/settings` edits the configuration without a redeploy — everything except what is needed before
+the database opens, the web-push key pair and the page's own account. It is off until
 `ADMIN_PASSWORD` (at least 12 characters) is set; until then every address below it answers 404.
+In production the `.env` needs only `SITE_DOMAIN`, `ACME_EMAIL` and `ADMIN_PASSWORD`
+(see [`deploy/vps/`](deploy/vps/README.md)).
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -111,26 +106,45 @@ Set `TRUST_PROXY` to the addresses (IP or CIDR, comma separated) of the proxies 
 - **Precedence:** the page wins over the environment, the environment over the default. Each
   field shows its source; "Auf die Umgebung zurücksetzen" removes the saved value. A saved
   empty value hides the environment on purpose. Values live in `settings` as `cfg.<NAME>`.
-- **On the page:** `TEAM_IDS`, `CLUB_TEAM_IDS`, `CLUB_NAME`, the three colours, `SYNC_INTERVAL_MS`,
-  `SYNC_LIVE_INTERVAL_MS`, `TELEGRAM_INVITE_CODE`, `TELEGRAM_ADMIN_CHAT_IDS`, `BOT_AUTO_DESCRIPTION`,
-  `SITE_ENABLED`, `SITE_PUSH_MAX`, `SITE_URL`, `SITE_OPERATOR`, `SITE_FEEDBACK_MAIL`,
-  `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`, `CLUBDESK_TEAMS`, `SITE_PHOTOS`, `TEAM_GROUPS` (the last three inside the team rows of `TEAM_IDS`, which the page groups by area).
+- **On the page:** tabs Mannschaften (`TEAM_IDS`, `HANDBALL_CLUBS`, `CLUB_TEAM_IDS`, `CLUB_NAME`; `CLUBDESK_TEAMS`,
+  `SITE_PHOTOS`, `TEAM_GROUPS` inside the team rows of `TEAM_IDS`, which the page groups by area), Aussehen
+  (the three colours), Microsite (`SITE_ENABLED`, `SITE_OPERATOR`, `SITE_FEEDBACK_MAIL`, `SITE_FRAME_ANCESTORS`,
+  `SITE_URL`, `SITE_PREVIEW_TOKEN`, `CLUBDESK_URL`), Telegram (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_INVITE_CODE`,
+  `TELEGRAM_ADMIN_CHAT_IDS`, `BOT_AUTO_DESCRIPTION`) and Fortgeschritten (`SYNC_INTERVAL_MS`,
+  `SYNC_LIVE_INTERVAL_MS`, `SITE_PUSH_MAX`, `LOG_LEVEL`). Every field says what it does, where its effect shows
+  and when it applies.
 - **Environment only:** `PUBLIC_URL`, `PORT`, `TRUST_PROXY`, `DATA_DIR`, `DATABASE_PATH`, `SQLITE_JOURNAL_MODE`,
-  `LOG_LEVEL`, `IMPORT_TODOTECK_DB`, `TELEGRAM_BOT_TOKEN`, `API_TOKEN`, `VAPID_*` and the `ADMIN_*` account.
-  The page only shows whether the secrets are set. The bot token already runs through the same lookup, so
-  moving it onto the page later is a registry entry, not a rewrite.
+  `VAPID_*` and the `ADMIN_*` account. The page shows whether the VAPID key exists, never a value. Secrets on
+  the page (`TELEGRAM_BOT_TOKEN`, `SITE_PREVIEW_TOKEN`) are write-only: replaced or removed, never sent back,
+  masked in the change log; they sit in the database like the VAPID key, so the backup is as secret as the `.env`.
+- **Moving off the environment:** the status tab lists every value that still comes from the environment;
+  „Auf diese Seite übernehmen“ (`POST /settings/api/uebernehmen`) saves them all on the page, after which they can
+  leave the `.env`.
+- **Season change:** `HANDBALL_CLUBS` holds the club pages on handball.net as pasted links
+  (`https://www.handball.net/club/01ufb4b?fed_id=142`, stored as `01ufb4b:142`; for a club playing as a
+  syndicate also the member clubs whose names teams still play under). „Prüfen und Vereinsliste laden“ checks
+  every team of `TEAM_IDS` for matches in the running season (`/settings/api/saison`) and lists the teams of
+  those club pages (`/settings/api/vereine`, read from the page's server state, cached ten minutes): add a team,
+  replace a team id that has no matches any more (name, area and ClubDesk page stay; youth photo releases are
+  cleared for the new season) or give a member club's team the club name (`CLUB_TEAM_IDS`). A pasted link of a
+  team page or ClubDesk team page becomes the id or slug.
+- **Setup checklist:** the status tab starts with what is missing (teams, fetch, season, club page, bot and
+  webhook, admin chat, footer, embedding, values left in the environment), each with a jump to its tab.
 - **Editing:** changes collect until "Speichern …" (bottom bar, Ctrl/Cmd+S), which first lists every change
   (old → new) for confirmation; they survive tab switches, "Verwerfen" drops them, leaving the page asks first.
   Fields are checked live with the server's own validators (`/settings/api/check`, nothing saved). A team id is
   looked up on handball.net (name and league, cached an hour); team rows sort by drag or ↑/↓, removing one can be
   undone, and each saved team has its own preview link. The colours show a preview and a WCAG contrast check.
-  Telegram shows the invite link with a QR code, a test message to the admin chats and a picker for admin chats
-  from the subscribers; the microsite tab sends a test push to the current browser (service worker
-  `/settings/sw.js`, the subscription is not stored). The status tab refreshes every 30 s, waits for the result
+  Telegram shows „Token prüfen“ (asks Telegram which bot a token belongs to, before saving), the invite link
+  with a QR code, a test message to the admin chats and a picker for admin chats from the subscribers; the
+  microsite tab shows the embedding block with this service's address (`/settings/api/einbettung`, the same
+  block as below) and sends a test push to the current browser (service worker `/settings/sw.js`, the
+  subscription is not stored). The status tab refreshes every 30 s, waits for the result
   of "Jetzt abrufen", and the change log can be filtered, paged and restore an old value as a pending change.
-- **Applying:** most values act immediately. Teams, club name and ClubDesk start a fetch; the intervals apply
-  from the next tick. Every change is logged in `settings_audit` (secrets masked). "Als .env exportieren"
-  gives the effective values without secrets, to copy into `docker-configs`.
+- **Applying:** most values act immediately, without a restart — a new bot token registers webhook, commands and
+  menu at once, `SITE_FRAME_ANCESTORS` is read per request, `LOG_LEVEL` switches the logger. Teams, club name and
+  ClubDesk start a fetch; the intervals apply from the next tick. Every change is logged in `settings_audit` (secrets masked). "Als .env exportieren"
+  gives the effective values without secrets, as a backup of the configuration.
 - **Security:** sessions in memory (8 h, ended after 60 minutes without activity — background refreshes with
   `X-Hintergrund: 1` do not count —, lost on restart, "Überall abmelden" ends all), cookie `HttpOnly; SameSite=Strict; Path=/settings`
   (`Secure` on https), JSON-only writes with `X-CSRF-Token` and an Origin check, login limited to 5 per minute and
@@ -145,34 +159,34 @@ See `.env.example` for every variable with its default. Values saved on the sett
 | Variable | Default | Meaning |
 |---|---|---|
 | `PUBLIC_URL` | `http://localhost:3000` | External address of this service (webhook, page links). |
+| `HANDBALL_CLUBS` | – | Club pages on handball.net for the season-change assistant, `clubid:fed_id` (`01ufb4b:142`) or the pasted link, comma or newline separated. Read only on demand from `/settings`. |
 | `TEAM_IDS` | – | Team IDs from handball.net, comma separated, optionally `id=Name`. Without a name the team switcher derives one from league and team name (`1. Herren`, `mB-Jugend`). The page groups the teams in two levels — Herren · Frauen · Jungen · Mädchen on top, the teams of that group below — from the competition (or the name given here: `wC-Jugend`, `2. Damen`). |
 | `TEAM_GROUPS` | – (read from competition and name) | Area per team when the automatic one is wrong: `96254=jungen,75796=herren` (`herren`, `frauen`, `jungen`, `maedchen`, `kinder`). Edited per team row on `/settings`. |
-| `CLUB_TEAM_IDS` | – | Team IDs not in `TEAM_IDS` (e.g. a club team met as an opponent) that handball.net still lists under their original club: shown everywhere (page, images, bot, API) as `CLUB_NAME`. Teams in `TEAM_IDS` get the club name anyway. A trailing Roman numeral of the source name (`… II`) is kept. |
-| `CLUB_NAME` | `HSG Wölfe Voreifel` | The club's name everywhere (page, push, feed, images, bot, API) for the own teams (`TEAM_IDS`) and for `CLUB_TEAM_IDS`, whatever handball.net calls them. A trailing Roman numeral of the source name (`… II`) is kept. |
+| `CLUB_TEAM_IDS` | – | Team IDs not in `TEAM_IDS` (e.g. a club team met as an opponent) that handball.net still lists under their original club: shown everywhere (page, images, bot) as `CLUB_NAME`. Teams in `TEAM_IDS` get the club name anyway. A trailing Roman numeral of the source name (`… II`) is kept. |
+| `CLUB_NAME` | `HSG Wölfe Voreifel` | The club's name everywhere (page, push, feed, images, bot) for the own teams (`TEAM_IDS`) and for `CLUB_TEAM_IDS`, whatever handball.net calls them. A trailing Roman numeral of the source name (`… II`) is kept. |
 | `PRIMARY_COLOR` / `SECONDARY_COLOR` / `ACCENT_COLOR` | club default | Palette of images and page, `#rrggbb`. |
 | `SYNC_INTERVAL_MS` | `900000` | Tick of the scheduler, minimum 5 min. |
 | `SYNC_LIVE_INTERVAL_MS` | `60000` | Tick while a match is live (min 20 s, `0` = off); also polls from 5 minutes before kick-off instead of kick-off + 45 min. Each tick stores score, game clock and the latest goals; the page replaces „Nächstes Spiel“ by a live view and reloads itself every 30 s. |
 | `SITE_PUSH_MAX` | `2000` | Maximum number of browser push subscriptions; the subscribe route answers 503 above it. |
-| `TELEGRAM_BOT_TOKEN` | – | Enables the bot. |
+| `TELEGRAM_BOT_TOKEN` | – | Enables the bot. Best set on `/settings` („Token prüfen“, then save: the bot registers at once). |
 | `TELEGRAM_INVITE_CODE` | – | Restricts `/start` to invitees. |
 | `TELEGRAM_ADMIN_CHAT_IDS` | – | Operator chats (status, broadcast, feedback, alerts). In a listed group, only members whose own ID is listed too may use the operator commands. |
 | `BOT_AUTO_DESCRIPTION` | `true` | Keep the bot's profile texts in sync with standings and next match. |
 | `SITE_ENABLED` | `true` | Serve the microsite. |
 | `SITE_URL` | – | Root under which a proxy serves the pages. |
-| `SITE_FRAME_ANCESTORS` | – (none) | https origins allowed to embed the microsite in an iframe (the club website), comma-separated, e.g. `https://woelfe-voreifel.de,https://www.woelfe-voreifel.de` (with and without `www` are two origins). Set: the CSP carries `frame-ancestors 'self' <origins>` and `X-Frame-Options` is dropped (it knows no list of origins). Empty: `frame-ancestors 'none'` plus `X-Frame-Options: SAMEORIGIN`. For testing only, a single `*` lets any site embed the microsite (`frame-ancestors *`; the service logs a warning at start) — replace it with the club's origins afterwards. A leading wildcard covers all subdomains (`https://*.example.com`). `/settings`, `/api/*` and the Telegram webhook can never be framed. Read at start: restart the container after a change. Append `?kompakt=1` to the embedded URL: the page then drops logo and club name from its header, since the club site shows them already; `&farbe=dunkel` or `&farbe=hell` fixes the colour scheme. The block to paste into the club site, with the script that sizes the frame to its content, is under „Embedding in the club website“ below. Browsers never offer to install a page inside an iframe, so the embedded page shows an install icon that opens the full page in a new tab with `?installieren=1`; a `sandbox` on the iframe needs `allow-popups allow-popups-to-escape-sandbox` for that. The same goes for the bell: browsers block the notification permission prompt inside a foreign iframe, so there the bell opens the full page in a new tab with `?benachrichtigungen=1`, which shows the notification window right away. The club site can link to `<PUBLIC_URL>/?installieren=1` (or a team's `/<team-id>/?installieren=1`) itself: the page opens with the install window (install button in Chrome/Edge/Samsung, „Teilen → Zum Home-Bildschirm“ steps on iPhone and iPad). The installed app always starts in the full view. |
+| `SITE_FRAME_ANCESTORS` | – (none) | https origins allowed to embed the microsite in an iframe (the club website), comma-separated, e.g. `https://woelfe-voreifel.de,https://www.woelfe-voreifel.de` (with and without `www` are two origins). Set: the CSP carries `frame-ancestors 'self' <origins>` and `X-Frame-Options` is dropped (it knows no list of origins). Empty: `frame-ancestors 'none'` plus `X-Frame-Options: SAMEORIGIN`. For testing only, a single `*` lets any site embed the microsite (`frame-ancestors *`; the service logs a warning at start) — replace it with the club's origins afterwards. A leading wildcard covers all subdomains (`https://*.example.com`). `/settings` and the Telegram webhook can never be framed. Read per request: a change on `/settings` applies at once. Append `?kompakt=1` to the embedded URL: the page then drops logo and club name from its header, since the club site shows them already; `&farbe=dunkel` or `&farbe=hell` fixes the colour scheme. The block to paste into the club site, with the script that sizes the frame to its content, is under „Embedding in the club website“ below. Browsers never offer to install a page inside an iframe, so the embedded page shows an install icon that opens the full page in a new tab with `?installieren=1`; a `sandbox` on the iframe needs `allow-popups allow-popups-to-escape-sandbox` for that. The same goes for the bell: browsers block the notification permission prompt inside a foreign iframe, so there the bell opens the full page in a new tab with `?benachrichtigungen=1`, which shows the notification window right away. The club site can link to `<PUBLIC_URL>/?installieren=1` (or a team's `/<team-id>/?installieren=1`) itself: the page opens with the install window (install button in Chrome/Edge/Samsung, „Teilen → Zum Home-Bildschirm“ steps on iPhone and iPad). The installed app always starts in the full view. |
 | `SITE_OPERATOR` / `SITE_FEEDBACK_MAIL` | – | Footer of the microsite. |
 | `SITE_PREVIEW_TOKEN` | – (off) | Secret (≥ 32 chars) for `/<team>/?vorab=<token>`: the page then also shows what is not public yet (ClubDesk photos). Responses are `private, no-store`; the token is masked in logs. |
 | `CLUBDESK_URL` / `CLUBDESK_TEAMS` | – | Club website on ClubDesk and team-id → team-page mapping (`75796=woelfe_1`). Daily fetch (and right after a changed release on `/settings`) of the group photo (youth only with a released group photo) and the squad portraits (youth only when released); stored downscaled as JPEG. Always in the preview; public per `SITE_PHOTOS`. |
 | `SITE_PHOTOS` | – (preview only) | Which ClubDesk photos a team shows publicly: `75796=mannschaft+spieler,96254=mannschaft` (`mannschaft` = group photo, `spieler` = portraits with names; for youth teams the only way they are fetched at all). Edited per team row on `/settings`. |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | generated | Web push keys; generated and stored on first use. |
-| `API_TOKEN` | – | Bearer token for `/api/*`; unset means 401 for all of it. |
 | `DATA_DIR` / `DATABASE_PATH` | `./data` | Where the SQLite file lives. |
 | `TRUST_PROXY` | – | Proxy addresses (IP/CIDR list) whose `X-Forwarded-For` is trusted. |
-| `IMPORT_TODOTECK_DB` | – | One-time import from a Todoteck database at startup. |
+| `LOG_LEVEL` | `info` | `error`, `warn`, `info` or `debug`; switched on `/settings` without a restart. |
 
 ### Embedding in the club website
 
-Allow the club site in `SITE_FRAME_ANCESTORS`, then paste this block into one HTML element of
+Allow the club site in `SITE_FRAME_ANCESTORS` (Microsite tab), then paste this block — the tab shows it with this service's address, ready to copy — into one HTML element of
 the club site — iframe, fallback link and script belong together on the same page. Replace
 `https://app.woelfe-voreifel.de` (three times) with the address the microsite runs under.
 `?kompakt=1` drops logo and club name, `&farbe=dunkel` (or `hell`) fixes the colour scheme
@@ -224,16 +238,11 @@ Without the script the frame keeps its fixed height and scrolls inside; everythi
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `/settings`, `/settings/settings.js`, `/settings/sw.js`, `/settings/vorschau`, `/settings/api/*` | admin session (except the page and its two scripts) | Settings page (login, state, save, live check, change log, team lookup, invite QR code, test message and test push, sync, `.env` export, log out everywhere, redirect to the secret preview). 404 without `ADMIN_PASSWORD`. |
+| `/settings`, `/settings/settings.js`, `/settings/sw.js`, `/settings/vorschau`, `/settings/api/*` | admin session (except the page and its two scripts) | Settings page (login, state, save, live check, change log, team lookup, season check, club team list, take over from the environment, bot token check, embedding block, invite QR code, test message and test push, sync, `.env` export, log out everywhere, redirect to the secret preview). 404 without `ADMIN_PASSWORD`. |
 | `GET /healthz` | none | Liveness, version, fetch state (`sync`: last success, failures, counters — no error text). |
 | `GET /`, `GET /:teamId/…` | none | Microsite (start page `/` „Wölfe live - Handball im Revier“ with home and away games of the coming weekend — in holidays the next weekend with a match —, HTML, match pages `spiel/:matchId`, `app.js`, `sw.js`, manifest, logo, fonts, `bild/*.png`, `feed.xml`, `kalender.ics`, `push`; at the root `/push` for the club subscription and `/bild/wochenende.png`, the weekend's home games as a shareable image; the start page also shows today's games, the results of the last weekend with a match, and per team place, points as plus:minus („6:4“) and the league). 404 while `SITE_ENABLED=false`. |
 | `POST /telegram/webhook/:secret` | path + header secret | Telegram updates. |
 | `GET /inline/:art.jpg` | HMAC signature in URL | Images for the bot's inline mode. |
-| `GET /api/overview` | Bearer | Teams, matches, standings, bot and site summary — the shape Todoteck's cockpit consumes. Additive since the two-level switcher: `teams[].group` (`herren`/`frauen`/`jungen`/`maedchen`/`null`), `matches[].is_live` and `matches[].live` (its `items[]` additionally carry `player_id`, `number` and `is_home` of the scorer). |
-| `GET /api/teams/:id/details` | Bearer | Season lines, records, players, available images. |
-| `GET /api/teams/:id/bild/:art` | Bearer | PNG: `tabelle`, `kader`, `spiel`, `endstand?match=`, `verlauf`, `torjaeger`, `saison`, `spieler/:playerId`. |
-| `POST /api/sync` | Bearer | Force a fetch, then push to bot and site. |
-| `GET /api/health` | Bearer | Fetch/bot/site health for Todoteck's service row. |
 
 ## Database schema
 
@@ -246,8 +255,7 @@ each and recorded in `migrations`.
 
 ## Security aspects
 
-- Visitors need no account and get no cookie. Two protected surfaces: `/api/*` (Bearer token,
-  constant-time compare, closed entirely without `API_TOKEN`) and `/settings` (admin account from the
+- Visitors need no account and get no cookie. One protected surface: `/settings` (admin account from the
   environment, session cookie, CSRF protection; absent without `ADMIN_PASSWORD`, optionally on its own `ADMIN_PORT`).
 - The webhook checks a random path and Telegram's secret header; inline images carry a
   signed, expiring URL. Rate limits on every public route.
@@ -283,7 +291,7 @@ the CSP allows only `'self'`). A host with several roles lists them comma separa
 | `*.push.services.mozilla.com` | Connection | Web Push to Firefox | as above |
 | `*.notify.windows.com` | Connection | Web Push to Edge | as above |
 | `*.push.apple.com` | Connection | Web Push to Safari | as above |
-| `www.handball.net` | Connection, Link | Source: token page and internal API (matches, standings, line-ups), team logos; links to team and match pages | Scheduler tick, live tick, `POST /api/sync` |
+| `www.handball.net` | Connection, Link | Source: token page and internal API (matches, standings, line-ups), team logos, club pages (`/club/<id>?fed_id=`, teams of a club); links to team and match pages | Scheduler tick, live tick, „Jetzt abrufen“ and the season-change assistant on `/settings` |
 | `handball.net` | Connection | Team logos (allowlist of `safeFetchImage`) | Scheduler tick, at most ten logos per run, 30 days cached |
 | `handball360.isquad.de` | Connection | Team logos (allowlist of `safeFetchImage`) | as above |
 | `localhost` | Default | Fallback for `PUBLIC_URL` | only without `PUBLIC_URL` |
@@ -306,7 +314,7 @@ Not in the table, on purpose:
   accepted only for the push hosts above (`isPushServiceUrl`, at subscription and at
   delivery). Logo URLs come from handball.net's answers and are fetched only from the
   logo hosts above, through `safeFetch`.
-- **Inbound callers.** Telegram (webhook) and Todoteck (`/api/*`) call this service;
+- **Inbound callers.** Telegram (webhook) calls this service, browsers load the microsite;
   this service never calls Todoteck.
 
 Adding a host: write the client (addresses from input or foreign answers through

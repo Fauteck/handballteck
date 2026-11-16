@@ -145,3 +145,12 @@ export function syncJetzt(): boolean {
   void syncAktion().catch(err => serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, '[settings] Lauf gescheitert'));
   return true;
 }
+
+/**
+ * Die Einstellungen, deren Wert noch aus der Umgebung kommt (nicht von der
+ * Seite, nicht der Standard). „Umgebungswerte übernehmen“ speichert sie auf
+ * der Seite; danach können sie aus der `.env`.
+ */
+export function nurAusDerUmgebung(): string[] {
+  return EINSTELLUNGEN.filter(e => quelleVon(e.key) === 'umgebung').map(e => e.key);
+}

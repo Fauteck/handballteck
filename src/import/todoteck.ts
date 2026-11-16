@@ -1,6 +1,7 @@
 /**
- * Übernahme aus Todoteck — einmalig, beim Start, gesteuert über
- * `IMPORT_TODOTECK_DB`.
+ * Übernahme aus Todoteck — von Hand mit `npm run import:todoteck`. Der Aufruf
+ * beim Start (`IMPORT_TODOTECK_DB`) ist seit dem 16.11.2026 entfernt; der Umzug
+ * war am 28.09.2026.
  *
  * Bis zum 28.09.2026 lag die Handball-Verfolgung in Todoteck; die dreizehn
  * Tabellen dort heißen seit dessen Migration 0105 `legacy_handball_*` (oder

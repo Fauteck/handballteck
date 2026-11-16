@@ -3,17 +3,16 @@
  *
  * Der Takt ist ein einfacher Zeitgeber statt Todotecks Sync-Kern: ein Job,
  * keine Laufhistorie in einer Tabelle — was der Lauf tat, steht im Log und
- * in `/api/health`. Ein Lauf, der noch läuft, wird nicht überholt.
+ * auf der Einstellungsseite unter „Zustand“. Ein Lauf, der noch läuft, wird nicht überholt.
  */
 import { runMigrations } from './db/migrate';
 import { buildServer } from './server';
-import { port, teamIds, publicUrl, importTodoteckDb, apiToken, adminPort, adminPassword, ADMIN_PASSWORD_MIN } from './config';
+import { port, teamIds, publicUrl, adminPort, adminPassword, ADMIN_PASSWORD_MIN, logLevel, siteFrameAncestors, botToken } from './config';
 import { beiAenderung, setzeSyncAktion } from './lib/settingsStore';
-import { importTodoteck } from './import/todoteck';
 import { syncHandballTeams, naechsterAbstandMs } from './lib/handballTeam';
 import { handballOverview } from './lib/handballSicht';
 import { clubdeskHolen, clubdeskFaelligMachen } from './lib/clubdesk';
-import { registerHandballBotAtBoot, refreshHandballWebhookInfo } from './lib/handballBotBasis';
+import { registerHandballBotAtBoot, refreshHandballWebhookInfo, activateHandballBot, refreshHandballAdminMenu } from './lib/handballBotBasis';
 import { pflegeHandballBotBeschreibung } from './lib/handballBotBeschreibung';
 import { pushHandballBot } from './lib/handballBotPush';
 import { pushHandballSite } from './lib/handballSitePush';
@@ -59,26 +58,6 @@ async function main(): Promise<void> {
   const fastify = await buildServer();
   if (neu.length > 0) fastify.log.info(`Migrationen angewendet: ${neu.join(', ')}`);
 
-  // Übernahme aus Todoteck — einmalig, nur mit IMPORT_TODOTECK_DB, vor dem
-  // ersten Takt (sonst schickte der Bot womöglich, was dort schon raus war).
-  const importQuelle = importTodoteckDb();
-  if (importQuelle) {
-    try {
-      const r = importTodoteck(importQuelle);
-      if (r.status === 'schon_erledigt') fastify.log.info('Übernahme aus Todoteck lief schon — übersprungen. IMPORT_TODOTECK_DB kann aus dem Stack.');
-      else if (r.status === 'quelle_fehlt') fastify.log.error(`Übernahme aus Todoteck: ${importQuelle} nicht gefunden — nichts übernommen`);
-      else {
-        for (const t of r.tabellen) fastify.log.info(`Übernahme ${t.tabelle}: ${t.gelesen} gelesen, ${t.uebernommen} übernommen`);
-        for (const h of r.hinweise) fastify.log.warn(`Übernahme: ${h}`);
-        fastify.log.info(`Übernahme aus Todoteck fertig: ${r.zeilen} Zeilen, VAPID ${r.vapid}`);
-      }
-    } catch (err) {
-      fastify.log.error({ err: err instanceof Error ? err.message : String(err) }, 'Übernahme aus Todoteck gescheitert');
-    }
-  }
-  // SEC-3-003: Der Token ist das einzige Schloss vor /api/* — ein kurzer lässt sich durchprobieren.
-  const token = apiToken();
-  if (token && token.length < 32) fastify.log.warn(`API_TOKEN hat nur ${token.length} Zeichen — mindestens 32 nehmen (openssl rand -hex 32).`);
   // Einstellungsseite: ein Lauf auf Knopfdruck, und nach Änderungen an Mannschaften oder Quellen sofort.
   setzeSyncAktion(() => einTakt(true));
   beiAenderung(keys => {
@@ -86,6 +65,18 @@ async function main(): Promise<void> {
     const fotos = keys.some(k => ['CLUBDESK_URL', 'CLUBDESK_TEAMS', 'SITE_PHOTOS'].includes(k));
     if (fotos) clubdeskFaelligMachen();
     if (fotos || keys.some(k => ['TEAM_IDS', 'CLUB_TEAM_IDS', 'CLUB_NAME'].includes(k))) void einTakt();
+    // Das Log-Level gilt ohne Neustart.
+    if (keys.includes('LOG_LEVEL')) { fastify.log.level = logLevel(); fastify.log.info(`Log-Level jetzt ${logLevel()}`); }
+    if (keys.includes('SITE_FRAME_ANCESTORS') && siteFrameAncestors()[0] === '*') fastify.log.warn('SITE_FRAME_ANCESTORS=* — jede fremde Seite darf die Microsite einbetten. Nur zum Testen.');
+    // Ein neuer Bot-Token: Webhook, Befehle und Menü beim (womöglich anderen) Bot anmelden.
+    if (keys.includes('TELEGRAM_BOT_TOKEN')) {
+      if (!botToken()) fastify.log.info('Bot-Token entfernt — der Bot ist aus.');
+      else void activateHandballBot()
+        .then(r => { if (r) fastify.log.info(`Telegram-Bot angemeldet (${new URL(r.url).host}${r.username ? `, @${r.username}` : ''})`); })
+        .catch(err => fastify.log.error({ err: err instanceof Error ? err.message : String(err) }, 'Telegram-Bot konnte nicht angemeldet werden'));
+    } else if (keys.includes('TELEGRAM_ADMIN_CHAT_IDS')) {
+      void refreshHandballAdminMenu().catch(err => fastify.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'Admin-Menü des Bots nicht aktualisiert'));
+    }
   });
   if (!adminPassword()) {
     if (process.env.ADMIN_PASSWORD) fastify.log.warn(`ADMIN_PASSWORD hat weniger als ${ADMIN_PASSWORD_MIN} Zeichen — die Einstellungsseite bleibt aus.`);

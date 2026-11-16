@@ -433,6 +433,81 @@ export async function fetchActiveSeason(): Promise<HandballSeason> {
   return { id: aktive.id, name: aktive.name, isActive: !!aktive.is_active };
 }
 
+// ---------------------------------------------------------------------------
+// Vereinsseite: die Mannschaften eines Vereins
+// ---------------------------------------------------------------------------
+
+export interface HandballClubTeam {
+  id: string;
+  /** Der Name, unter dem die Mannschaft antritt („WÖLFE VOREIFEL II“, „HSG WÖLFE VOREIFEL“). */
+  name: string;
+  clubId: string;
+  clubName: string;
+  /** `M`, `F` oder leer. */
+  gender: string;
+  /** Altersklasse der Quelle: „ERWACHSENE“, „B-JUGEND“, … */
+  age: string;
+}
+
+const ClubTeamsAntwort = z.array(z.object({
+  id: z.union([z.number(), z.string()]),
+  name: z.string(),
+  club: z.object({ id: z.string(), name: z.string().optional() }).passthrough(),
+  gender: z.object({ id: z.string().optional() }).passthrough().nullable().optional(),
+  age_category: z.object({ name: z.string().optional() }).passthrough().nullable().optional(),
+}).passthrough());
+
+/**
+ * Die Mannschaften aus der öffentlichen Vereinsseite (`/club/<id>?fed_id=<kreis>`).
+ * Die Seite liefert sie nicht über eine eigene Schnittstelle aus, sondern als
+ * Zustand der serverseitig gerenderten App im `<script id="serverApp-state">`
+ * — darin die Antwort von `/api/new/teams` (Stand 16.11.2026). Gelesen wird
+ * jede Liste, deren Einträge Mannschaften dieses Vereins sind; ändert die
+ * Seite den Aufbau, scheitert es laut (`HandballEmptyError`). Ohne `fed_id`
+ * fehlt der Zustand, deshalb gehört er zur Vereinsangabe.
+ */
+export function parseClubTeams(html: string, clubId: string): HandballClubTeam[] {
+  const m = /<script[^>]*id="serverApp-state"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
+  if (!m) throw new HandballEmptyError('handball.net: Vereinsseite ohne Zustand — Aufbau der Seite geändert?');
+  let zustand: unknown;
+  try { zustand = JSON.parse(m[1]); } catch { throw new HandballEmptyError('handball.net: Zustand der Vereinsseite nicht lesbar'); }
+  const out: HandballClubTeam[] = [];
+  const gesehen = new Set<string>();
+  for (const eintrag of Object.values(zustand as Record<string, unknown>)) {
+    const daten = (eintrag as { b?: { data?: unknown } } | null)?.b?.data;
+    if (!Array.isArray(daten) || daten.length === 0) continue;
+    const geprueft = ClubTeamsAntwort.safeParse(daten);
+    if (!geprueft.success) continue;
+    for (const t of geprueft.data) {
+      const id = String(t.id);
+      if (t.club.id !== clubId || !/^\d{1,12}$/.test(id) || gesehen.has(id)) continue;
+      gesehen.add(id);
+      out.push({ id, name: schoenerName(t.name), clubId: t.club.id, clubName: t.club.name ?? '', gender: t.gender?.id ?? '', age: t.age_category?.name ?? '' });
+    }
+  }
+  if (out.length === 0) throw new HandballEmptyError(`handball.net: keine Mannschaften auf der Vereinsseite ${clubId} — Vereins-ID und Kreis prüfen`);
+  return out;
+}
+
+export async function fetchClubTeams(clubId: string, fedId: string): Promise<HandballClubTeam[]> {
+  if (!/^[a-z0-9]{3,20}$/i.test(clubId) || !/^\d{1,6}$/.test(fedId)) throw new HandballEmptyError('handball.net: ungültige Vereinsangabe');
+  zaehler.requests++;
+  try {
+    const res = await mitTimeout(`${BASE_URL}/club/${encodeURIComponent(clubId)}?fed_id=${encodeURIComponent(fedId)}`, {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html' },
+    });
+    if (res.status >= 500 || res.status === 429) throw new HandballTransientError(`handball.net: HTTP ${res.status} für die Vereinsseite`);
+    if (res.status === 404) throw new HandballEmptyError(`handball.net: Verein ${clubId} nicht gefunden`);
+    if (!res.ok) throw new HandballBlockedError(`handball.net: Vereinsseite nicht ladbar (HTTP ${res.status})`);
+    const teams = parseClubTeams(await res.text(), clubId);
+    zaehler.lastOkAt = new Date().toISOString();
+    return teams;
+  } catch (err) {
+    zaehler.failures++;
+    throw err;
+  }
+}
+
 /**
  * Alle Spiele einer Mannschaft in einer Saison — 18 in einer Kreisoberliga.
  * Null Spiele heißt „falsche Team-ID oder Aufbau geändert", nie „spielfrei".

@@ -2,7 +2,7 @@
   "name": "handballteck",
   "version": "1.0.0",
   "private": true,
-  "description": "Handball-Verfolgung für eine Amateur-Mannschaft von handball.net: Microsite, Telegram-Bot, Web-Push, Kalender-Abo, Feed — und eine kleine API für das Todoteck-Cockpit.",
+  "description": "Handball-Verfolgung für eine Amateur-Mannschaft von handball.net: Microsite, Telegram-Bot, Web-Push, Kalender-Abo, Feed",
   "license": "MIT",
   "engines": {
     "node": ">=26"
