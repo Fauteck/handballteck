@@ -96,8 +96,7 @@ Dann umziehen:
 4. **Starten:** `docker compose up -d && docker compose logs -f handballteck`. Im Log
    steht „Handballteck läuft … erreichbar unter https://app.woelfe-voreifel.de“. Den
    Telegram-Webhook stellt der Dienst beim Start selbst auf die neue Adresse um.
-5. **Einstellungsseite prüfen** (Tunnel vom eigenen Rechner aus:
-   `ssh -L 3411:127.0.0.1:3411 root@217.160.74.3`, dann `http://localhost:3411/`): Steht
+5. **Einstellungsseite prüfen** (`https://app.woelfe-voreifel.de/settings`): Steht
    dort ein gespeichertes `SITE_URL` mit der alten Domain, auf „Auf die Umgebung
    zurücksetzen“. Sonst zeigen Kalender, Feed und Vorschaubilder weiter auf die alte Adresse.
 6. **Nachkontrolle:** `/healthz`, eine Mannschaftsseite, `/status` im Bot aus einem
@@ -137,8 +136,9 @@ Dann umziehen:
   liegen auf demselben Server. Mindestens eine Kopie gehört woandershin (IONOS-Backup oder
   regelmäßig abholen).
 - **Logs:** `docker compose logs --tail 200 handballteck`.
-- **Einstellungsseite:** nur per SSH-Tunnel (Phase B, Schritt 5). Port 3411 nie in der
-  Firewall freigeben.
+- **Einstellungsseite:** öffentlich unter `https://app.woelfe-voreifel.de/settings`, Login
+  mit `ADMIN_USER`/`ADMIN_PASSWORD` aus `.env`. Das Passwort lang und zufällig halten
+  (`openssl rand -base64 24`); die Anmeldung ist pro Absender gedrosselt.
 
 ## Rückweg
 
