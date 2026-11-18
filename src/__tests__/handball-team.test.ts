@@ -901,6 +901,22 @@ describe('Gruppen, Vereinsname und Live-Stand', () => {
     expect(seite.next_match?.away_name).toBe('D2 (SGO)');
   });
 
+  it('nennt zwei eigene Mannschaften einer Staffel in der Tabelle der Seite unter ihrem Label', () => {
+    trageTeamEin(`${TEAM}=D2 (RTV),96300=D2 (SGO)`);
+    legeSpiel({ home_name: 'HSG Wölfe Voreifel II', away_id: '96301', away_name: 'HV Erftstadt' });
+    const zeile = (position: number, teamId: string, teamName: string) => ({ round: 3, position, teamId, teamName, played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 9, goalsAgainst: 3, goalsDiff: 6, points: 6 });
+    dbRef.insert(schemaRef.handball_standings).values({
+      phase_id: 12800, season_id: 2627, competition_name: 'Kreisliga D', fetched_at: new Date().toISOString(),
+      payload: JSON.stringify([zeile(1, '96300', 'HSG Wölfe Voreifel II'), zeile(2, TEAM, 'HSG Wölfe Voreifel II'), zeile(3, '96301', 'HV Erftstadt')]),
+    } as never).run();
+    // Bot und API behalten den Vereinsnamen …
+    const roh = mod.handballOverview().teams[0];
+    expect(roh.standings[0].rows.map(r => r.teamName)).toEqual(['HSG Wölfe Voreifel II', 'HSG Wölfe Voreifel II', 'HV Erftstadt']);
+    // … die Seite unterscheidet die beiden.
+    const seite = mod.mitLabelsInSpielen(mod.handballOverview()).teams[0];
+    expect(seite.standings[0].rows.map(r => r.teamName)).toEqual(['D2 (SGO)', 'D2 (RTV)', 'HV Erftstadt']);
+  });
+
   it('behält die römische Ziffer der Mannschaft beim Umbenennen', () => {
     process.env.CLUB_TEAM_IDS = '1';
     try {
