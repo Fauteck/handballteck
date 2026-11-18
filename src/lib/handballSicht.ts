@@ -285,7 +285,9 @@ export function automatischeBereiche(): Record<string, HandballGroup | null> {
  * Für die Microsite: In Spielen heißen die eigenen Mannschaften wie überall auf
  * der Seite — unter ihrem Label („D1 (RTV)"), nicht unter dem Vereinsnamen mit
  * der Ziffer der Quelle („Wölfe Voreifel II"); auch als Gegner einer anderen
- * eigenen. Bot, Kalender des Bots und `/api` behalten den Vereinsnamen, denn
+ * eigenen. Dasselbe gilt für die Zeilen der Tabellen, sonst stünden zwei
+ * eigene Mannschaften einer Staffel („D2 (RTV)", „D2 (SGO)") beide als
+ * „Wölfe Voreifel II" darin. Bot, Kalender des Bots und `/api` behalten den Vereinsnamen, denn
  * dort fehlt der Zusammenhang der Seite. Liefert eine Kopie; die übergebene
  * Sicht bleibt, wie sie ist (sie kann die eingefrorene aus dem Zwischenspeicher sein).
  */
@@ -301,6 +303,9 @@ export function mitLabelsInSpielen(vorlage: HandballOverview): HandballOverview 
     v.matches.forEach(benennen);
     benennen(v.next_match);
     benennen(v.last_match);
+    for (const t of v.standings) {
+      for (const z of [...t.rows, ...(t.previous_rows ?? []), ...t.history_rows]) z.teamName = labelVon.get(z.teamId) ?? z.teamName;
+    }
   }
   return sicht;
 }
