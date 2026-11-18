@@ -122,6 +122,21 @@ describe('Einstellungsseite im Browser', () => {
     expect(await page.isVisible('.leiste')).toBe(true);
   });
 
+  it('macht aus einer eingefügten Gruppenadresse den Verweis und speichert das Häkchen „Vereinslogo“', async () => {
+    await page.click('.leiste >> text=Verwerfen');
+    await page.click('#tab_mannschaften');
+    const seite = page.locator('[aria-label="ClubDesk-Seite, Mannschaft 1"]');
+    await seite.fill('https://verein.clubdesk.com/spielbetrieb/kinderhandball?b=1000223&c=GD1000129&s=djEtAbc=');
+    await seite.blur();
+    expect(await seite.inputValue()).toBe('kinderhandball:1000129');
+    await page.check('[aria-label="Vereinslogo statt handball.net-Logo, Mannschaft 1"]');
+    await page.click('.leiste button.primary');
+    await page.click('dialog button.primary');
+    await page.waitForSelector('.meldung.ok:not([hidden])');
+    expect(konfig.clubdeskTeams().get('96254')).toBe('kinderhandball:1000129');
+    expect([...konfig.clubLogoTeams()]).toEqual(['96254']);
+  });
+
   it('läuft ohne Skriptfehler (auch nicht durch die CSP)', () => {
     expect(skriptFehler).toEqual([]);
   });

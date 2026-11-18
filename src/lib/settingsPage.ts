@@ -118,7 +118,7 @@ export const SETTINGS_JS = String.raw`(function () {
   var nachMannschaften = [];
   var farbenAktualisieren = null;
   var refs = {};
-  var MANNSCHAFT_KEYS = ['TEAM_IDS', 'CLUBDESK_TEAMS', 'TEAM_GROUPS', 'SITE_PHOTOS'];
+  var MANNSCHAFT_KEYS = ['TEAM_IDS', 'CLUBDESK_TEAMS', 'TEAM_GROUPS', 'SITE_PHOTOS', 'CLUB_LOGO_TEAMS'];
 
   function el(tag, attrs) {
     var e = document.createElement(tag);
@@ -351,21 +351,40 @@ export const SETTINGS_JS = String.raw`(function () {
       return m.id + '=' + [m.gruppe ? 'mannschaft' : null, m.spieler ? 'spieler' : null].filter(Boolean).join('+');
     }).join(',');
   }
+  function logoText(liste) {
+    return liste.filter(function (m) { return m.id && m.logo; }).map(function (m) { return m.id; }).join(',');
+  }
+  /**
+   * Was im Feld „ClubDesk-Seite“ steht, in der gespeicherten Form: eine
+   * eingefügte Adresse wird zur Teamseite (woelfe_1) oder zur Gruppe einer
+   * Seite mit Gruppenkacheln (kinderhandball:1000129 aus …/kinderhandball?…&c=GD1000129).
+   */
+  function clubdeskVerweis(roh) {
+    var t = String(roh || '').trim();
+    var team = /\/spielbetrieb\/teams-und-tabellen\/([a-z0-9_-]{1,40})\/?(?:[?#].*)?$/i.exec(t);
+    if (team) return team[1];
+    var gruppe = /\/spielbetrieb\/([a-z0-9_-]{1,40})\/?\?(?:.*&)?c=GD(\d{1,12})(?:&|#|$)/i.exec(t);
+    if (gruppe) return gruppe[1].toLowerCase() + ':' + gruppe[2];
+    return t;
+  }
   function bereicheText(liste) {
     return liste.filter(function (m) { return m.id && m.bereich; }).map(function (m) { return m.id + '=' + m.bereich; }).join(',');
   }
-  function leereMannschaft() { return { id: '', name: '', bereich: '', slug: '', gruppe: false, spieler: false }; }
+  function leereMannschaft() { return { id: '', name: '', bereich: '', slug: '', gruppe: false, spieler: false, logo: false }; }
 
-  /** Die Zeilen aus vier Einstellungen — mit offenen Änderungen (z. B. aus dem Protokoll wiederhergestellt). */
-  function mannschaftenAusWerten(teams, clubdesk, bereiche, fotos) {
+  /** Die Zeilen aus fünf Einstellungen — mit offenen Änderungen (z. B. aus dem Protokoll wiederhergestellt). */
+  function mannschaftenAusWerten(teams, clubdesk, bereiche, fotos, logos) {
     var liste = mannschaftenLesen(teams);
     var slugs = paareLesen(clubdesk), gesetzt = paareLesen(bereiche), rechteJe = paareLesen(fotos);
+    var mitLogo = {};
+    String(logos || '').split(/[\s,;]+/).forEach(function (id) { if (id) mitLogo[id] = true; });
     liste.forEach(function (m) {
       m.bereich = gesetzt[m.id] || '';
       m.slug = slugs[m.id] || '';
       var rechte = (rechteJe[m.id] || '').toLowerCase().split('+');
       m.gruppe = rechte.indexOf('mannschaft') >= 0;
       m.spieler = rechte.indexOf('spieler') >= 0;
+      m.logo = !!mitLogo[m.id];
     });
     return liste;
   }
@@ -406,9 +425,10 @@ export const SETTINGS_JS = String.raw`(function () {
     var clubdeskFeld = feldVon('CLUBDESK_TEAMS');
     var fotosFeld = feldVon('SITE_PHOTOS');
     var bereichFeld = feldVon('TEAM_GROUPS');
-    var startListe = mannschaftenAusWerten(f.wert, clubdeskFeld ? clubdeskFeld.wert : '', bereichFeld ? bereichFeld.wert : '', fotosFeld ? fotosFeld.wert : '');
-    var startClubdesk = clubdeskText(startListe), startFotos = fotosText(startListe), startBereiche = bereicheText(startListe);
-    if (!entwurf) entwurf = mannschaftenAusWerten(kuenftigRoh('TEAM_IDS'), kuenftigRoh('CLUBDESK_TEAMS'), kuenftigRoh('TEAM_GROUPS'), kuenftigRoh('SITE_PHOTOS'));
+    var logoFeld = feldVon('CLUB_LOGO_TEAMS');
+    var startListe = mannschaftenAusWerten(f.wert, clubdeskFeld ? clubdeskFeld.wert : '', bereichFeld ? bereichFeld.wert : '', fotosFeld ? fotosFeld.wert : '', logoFeld ? logoFeld.wert : '');
+    var startClubdesk = clubdeskText(startListe), startFotos = fotosText(startListe), startBereiche = bereicheText(startListe), startLogos = logoText(startListe);
+    if (!entwurf) entwurf = mannschaftenAusWerten(kuenftigRoh('TEAM_IDS'), kuenftigRoh('CLUBDESK_TEAMS'), kuenftigRoh('TEAM_GROUPS'), kuenftigRoh('SITE_PHOTOS'), kuenftigRoh('CLUB_LOGO_TEAMS'));
     var bereiche = state.bereiche || [];
     var automatisch = state.bereichAutomatisch || {};
     function wirksam(m) { return m.bereich || automatisch[m.id] || ''; }
@@ -433,14 +453,14 @@ export const SETTINGS_JS = String.raw`(function () {
         else if (gesehen[m.id]) meldung = meldung || 'Die Team-ID ' + m.id + ' steht zweimal da.';
         gesehen[m.id] = true;
         if (/[,;\n]/.test(m.name) || m.name.length > 40) meldung = meldung || 'Der Name darf höchstens 40 Zeichen haben, ohne Komma und Semikolon.';
-        if (m.slug && !/^[a-z0-9_-]{1,40}$/i.test(m.slug)) meldung = meldung || 'Die ClubDesk-Seite ist der letzte Teil der Adresse, z. B. woelfe_1.';
+        if (m.slug && !/^[a-z0-9_-]{1,40}(?::\d{1,12})?$/i.test(m.slug)) meldung = meldung || 'Die ClubDesk-Seite ist der letzte Teil der Adresse (z. B. woelfe_1) oder die eingefügte Adresse einer Gruppe, z. B. vom Kinderhandball.';
         if ((m.gruppe || m.spieler) && !m.slug) meldung = meldung || 'Fotos brauchen die ClubDesk-Seite der Mannschaft.';
       });
       if (meldung) ungueltig[f.key] = true; else delete ungueltig[f.key];
       meldungSeite = meldung;
       fehlerAnzeigen();
     }
-    // Fehler der Seite und des Servers — auch zu den versteckten Feldern (ClubDesk, Bereiche, Fotos).
+    // Fehler der Seite und des Servers — auch zu den versteckten Feldern (ClubDesk, Bereiche, Fotos, Logo).
     function fehlerAnzeigen() {
       var texte = [];
       if (meldungSeite) texte.push(meldungSeite);
@@ -457,7 +477,7 @@ export const SETTINGS_JS = String.raw`(function () {
     var gezogen = -1;
     function neuZeichnen() {
       behaelter.textContent = '';
-      behaelter.appendChild(el('div', { class: 'mrow kopf', 'aria-hidden': 'true' }, el('span'), el('span', { text: 'Bereich' }), el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: von handball.net)' }), el('span', { text: 'ClubDesk-Seite' }), el('span', { text: 'Fotos öffentlich' }), el('span')));
+      behaelter.appendChild(el('div', { class: 'mrow kopf', 'aria-hidden': 'true' }, el('span'), el('span', { text: 'Bereich' }), el('span', { text: 'Team-ID' }), el('span', { text: 'Name (leer: von handball.net)' }), el('span', { text: 'ClubDesk-Seite' }), el('span', { text: 'Fotos öffentlich · Logo' }), el('span')));
       var letzterRang = -1;
       entwurf.forEach(function (m, i) {
         var r = rang(m);
@@ -472,16 +492,20 @@ export const SETTINGS_JS = String.raw`(function () {
         bereichWahl.value = m.bereich;
         var idFeld = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'off', placeholder: '96254', 'aria-label': 'Team-ID, Mannschaft ' + nr });
         var nameFeld = el('input', { type: 'text', autocomplete: 'off', placeholder: 'z. B. B-Jugend', 'aria-label': 'Name, Mannschaft ' + nr });
-        var slugFeld = el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'z. B. woelfe_1', 'aria-label': 'ClubDesk-Seite, Mannschaft ' + nr });
+        var slugFeld = el('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'woelfe_1 oder Adresse', 'aria-label': 'ClubDesk-Seite, Mannschaft ' + nr });
         var gruppeFeld = el('input', { type: 'checkbox', 'aria-label': 'Mannschaftsbild öffentlich, Mannschaft ' + nr });
         var spielerFeld = el('input', { type: 'checkbox', 'aria-label': 'Spielerbilder öffentlich, Mannschaft ' + nr });
+        var logoWahl = el('input', { type: 'checkbox', 'aria-label': 'Vereinslogo statt handball.net-Logo, Mannschaft ' + nr });
         var info = el('span', { 'aria-live': 'polite' });
-        idFeld.value = m.id; nameFeld.value = m.name; slugFeld.value = m.slug; gruppeFeld.checked = m.gruppe; spielerFeld.checked = m.spieler;
+        idFeld.value = m.id; nameFeld.value = m.name; slugFeld.value = m.slug; gruppeFeld.checked = m.gruppe; spielerFeld.checked = m.spieler; logoWahl.checked = m.logo;
         teamInfoZeigen(m, info);
         bereichWahl.addEventListener('change', function () { m.bereich = bereichWahl.value; sortieren(); neuZeichnen(); aenderung(); });
         idFeld.addEventListener('input', function () { m.id = idFeld.value.trim(); aenderung(); teamInfoHolen(m, info); });
         nameFeld.addEventListener('input', function () { m.name = nameFeld.value.trim(); aenderung(); });
-        slugFeld.addEventListener('input', function () { m.slug = slugFeld.value.trim(); aenderung(); });
+        slugFeld.addEventListener('input', function () { m.slug = clubdeskVerweis(slugFeld.value); aenderung(); });
+        // Eine eingefügte Adresse steht nach dem Verlassen des Felds in der gespeicherten Form da.
+        slugFeld.addEventListener('change', function () { if (slugFeld.value !== m.slug) slugFeld.value = m.slug; });
+        logoWahl.addEventListener('change', function () { m.logo = logoWahl.checked; aenderung(); });
         gruppeFeld.addEventListener('change', function () { m.gruppe = gruppeFeld.checked; aenderung(); });
         spielerFeld.addEventListener('change', function () {
           if (spielerFeld.checked && !window.confirm('Porträts mit Namen werden öffentlich gezeigt — bei Jugendmannschaften Fotos von Kindern. Nur, wenn die Bildrechte mit Verein und Eltern geklärt sind. Wirklich einschalten?')) { spielerFeld.checked = false; return; }
@@ -501,7 +525,8 @@ export const SETTINGS_JS = String.raw`(function () {
         var zeile = el('div', { class: 'mrow' }, griff, bereichWahl, idFeld, nameFeld, slugFeld,
           el('span', { class: 'fotos' },
             el('label', null, gruppeFeld, 'Mannschaftsbild'),
-            el('label', null, spielerFeld, 'Spielerbilder')),
+            el('label', null, spielerFeld, 'Spielerbilder'),
+            el('label', { title: 'Bilder und Seite zeigen das Vereinslogo statt des Logos oder der Initialen von handball.net.' }, logoWahl, 'Vereinslogo')),
           el('span', { class: 'knoepfe' },
             el('button', { type: 'button', text: '↑', 'aria-label': 'Im Bereich nach oben, Mannschaft ' + nr, onclick: function () { schieben(-1); } }),
             el('button', { type: 'button', text: '↓', 'aria-label': 'Im Bereich nach unten, Mannschaft ' + nr, onclick: function () { schieben(1); } }),
@@ -549,6 +574,7 @@ export const SETTINGS_JS = String.raw`(function () {
       nebenfeld(clubdeskFeld, startClubdesk, clubdeskText(entwurf));
       nebenfeld(fotosFeld, startFotos, fotosText(entwurf));
       nebenfeld(bereichFeld, startBereiche, bereicheText(entwurf));
+      nebenfeld(logoFeld, startLogos, logoText(entwurf));
       MANNSCHAFT_KEYS.forEach(function (k) { delete serverFehler[k]; });
       pruefen();
       geaendertMelden();
@@ -560,6 +586,7 @@ export const SETTINGS_JS = String.raw`(function () {
     nebenfeld(clubdeskFeld, startClubdesk, clubdeskText(entwurf));
     nebenfeld(fotosFeld, startFotos, fotosText(entwurf));
     nebenfeld(bereichFeld, startBereiche, bereicheText(entwurf));
+    nebenfeld(logoFeld, startLogos, logoText(entwurf));
     pruefen();
     return behaelter;
   }

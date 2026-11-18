@@ -369,10 +369,12 @@ function wochenendeSvg(teams: readonly HandballTeamView[], erste: HandballTeamVi
  * Vereinsfarbe mit den Initialen. Gecacht wie die anderen Bilder.
  */
 export async function siteLogoPng(team: HandballTeamView, palette: FullPalette, groesse: 192 | 512 = 512): Promise<Buffer> {
+  // Die Fassung im Schlüssel: Ein neues Logo oder der Schalter „Vereinslogo“ wirkt sofort.
+  const fassung = logoVersion(team.team_id) ?? 'ohne';
   if (groesse === 192) {
-    return (await zwischengespeichert(`logo:${team.team_id}:192`, async () => sharp(await siteLogoPng(team, palette, 512)).resize(192, 192).png().toBuffer(), LOGO_FRIST_MS))!;
+    return (await zwischengespeichert(`logo:${team.team_id}:${fassung}:192`, async () => sharp(await siteLogoPng(team, palette, 512)).resize(192, 192).png().toBuffer(), LOGO_FRIST_MS))!;
   }
-  return (await zwischengespeichert(`logo:${team.team_id}:512`, () => logoPng512(team, palette), LOGO_FRIST_MS))!;
+  return (await zwischengespeichert(`logo:${team.team_id}:${fassung}:512`, () => logoPng512(team, palette), LOGO_FRIST_MS))!;
 }
 
 async function logoPng512(team: HandballTeamView, palette: FullPalette): Promise<Buffer> {
