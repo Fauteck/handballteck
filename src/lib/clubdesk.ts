@@ -5,6 +5,16 @@
  * je Mannschaft nach Freigabe auf der Einstellungsseite (`SITE_PHOTOS`).
  * Warum und welche Freigaben: Wiki „Handball-Verfolgung (handball.net)“ §7.7.
  *
+ * Zwei Arten von Seiten (`CLUBDESK_TEAMS`):
+ * - `woelfe_1`: eine Teamseite unter „Teams & Tabellen“; das Gruppenbild steht
+ *   in der Übersicht, der Kader mit `<h3>`-Abschnitten auf der Teamseite.
+ * - `kinderhandball:1000129`: eine Gruppe auf einer Seite mit Gruppenkacheln
+ *   (geprüft am 18.11.2026). Die Kachel trägt Gruppenbild und Namen und führt
+ *   per `onclick` auf die Detailseite `?b=…&c=GD<gruppe>&s=…` (signiert, die
+ *   Adresse wird deshalb jedes Mal aus der Kachel gelesen). Dort stehen die
+ *   Kontakte als Kacheln, die Rolle („Trainer(in)“, „Spieler(in)“) als
+ *   Untertitel. Solche Gruppen gelten immer als Jugend.
+ *
  * Was man über die Quelle wissen muss (geprüft am 01.10.2026):
  * - Bilder gibt es nur über `/clubdesk/fileservlet?type=image&id=…&s=…`; ohne
  *   die Signatur `s` antwortet ClubDesk mit 404. Die Signatur steht im HTML.
@@ -30,6 +40,8 @@ import { serviceLog } from './serviceLogger';
 
 /** Die Seiten liegen unter diesem Pfad; die Teamseiten darunter je Mannschaft. */
 const TEAMS_PFAD = '/spielbetrieb/teams-und-tabellen';
+/** Seiten mit Gruppenkacheln (Kinderhandball) liegen direkt unter diesem Pfad. */
+const SPIELBETRIEB_PFAD = '/spielbetrieb';
 /** Das Gruppenbild-Original ist bis zu 55 MB groß — mit Luft. */
 const GRUPPE_MAX_BYTES = 80 * 1024 * 1024;
 const PORTRAET_MAX_BYTES = 3 * 1024 * 1024;
@@ -118,6 +130,59 @@ export function parseTeamseite(html: string): ClubdeskPerson[] {
   return out;
 }
 
+export interface ClubdeskGruppenKachel {
+  groupId: string;
+  name: string;
+  /** Pfad samt Abfrage der Detailseite, wie die Kachel ihn nennt (signiert). */
+  detailPfad: string;
+  imageId: string | null;
+  signature: string | null;
+}
+
+/**
+ * Eine Seite mit Gruppenkacheln (`/spielbetrieb/kinderhandball`): je Kachel
+ * Gruppe, Name, Gruppenbild (fehlt beim Platzhalter) und die Detailseite.
+ * Nur Detailseiten unter derselben Seite werden übernommen.
+ */
+export function parseGruppenkacheln(html: string, seite: string): ClubdeskGruppenKachel[] {
+  const out: ClubdeskGruppenKachel[] = [];
+  const kacheln = html.split(/class="cd-tile-v-box\b/).slice(1);
+  for (const k of kacheln) {
+    const ziel = /window\.location\.href='([^']{1,400})'/.exec(k)?.[1]?.replace(/&amp;/g, '&');
+    if (!ziel) continue;
+    // Nur ein Pfad derselben Seite samt Abfrage — keine fremde Herkunft, kein anderer Pfad.
+    const praefix = `${SPIELBETRIEB_PFAD}/${seite}?`;
+    if (!ziel.startsWith(praefix) || /[\s"<>#]/.test(ziel)) continue;
+    const gruppe = /^GD(\d{1,12})$/.exec(new URLSearchParams(ziel.slice(praefix.length)).get('c') ?? '')?.[1];
+    const name = /cd-tile-v-main-heading"[^>]*>([\s\S]*?)<\/div>/.exec(k)?.[1];
+    if (!gruppe || !name || !text(name)) continue;
+    const src = /<img[^>]*?src="([^"]+)"[^>]*alt="Gruppenfoto"/.exec(k)?.[1];
+    const bild = src ? bildAus(src) : null;
+    out.push({ groupId: gruppe, name: text(name), detailPfad: ziel, imageId: bild?.imageId ?? null, signature: bild?.signature ?? null });
+  }
+  return out;
+}
+
+/**
+ * Die Detailseite einer Gruppe: die Kontakte als Kacheln, die Rolle als
+ * Untertitel. Eine Position gibt es hier nicht.
+ */
+export function parseGruppendetail(html: string): ClubdeskPerson[] {
+  const out: ClubdeskPerson[] = [];
+  const start = html.search(/class="cd-group-contact-list\b/);
+  if (start < 0) return out;
+  for (const k of html.slice(start).split(/class="cd-tile-v-box\b/).slice(1)) {
+    const contact = /contact-(\d{1,12})"/.exec(k)?.[1];
+    const name = /cd-tile-v-main-heading"[^>]*>([\s\S]*?)<\/div>/.exec(k)?.[1];
+    if (!contact || !name || !text(name)) continue;
+    const rolle = /cd-tile-v-main-subheading"[^>]*>([\s\S]*?)<\/div>/.exec(k)?.[1];
+    const src = /<img[^>]*?src="([^"]+)"[^>]*alt="Kontaktfoto"/.exec(k)?.[1];
+    const bild = src ? bildAus(src) : null;
+    out.push({ contactId: contact, name: text(name), section: rolle ? text(rolle) : '', position: null, imageId: bild?.imageId ?? null, signature: bild?.signature ?? null });
+  }
+  return out;
+}
+
 /** Ob eine Mannschaft eine Jugend ist — aus ihrem Namen in der Mannschaftswahl oder der Bildunterschrift der Vereinsseite. */
 export function istJugend(...namen: Array<string | null | undefined>): boolean {
   return namen.some(n => !!n && /jugend|junior/i.test(n));
@@ -178,10 +243,33 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
   const nurHost = (u: URL) => u.hostname === host;
   let geladen = 0;
   try {
-    const gruppen = parseUebersicht(await safeFetchHtml(`${basis}${TEAMS_PFAD}`, { allowHost: nurHost }));
+    // Jede Seite höchstens einmal je Lauf — die Übersicht nur, wenn eine Teamseite eingetragen ist.
+    const seiten = new Map<string, Promise<string>>();
+    const seite = (pfad: string) => {
+      if (!seiten.has(pfad)) seiten.set(pfad, safeFetchHtml(`${basis}${pfad}`, { allowHost: nurHost }));
+      return seiten.get(pfad)!;
+    };
     for (const [teamId, slug] of zuordnung) {
-      const gruppe = gruppen.find(g => g.slug === slug) ?? null;
-      const jugend = istJugend(teamLabels.get(teamId), gruppe?.caption);
+      const [seitenName, gruppenId] = slug.split(':');
+      let gruppe: { caption: string; imageId: string; signature: string } | null;
+      let personenPfad: string | null;
+      let jugend: boolean;
+      let personenLesen: (html: string) => ClubdeskPerson[];
+      if (gruppenId) {
+        // Eine Gruppe auf einer Seite mit Gruppenkacheln (Kinderhandball): immer Jugend.
+        const kachel = parseGruppenkacheln(await seite(`${SPIELBETRIEB_PFAD}/${seitenName}`), seitenName).find(k => k.groupId === gruppenId) ?? null;
+        if (!kachel) serviceLog.warn(`[clubdesk] Gruppe ${gruppenId} auf /spielbetrieb/${seitenName} nicht gefunden (Team ${teamId})`);
+        gruppe = kachel?.imageId && kachel.signature ? { caption: kachel.name, imageId: kachel.imageId, signature: kachel.signature } : null;
+        personenPfad = kachel?.detailPfad ?? null;
+        jugend = true;
+        personenLesen = parseGruppendetail;
+      } else {
+        const g = parseUebersicht(await seite(TEAMS_PFAD)).find(x => x.slug === slug) ?? null;
+        gruppe = g;
+        personenPfad = `${TEAMS_PFAD}/${slug}`;
+        jugend = istJugend(teamLabels.get(teamId), g?.caption);
+        personenLesen = parseTeamseite;
+      }
       const frei = sitePhotos().get(teamId);
       if (jugend && !frei?.gruppe && !frei?.spieler) {
         // Jugendbilder nur mit ausdrücklicher Freigabe — sonst auch nicht vorhalten.
@@ -209,8 +297,9 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
         db.delete(clubdesk_photo).where(and(eq(clubdesk_photo.team_id, teamId), eq(clubdesk_photo.kind, 'person'))).run();
         continue;
       }
+      if (!personenPfad) continue;
       try {
-        const personen = parseTeamseite(await safeFetchHtml(`${basis}${TEAMS_PFAD}/${slug}`, { allowHost: nurHost }));
+        const personen = personenLesen(await safeFetchHtml(`${basis}${personenPfad}`, { allowHost: nurHost }));
         const behalten: string[] = [`${teamId}:gruppe`];
         let sort = 0;
         for (const p of personen) {
@@ -236,7 +325,7 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
         // Wer nicht mehr auf der Teamseite steht, verschwindet auch hier.
         db.delete(clubdesk_photo).where(and(eq(clubdesk_photo.team_id, teamId), eq(clubdesk_photo.kind, 'person'), notInArray(clubdesk_photo.id, behalten))).run();
       } catch (err) {
-        serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, `[clubdesk] Teamseite ${slug} nicht abrufbar`);
+        serviceLog.warn({ err: err instanceof Error ? err.message : String(err) }, `[clubdesk] Seite ${slug} nicht abrufbar`);
       }
     }
     // Mannschaften, die aus CLUBDESK_TEAMS verschwunden sind, nicht weiter vorhalten.
@@ -244,7 +333,7 @@ export async function clubdeskHolen(teamLabels: Map<string, string>, force = fal
     return { status: 'ok', geladen };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    serviceLog.warn({ err: detail }, '[clubdesk] Übersicht nicht abrufbar');
+    serviceLog.warn({ err: detail }, '[clubdesk] Übersicht oder Gruppenseite nicht abrufbar');
     return { status: 'fehler', geladen, detail };
   }
 }

@@ -13,8 +13,9 @@ process.env.DATABASE_PATH = `/tmp/handball-clubdesk-${process.pid}.db`;
 const netz = vi.hoisted(() => ({ seiten: new Map<string, string>(), bild: Buffer.alloc(0) }));
 vi.mock('../lib/safeFetch', () => ({
   safeFetchHtml: async (url: string) => {
-    const pfad = new URL(url).pathname;
-    const seite = netz.seiten.get(pfad);
+    const u = new URL(url);
+    const pfad = u.pathname;
+    const seite = netz.seiten.get(pfad + u.search) ?? netz.seiten.get(pfad);
     if (seite === undefined) throw new Error(`nicht da: ${pfad}`);
     return seite;
   },
@@ -72,7 +73,70 @@ const TEAMSEITE = `
 <div>Widget</div>
 `;
 
+// Eine Seite mit Gruppenkacheln wie /spielbetrieb/kinderhandball (Aufbau wie am 18.11.2026).
+const gruppenKachel = (gruppe: string, name: string, bild: string | null) => `
+<div tabindex="0" class="cd-tile-v-box cd-tile-width-3" onclick="window.location.href='/spielbetrieb/kinderhandball?b=1000223&c=GD${gruppe}&s=djEtSeite${gruppe}='" style="cursor:pointer;">
+  <span class="cd-back-anchor" id="grouplistblock-1000223-group-${gruppe}"></span>
+  <div class="cd-image-wrapper-4_3"><div class="cd-image-content ">
+    <img class="cd-zoom cd-image-cover" src="${bild ? `fileservlet?type=image&amp;id=${bild}&amp;s=djEtG${bild}=` : 'webpage/images/group/placeholder-group.png'}" alt="Gruppenfoto"/>
+  </div></div>
+  <div class="cd-tile-v-main-area" ><div class="cd-tile-v-main-heading">${name}</div></div>
+  <div class="cd-tile-v-detail-area tinyMceContent cd-value-html"></div>
+</div>`;
+
+const KINDERHANDBALL = `
+<h2>Ort A</h2>
+<div class="cd-grouplist-tile-v cd-tile-v"><div class="cd-tile-container">
+${gruppenKachel('1000129', 'RTV D-Jugend 1 (2014/2015)', '1001003')}
+${gruppenKachel('1000130', 'RTV Minis', null)}
+<div tabindex="0" class="cd-tile-v-box" onclick="window.location.href='https://anderswo.example/spielbetrieb/kinderhandball?c=GD1000131'"><div class="cd-tile-v-main-heading">Fremd</div></div>
+</div></div>`;
+
+const kontaktKachel = (contact: string, name: string, rolle: string, bild: string | null) => `
+    <div tabindex="0" class="cd-tile-v-box cd-tile-width-4"  >
+        <span class="cd-back-anchor" id="contactlistblock-1000223-contact-${contact}"></span>
+        <div class="cd-image-wrapper-3_4"><div class="cd-image-content ">
+            <img class="cd-zoom cd-image-cover"
+                 src="${bild ? `fileservlet?type=image&amp;id=${bild}&amp;s=djEtK${bild}=&amp;imageFormat=_1024x1024` : 'webpage/images/contact/placeholder-male.png'}"
+                 alt="Kontaktfoto"/>
+        </div></div>
+        <div class="cd-tile-v-main-area" style="flex-grow:1;">
+            <div class="cd-tile-v-main-heading">${name}</div>
+            <div class="cd-tile-v-main-subheading">${rolle}</div>
+        </div>
+    </div>`;
+
+const GRUPPENDETAIL = `
+<div class="cd-group-detail">
+  <h1>RTV D-Jugend 1 (2014/2015)</h1>
+  <a href="fileservlet?type=image&amp;id=1001003&amp;s=djEtG1001003=&amp;imageFormat=_2048x2048"><img class="cd-group-image" alt="Gruppenfoto" src="fileservlet?type=image&amp;id=1001003&amp;s=djEtG1001003=&amp;imageFormat=_1024x1024"></a>
+  <div class="cd-group-contact-list m12">
+    <h2>Kontakte</h2>
+    <div class="cd-contactlist-tile-v cd-tile-v"><div class="cd-tile-container">
+    ${kontaktKachel('5001', 'Trainer A', 'Trainer(in)', '6001')}
+    ${kontaktKachel('5002', 'Kind B', 'Spieler(in)', null)}
+    ${kontaktKachel('5003', 'Kind C', 'Spieler(in)', '6003')}
+    </div></div>
+  </div>
+</div>`;
+
 describe('ClubDesk lesen', () => {
+  it('liest Gruppenkacheln samt signierter Detailseite — nur Detailseiten derselben Seite', () => {
+    expect(cd.parseGruppenkacheln(KINDERHANDBALL, 'kinderhandball')).toEqual([
+      { groupId: '1000129', name: 'RTV D-Jugend 1 (2014/2015)', detailPfad: '/spielbetrieb/kinderhandball?b=1000223&c=GD1000129&s=djEtSeite1000129=', imageId: '1001003', signature: 'djEtG1001003=' },
+      { groupId: '1000130', name: 'RTV Minis', detailPfad: '/spielbetrieb/kinderhandball?b=1000223&c=GD1000130&s=djEtSeite1000130=', imageId: null, signature: null },
+    ]);
+    expect(cd.parseGruppenkacheln(KINDERHANDBALL, 'andere-seite')).toEqual([]);
+  });
+
+  it('liest die Kontakte der Gruppen-Detailseite mit der Rolle als Abschnitt', () => {
+    expect(cd.parseGruppendetail(GRUPPENDETAIL).map(p => [p.contactId, p.name, p.section, p.position, p.imageId, p.signature])).toEqual([
+      ['5001', 'Trainer A', 'Trainer(in)', null, '6001', 'djEtK6001='],
+      ['5002', 'Kind B', 'Spieler(in)', null, null, null],
+      ['5003', 'Kind C', 'Spieler(in)', null, '6003', 'djEtK6003='],
+    ]);
+  });
+
   it('ordnet in der Übersicht je Teamseite Gruppenbild und Bildunterschrift zu — nur Bilder von ClubDesk', () => {
     expect(cd.parseUebersicht(UEBERSICHT)).toEqual([
       { slug: 'woelfe_1', caption: 'Wölfe I', imageId: '1000871', signature: 'djEtAbc_123-x=' },
@@ -131,6 +195,34 @@ describe('ClubDesk lesen', () => {
       process.env.SITE_PHOTOS = '96254=mannschaft';
       await cd.clubdeskHolen(jugend, true);
       expect(gespeichert()).toEqual(['96254:gruppe']);
+    } finally {
+      db.delete(clubdesk_photo).run();
+      delete process.env.CLUBDESK_URL; delete process.env.CLUBDESK_TEAMS; delete process.env.SITE_PHOTOS;
+    }
+  });
+
+  it('holt eine Gruppe vom Kinderhandball — immer als Jugend, ohne die Übersicht „Teams & Tabellen“', async () => {
+    netz.seiten.clear();
+    netz.seiten.set('/spielbetrieb/kinderhandball', KINDERHANDBALL);
+    netz.seiten.set('/spielbetrieb/kinderhandball?b=1000223&c=GD1000129&s=djEtSeite1000129=', GRUPPENDETAIL);
+    process.env.CLUBDESK_URL = 'https://verein.clubdesk.com';
+    process.env.CLUBDESK_TEAMS = '101234=kinderhandball:1000129';
+    // Ein Name ohne „Jugend“: zählt trotzdem als Jugend.
+    const namen = new Map([['101234', 'Minis']]);
+    const { db } = await import('../db');
+    const { clubdesk_photo } = await import('../db/schema');
+    const gespeichert = () => db.select({ id: clubdesk_photo.id }).from(clubdesk_photo).all().map(r => r.id).sort();
+    try {
+      delete process.env.SITE_PHOTOS;
+      expect((await cd.clubdeskHolen(namen, true)).status).toBe('ok');
+      expect(gespeichert()).toEqual([]);
+      process.env.SITE_PHOTOS = '101234=mannschaft';
+      expect((await cd.clubdeskHolen(namen, true)).status).toBe('ok');
+      expect(gespeichert()).toEqual(['101234:gruppe']);
+      process.env.SITE_PHOTOS = '101234=mannschaft+spieler';
+      await cd.clubdeskHolen(namen, true);
+      expect(gespeichert()).toEqual(['101234:gruppe', '101234:person:5001', '101234:person:5003']);
+      expect(cd.portraits('101234').map(p => [p.name, p.section])).toEqual([['Trainer A', 'Trainer(in)'], ['Kind C', 'Spieler(in)']]);
     } finally {
       db.delete(clubdesk_photo).run();
       delete process.env.CLUBDESK_URL; delete process.env.CLUBDESK_TEAMS; delete process.env.SITE_PHOTOS;

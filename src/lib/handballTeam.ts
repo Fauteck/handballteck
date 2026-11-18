@@ -33,7 +33,7 @@ import sharp from 'sharp';
 import { db } from '../db';
 import { handball_team_match, handball_standings, handball_roster, handball_match_player, handball_match_change, handball_team_logo, handball_opponent_form } from '../db/schema';
 import { safeFetchImage } from './safeFetch';
-import { teamIds as configTeamIds, palette as configPalette, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds } from '../config';
+import { teamIds as configTeamIds, palette as configPalette, syncLiveIntervalMs, syncIntervalMs, clubName, clubTeamIds, clubLogoTeams } from '../config';
 import {
   HANDBALL_KIND,
   fetchActiveSeason,
@@ -926,9 +926,36 @@ async function alteLogosVerkleinern(): Promise<void> {
  * Logo gespeichert oder das alte verkleinert wird. Null ohne Logo.
  */
 export function logoVersion(teamId: string): string | null {
+  const quelle = logoQuelle(teamId);
+  if (!quelle) return null;
   const row = db.select({ at: handball_team_logo.fetched_at, laenge: sql<number>`length(${handball_team_logo.image})` })
-    .from(handball_team_logo).where(eq(handball_team_logo.team_id, teamId)).get();
-  return row ? `${Date.parse(row.at).toString(36)}${Number(row.laenge).toString(36)}` : null;
+    .from(handball_team_logo).where(eq(handball_team_logo.team_id, quelle)).get();
+  // Die Quelle gehört zur Fassung: Wer das Vereinslogo ein- oder ausschaltet, bekommt eine neue Adresse.
+  return row ? `${Date.parse(row.at).toString(36)}${Number(row.laenge).toString(36)}${quelle === teamId ? '' : `v${quelle}`}` : null;
+}
+
+/**
+ * Das Vereinslogo: das Logo der ersten eigenen Mannschaft (Reihenfolge der
+ * Einstellungen), die selbst nicht auf das Vereinslogo umgestellt ist und von
+ * handball.net eins hat. Null, wenn keine eins hat.
+ */
+export function vereinsLogoTeam(): string | null {
+  const umgestellt = clubLogoTeams();
+  const kandidaten = [...configTeamIds(), ...clubTeamIds()].filter(id => !umgestellt.has(id));
+  if (kandidaten.length === 0) return null;
+  const mitLogo = new Set(db.select({ id: handball_team_logo.team_id }).from(handball_team_logo).all().map(r => r.id));
+  return kandidaten.find(id => mitLogo.has(id)) ?? null;
+}
+
+/**
+ * Wessen gespeichertes Logo für diese Team-ID gilt: das eigene — oder, wenn
+ * die Mannschaft auf der Einstellungsseite auf das Vereinslogo umgestellt
+ * ist, das des Vereins. Ohne Vereinslogo bleibt es beim eigenen (oder den
+ * Initialen).
+ */
+function logoQuelle(teamId: string): string {
+  if (!clubLogoTeams().has(teamId)) return teamId;
+  return vereinsLogoTeam() ?? teamId;
 }
 
 async function logoHolen(teamId: string, url: string | null): Promise<number> {
@@ -989,7 +1016,7 @@ export function backlogFor(teamId: string): { lineupsMissing: number; logosMissi
 
 /** Das gespeicherte Logo als Data-URI für die SVG-Bilder — null, wenn keins da ist. */
 export function logoDataUri(teamId: string): string | null {
-  const row = db.select().from(handball_team_logo).where(eq(handball_team_logo.team_id, teamId)).get();
+  const row = db.select().from(handball_team_logo).where(eq(handball_team_logo.team_id, logoQuelle(teamId))).get();
   if (!row) return null;
   return `data:${row.mime_type};base64,${Buffer.from(row.image).toString('base64')}`;
 }

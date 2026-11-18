@@ -306,17 +306,34 @@ export function clubdeskUrl(): string | null {
 }
 
 /**
- * Welche Teamseite der Vereinsseite zu welcher Mannschaft gehört:
- * `96254=woelfe_b,75796=woelfe_1`. Der Teil nach dem Gleichheitszeichen ist
- * der letzte Pfadteil unter `/spielbetrieb/teams-und-tabellen/`.
+ * Ein Verweis auf die Vereinsseite: entweder eine Teamseite unter
+ * `/spielbetrieb/teams-und-tabellen/` (`woelfe_1`) oder eine Gruppe auf einer
+ * Seite mit Gruppenkacheln wie `/spielbetrieb/kinderhandball`
+ * (`kinderhandball:1000129` — die Zahl ist die Gruppe aus `c=GD1000129`).
+ */
+export const CLUBDESK_VERWEIS = /^(?:[a-z0-9_-]{1,40}|[a-z0-9_-]{1,40}:\d{1,12})$/i;
+
+/**
+ * Welche Seite der Vereinsseite zu welcher Mannschaft gehört:
+ * `96254=woelfe_b,75796=woelfe_1,101234=kinderhandball:1000129`.
  */
 export function clubdeskTeams(): Map<string, string> {
   const out = new Map<string, string>();
   for (const teil of (env('CLUBDESK_TEAMS') ?? '').split(',')) {
     const [id, slug] = teil.split('=').map(x => x?.trim() ?? '');
-    if (/^\d{1,12}$/.test(id) && /^[a-z0-9_-]{1,40}$/i.test(slug ?? '')) out.set(id, slug);
+    if (/^\d{1,12}$/.test(id) && CLUBDESK_VERWEIS.test(slug ?? '')) out.set(id, slug);
   }
   return out;
+}
+
+/**
+ * Die Mannschaften, die in Bildern und auf der Seite das Vereinslogo tragen
+ * statt des Logos, das handball.net zu ihnen liefert (oder der Initialen,
+ * wenn es keins gibt) — z. B. Jugendteams einer Spielgemeinschaft, die bei
+ * handball.net unter dem Partnerverein stehen. `CLUB_LOGO_TEAMS=96254,75796`.
+ */
+export function clubLogoTeams(): Set<string> {
+  return new Set(parseTeamIds(env('CLUB_LOGO_TEAMS')));
 }
 
 export interface TeamPhotoRelease { gruppe: boolean; spieler: boolean }
