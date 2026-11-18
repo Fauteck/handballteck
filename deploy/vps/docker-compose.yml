@@ -4,8 +4,8 @@
 # Einrichtung, Umzug, Update und Rückweg: README.md daneben.
 #
 # Aufbau: Internet → Caddy (80/443, Let's Encrypt) → handballteck:3000.
-# Die Einstellungsseite (ADMIN_PORT 3001) hängt nur an 127.0.0.1:3411 des
-# Servers und ist nur per SSH-Tunnel erreichbar, nie über Caddy.
+# Die Einstellungsseite liegt öffentlich unter /settings (ohne ADMIN_PORT):
+# Login mit ADMIN_USER/ADMIN_PASSWORD, Rate-Limit pro Absender (TRUST_PROXY).
 services:
   handballteck:
     # Standard `latest` (Dispatch auf main). Rückweg: IMAGE_TAG=<sha> in .env,
@@ -19,7 +19,6 @@ services:
       TZ: "Europe/Berlin"
       PORT: "3000"
       DATA_DIR: /data
-      ADMIN_PORT: "3001"
       # Nur Caddy (feste Adresse unten) darf X-Forwarded-For setzen. Caddy
       # selbst glaubt keinem vorgeschalteten Proxy und trägt die echte
       # Absenderadresse ein.
@@ -27,9 +26,6 @@ services:
     volumes:
       # Besitzer muss der Nutzer im Image sein (appuser), siehe README.
       - ./data:/data
-    ports:
-      # Nur lokal: /settings per SSH-Tunnel (ssh -L 3411:127.0.0.1:3411 …).
-      - "127.0.0.1:3411:3001"
     networks:
       default:
         ipv4_address: 10.34.20.20
