@@ -251,6 +251,13 @@ table.stand tr.bereich th{text-align:left;padding-top:14px;font-family:'Barlow C
 table.stand td b{font-family:'Barlow Condensed',sans-serif;font-size:var(--fs-md);font-weight:700;color:var(--hd)}
 table.heim td.ort a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
 table.heim tr.neu td{border-top:3px solid var(--line)}
+table.tafel tr.tag th{text-align:left;padding-top:14px;font-family:'Barlow Condensed',sans-serif;font-size:var(--fs-base);font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--hd);border-bottom:2px solid var(--line)}
+table.tafel td.status{white-space:nowrap}
+table.tafel td.status b{font-family:'Barlow Condensed',sans-serif;font-size:var(--fs-md)}
+.tafellink{margin:0}
+html.monitor{font-size:clamp(18px,1.7vw,36px)}
+html.monitor .skip,html.monitor .hero .kicker,html.monitor footer,html.monitor .nur-seite,html.monitor table.tafel td.ort a{display:none}
+html.monitor main.wrap,html.monitor .hero .wrap{max-width:none}
 .erg{font-weight:700}.erg.w{color:var(--wint)}.erg.l{color:var(--losst)}
 .mannschaften{list-style:none;margin:0;padding:0;display:grid}
 .mannschaften li{padding:12px 0;border-bottom:1px solid var(--line);font-size:var(--fs-base)}
@@ -263,6 +270,7 @@ table.heim:not(.stand) tr{display:grid;grid-template-columns:1fr;gap:var(--space
 table.heim:not(.stand) td{display:block;padding:2px 0;border:0}
 table.heim:not(.stand) td::before{content:attr(data-label);display:block;font-family:'Barlow Condensed',sans-serif;font-size:var(--fs-xs);font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 table.heim tr.neu{border-top:3px solid var(--line)}
+table.heim.tafel tr.tag{padding:0;border-bottom:0}
 table.stand th,table.stand td{padding:8px 4px;font-size:var(--fs-sm)}
 table.heim tr.neu td{border-top:0}
 }
@@ -419,6 +427,8 @@ ${dunkel()}
  */
 export const SITE_THEME_JS = `try { var t = localStorage.getItem('handball-site-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
 if (/[?&]kompakt=1(&|$)/.test(location.search)) document.documentElement.className += ' kompakt';
+// Die Abfahrtstafel als Hallenmonitor (?monitor=1): große Schrift, nur die Tafel.
+if (/[?&]monitor=1(&|$)/.test(location.search)) document.documentElement.className += ' monitor';
 // UXA-2: Die Vereinsseite legt das Farbschema fest (?farbe=dunkel|hell); das schlägt Gerät und gespeicherte Wahl.
 var farbe = /[?&]farbe=(dunkel|hell)(&|$)/.exec(location.search);
 if (farbe) document.documentElement.setAttribute('data-theme', farbe[1] === 'dunkel' ? 'dark' : 'light');

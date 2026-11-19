@@ -1487,4 +1487,28 @@ describe('Handball-Microsite', () => {
       expect(sendPush).not.toHaveBeenCalled();
     });
   });
+
+  it('zeigt auf der Abfahrtstafel die nächsten Anwürfe ohne Wochenend-Raster; ?monitor=1 lädt sich selbst neu', async () => {
+    const um = await get('/tafel');
+    expect(um.statusCode).toBe(301);
+    expect(um.headers.location).toBe('tafel/');
+    const res = await get('/tafel/');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['x-robots-tag']).toContain('noindex');
+    const html = res.body;
+    expect(html).toContain('<table class="heim tafel">');
+    // Das Spiel in sieben Tagen steht da, gleich an welchem Wochentag; das von letzter Woche nicht.
+    expect(html).toContain('In 7 Tagen');
+    expect(html).toContain(`href="../${TEAM}/#naechstes"`);
+    expect(html).not.toContain('spiel/m1');
+    // Dateien liegen unter der ersten Mannschaft, eine Ebene höher.
+    expect(html).toMatch(new RegExp(`<link rel="stylesheet" href="\\.\\./${TEAM}/site\\.css\\?v=[0-9a-f]{10}">`));
+    expect(html).not.toContain('http-equiv="refresh"');
+    expect((await get('/tafel/?monitor=1')).body).toContain('<meta http-equiv="refresh" content="60">');
+    // Die Startseite führt hin.
+    expect((await get('/')).body).toContain('href="./tafel/"');
+    setConfig({});
+    expect((await get('/tafel/')).statusCode).toBe(404);
+    expect((await get('/tafel')).statusCode).toBe(404);
+  });
 });
