@@ -156,9 +156,25 @@ export function normalisiereTabelle(rows: HandballStandingRow[]): HandballStandi
   return ergebnis.map(r => ({ ...r, round: spieltag })).sort((a, b) => a.position - b.position);
 }
 
+/**
+ * Der Halbzeitstand aus einer gespeicherten Torfolge: der Stand des letzten
+ * Ereignisses im ersten Block — nur, wenn es auch Ereignisse eines späteren
+ * Blocks gibt (sonst ist nicht belegt, dass die Halbzeit vorbei war).
+ */
+export function halbzeitAusTorfolge(events: HandballMatchEventItem[] | null): { home: number; away: number } | null {
+  if (!events || events.length === 0) return null;
+  const erste = events.filter(e => /^1\./.test(e.block));
+  const letzte = erste.at(-1);
+  if (!letzte || !events.some(e => e.block && !/^1\./.test(e.block))) return null;
+  return { home: letzte.home, away: letzte.away };
+}
+
 function sicht(r: typeof handball_team_match.$inferSelect, rated = false): HandballMatchView {
   const s = ausTeamSicht(r);
-  const won = (r.status === 'finished' || rated) && s.eigeneTore !== null && s.gegnerTore !== null && s.eigeneTore !== s.gegnerTore
+  // Den Halbzeitstand merkt sich sonst nur der Bot, wenn er ihn live sieht — ohne Bot oder
+  // nach einem verpassten Blick fehlte er. Die gespeicherte Torfolge kennt ihn immer.
+  const halbzeit = r.halftime_home === null || r.halftime_away === null ? halbzeitAusTorfolge(torfolgeAusZeile(r.events_payload)) : null;
+  const won =(r.status === 'finished' || rated) && s.eigeneTore !== null && s.gegnerTore !== null && s.eigeneTore !== s.gegnerTore
     ? s.eigeneTore > s.gegnerTore
     : null;
   return {
@@ -180,8 +196,8 @@ function sicht(r: typeof handball_team_match.$inferSelect, rated = false): Handb
     score_away: r.score_away,
     won,
     rated,
-    halftime_home: r.halftime_home,
-    halftime_away: r.halftime_away,
+    halftime_home: r.halftime_home ?? halbzeit?.home ?? null,
+    halftime_away: r.halftime_away ?? halbzeit?.away ?? null,
     venue_name: r.venue_name,
     venue_address: r.venue_address,
     venue_lat: r.venue_lat,
@@ -191,6 +207,28 @@ function sicht(r: typeof handball_team_match.$inferSelect, rated = false): Handb
     events: torfolgeAusZeile(r.events_payload),
     url: `https://www.handball.net/match/${encodeURIComponent(r.match_id)}?season_id=${r.season_id}`,
   };
+}
+
+/**
+ * Ein Testspiel: Die Quelle führt es als eigenen Wettbewerb („Testspiele
+ * Senioren m/w"). Es zählt nicht in Bilanz und Rekorde der Saison — die
+ * Tabelle zählt es auch nicht, und beide Zahlen stehen untereinander.
+ */
+export function istTestspiel(m: { competition_name: string }): boolean {
+  return /\b(Testspiel|Freundschaftsspiel)/i.test(m.competition_name);
+}
+
+/** Die Spiele ohne Testspiele — außer es gibt nur Testspiele (Vorbereitung): dann alle. */
+export function ohneTestspiele<T extends { competition_name: string }>(spiele: readonly T[]): T[] {
+  const pflicht = spiele.filter(m => !istTestspiel(m));
+  return pflicht.length > 0 ? pflicht : [...spiele];
+}
+
+/** Der Wettbewerb mit den meisten Spielen — Testspiele nur, wenn es nichts anderes gibt. */
+export function hauptWettbewerb(spiele: ReadonlyArray<{ competition_name: string }>): string | null {
+  const zaehler = new Map<string, number>();
+  for (const m of ohneTestspiele(spiele)) zaehler.set(m.competition_name, (zaehler.get(m.competition_name) ?? 0) + 1);
+  return [...zaehler.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 }
 
 const ROEMISCH: Record<string, number> = { II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
@@ -455,6 +493,27 @@ function baueUebersicht(): HandballOverview {
       if (v.label !== v.championship_name && v.label !== v.name && labels.get(v.label) === 1) continue;
       v.label = v.championship_name ? `${v.name} · ${v.championship_name}` : v.name;
     }
+  }
+  // Was jetzt noch im selben Bereich gleich heißt — auch zwei von Hand gleich
+  // benannte („D-Jugend (RTV)" in Kreisoberliga und Kreisliga) —, bekommt die
+  // Liga dazu; spielen beide in derselben Liga, eine laufende Nummer. Sonst
+  // stehen in Mannschaftswahl und Tabellenübersicht zwei Zeilen, die niemand
+  // auseinanderhält.
+  const jeBereich = new Map<string, typeof views>();
+  for (const v of views) {
+    const schluessel = `${v.group ?? ''}\u0000${v.label}`;
+    jeBereich.set(schluessel, [...(jeBereich.get(schluessel) ?? []), v]);
+  }
+  for (const gleiche of jeBereich.values()) {
+    if (gleiche.length < 2) continue;
+    const vergeben = new Set<string>();
+    gleiche.forEach((v, i) => {
+      const liga = hauptWettbewerb(v.matches);
+      let neu = liga ? `${v.label} · ${liga}` : `${v.label} (${i + 1})`;
+      if (vergeben.has(neu)) neu = `${neu} (${i + 1})`;
+      vergeben.add(neu);
+      v.label = neu;
+    });
   }
   for (const v of views) if ((gleich.get(v.name) ?? 0) > 1 && v.label !== v.name) v.name = `${v.name} ${v.label}`;
   return { configured: true, teams: views, updated_at: updatedAt };

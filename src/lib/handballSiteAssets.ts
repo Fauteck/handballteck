@@ -374,6 +374,7 @@ details.more[open] summary::before{transform:rotate(90deg)}
 .verlauf svg{display:block;width:100%;height:auto}
 .torfolge{margin:6px 0 0;font-size:var(--fs-sm);color:var(--muted);line-height:1.6}
 .torfolge b{color:var(--text)}
+.geschichte{margin-top:var(--space-15);font-size:var(--fs-sm)}
 .bericht{margin-top:10px;font-size:var(--fs-base);line-height:1.55}
 .bericht h4{font-family:'Barlow Condensed',sans-serif;font-size:var(--fs-md);font-weight:700;text-transform:uppercase;color:var(--hd);margin:12px 0 4px}
 .bericht p{margin:0 0 8px}

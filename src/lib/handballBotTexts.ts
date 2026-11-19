@@ -8,7 +8,7 @@
 import { escapeHtml, type InlineKeyboard } from './telegramClient';
 import { type HandballLineup, type HandballLineupSide, type HandballMatch, type HandballMatchEvents } from './handballNetClient';
 import { rosterFor, matchTopScorers, playerMatchLog, tendenzReferenz, type HandballChangeView, type HandballPlayerStats, type HandballRosterName, type HandballPlayerGame } from './handballTeam';
-import { type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
+import { ohneTestspiele, type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
 import type { HandballVenue } from './handballBot';
 
 // ---------------------------------------------------------------------------
@@ -445,7 +445,8 @@ export function komma(n: number): string {
  * längste Serie), steht hier noch einmal — die Liste soll für sich stehen.
  */
 export function textRekorde(team: HandballTeamView, spiele: HandballPlayerGame[], now = new Date()): string {
-  const gespielt = team.matches.filter(m => m.status === 'finished' && m.score_home !== null && m.score_away !== null);
+  // Ohne Testspiele: Ein 40:15 in der Vorbereitung ist kein Rekord der Saison.
+  const gespielt = ohneTestspiele(team.matches.filter(m => m.status === 'finished' && m.score_home !== null && m.score_away !== null));
   if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Spiel in dieser Saison — Rekorde gibt es ab dem ersten.`;
   const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
   const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
@@ -486,7 +487,10 @@ export function textRekorde(team: HandballTeamView, spiele: HandballPlayerGame[]
 }
 
 export function textSaison(team: HandballTeamView): string {
-  const gespielt = team.matches.filter(m => m.status === 'finished' && m.score_home !== null && m.score_away !== null);
+  const mitTests = team.matches.filter(m => m.status === 'finished' && m.score_home !== null && m.score_away !== null);
+  // Ohne Testspiele, damit die Bilanz zur Tabelle darunter passt (dort zählen sie nicht).
+  const gespielt = ohneTestspiele(mitTests);
+  const tests = mitTests.length - gespielt.length;
   if (gespielt.length === 0) return `<b>${escapeHtml(team.name)}</b>\nNoch kein Spiel in dieser Saison.`;
   const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
   const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
@@ -510,7 +514,7 @@ export function textSaison(team: HandballTeamView): string {
   for (let i = gespielt.length - 1; i >= 0 && gespielt[i].won === true; i--) laufend++;
   const zeilen = [
     `<b>${escapeHtml(team.name)}</b> — Saison ${team.championship_name ? escapeHtml(team.championship_name) : ''}`.trimEnd(),
-    `${gespielt.length} Spiel${gespielt.length === 1 ? '' : 'e'}: ${alle.s} Siege, ${alle.u} Unentschieden, ${alle.n} Niederlagen · ${punkte}:${gespielt.length * 2 - punkte} Punkte`,
+    `${gespielt.length} Spiel${gespielt.length === 1 ? '' : 'e'}: ${alle.s} Siege, ${alle.u} Unentschieden, ${alle.n} Niederlagen · ${punkte}:${gespielt.length * 2 - punkte} Punkte${tests > 0 ? ` · ohne ${tests} Testspiel${tests === 1 ? '' : 'e'}` : ''}`,
     `Tore ${alle.tf}:${alle.ta} · Schnitt ${komma(alle.tf / gespielt.length)} : ${komma(alle.ta / gespielt.length)}`,
     `Heim ${heim.s}-${heim.u}-${heim.n} (${heim.tf}:${heim.ta}) · Auswärts ${ausw.s}-${ausw.u}-${ausw.n} (${ausw.tf}:${ausw.ta})`,
   ];
