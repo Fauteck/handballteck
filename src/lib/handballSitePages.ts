@@ -5,8 +5,8 @@
  */
 
 import { vervollstaendigePalette } from './handballTableImage';
-import { readPalette, vereinsName, playerGames } from './handballTeam';
-import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, spielGeschichteHtml, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad } from './handballSite';
+import { readPalette, vereinsName, playerGames, changesFor } from './handballTeam';
+import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, spielGeschichteHtml, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad, inTagen } from './handballSite';
 import { inhaltsHash, SITE_THEME_JS, SITE_APP_JS } from './handballSiteAssets';
 import { type HandballTeamView, HANDBALL_GROUPS } from './handballSicht';
 import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
@@ -23,7 +23,7 @@ import { clubName } from '../config';
  * unter der Mannschaft). Kein Manifest und kein eigener Service Worker — der
  * gehört der Mannschaftsseite.
  */
-function unterseiteHtml(o: { dialog?: string; breit?: boolean; ogLogo?: boolean; app?: { titel: string; manifest: string }; live?: boolean; titel: string; beschreibung: string; url: string; ogBild: string | null; dateien: string; kopf: string; inhalt: string; fuss: string }): string {
+function unterseiteHtml(o: { refresh?: number; dialog?: string; breit?: boolean; ogLogo?: boolean; app?: { titel: string; manifest: string }; live?: boolean; titel: string; beschreibung: string; url: string; ogBild: string | null; dateien: string; kopf: string; inhalt: string; fuss: string }): string {
   const palette = vervollstaendigePalette(readPalette());
   return `<!doctype html>
 <html lang="de">
@@ -32,7 +32,7 @@ function unterseiteHtml(o: { dialog?: string; breit?: boolean; ogLogo?: boolean;
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${h(o.titel)}</title>
 <meta name="description" content="${h(o.beschreibung)}">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="noindex, nofollow">${o.refresh ? `\n<meta http-equiv="refresh" content="${o.refresh}">` : ''}
 <meta name="theme-color" content="${palette.primary}">
 <meta name="color-scheme" content="light dark">
 <meta property="og:type" content="website">
@@ -282,6 +282,11 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
     </li>`).join('')}</ul>
 </section>` : '';
 
+  // Die Wochenend-Tabellen kennen nur Freitag bis Sonntag: Ein Pokal- oder Nachholspiel am
+  // Mittwoch stand bis zum Spieltag nirgends. Die Tafel zeigt die nächsten Anwürfe ohne Lücke.
+  const vorher = naechsteAnwuerfe.filter(x => { const tag = TAG_ISO.format(new Date(x.m.starts_at)); return tag !== heute && tag < we.fr; }).length;
+  const tafelHtml = `<p class="tafellink"><a class="btn" href="./tafel/">${vorher > 0 ? `Unter der Woche: ${vorher} Spiel${vorher === 1 ? '' : 'e'} vor dem Wochenende` : 'Alle nächsten Anwürfe'} →</a></p>`;
+
   const wann = laeuft ? 'dieses Wochenende' : spaeter ? 'nächster Spieltag' : 'nächstes Wochenende';
   const weHtml = wochenendTabelle('heimspiele', 'Heimspiele', wann, heimspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Heimspiel angesetzt.`);
   const ausHtml = wochenendTabelle('auswaertsspiele', 'Auswärtsspiele', wann, auswaertsspiele, `Von Freitag bis Sonntag (${tagMonat(we.fr)}–${tagMonat(we.so)}) ist kein Auswärtsspiel angesetzt.`);
@@ -339,7 +344,115 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
       ['auswaertsspiele', 'Auswärtsspiele', ausHtml],
       ['letztes-wochenende', 'Ergebnisse', letzteHtml],
       ['stand', 'Tabellenplätze', standHtml],
-    ]), inhalt: `${liveHtml || liveLeerHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
+    ]), inhalt: `${liveHtml || liveLeerHtml}\n${tafelHtml}\n${heuteHtml}\n${weHtml}\n${ausHtml}\n${letzteHtml}\n${standHtml}`, fuss, breit: true, dialog: verpassen.dialog,
     app: { titel: 'Wölfe live', manifest: './manifest.webmanifest' }, live: live.length > 0 || teams.some(t => istLiveFenster(t.next_match, now)),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Abfahrtstafel: die nächsten Anwürfe aller Mannschaften, ohne Wochenend-Raster
+// ---------------------------------------------------------------------------
+
+/** So viele Zeilen zeigt die Tafel mindestens — die Spiele von heute stehen immer alle da. */
+const TAFEL_ZEILEN = 12;
+/** So lange gilt ein neu angesetztes Spiel als „Neuer Termin". */
+const NEUER_TERMIN_MS = 14 * 24 * 60 * 60 * 1000;
+/** Der Hallenmonitor lädt sich so oft neu (Sekunden) — ohne Skript, damit er auch auf einem alten Fernseher läuft. */
+const MONITOR_REFRESH_S = 60;
+
+type TafelZeile = { t: HandballTeamView; m: HandballTeamView['matches'][number] };
+
+/**
+ * Was auf der Tafel steht: alles, was gerade läuft, alle Spiele von heute
+ * (auch die beendeten, mit Ergebnis) und danach die nächsten Anwürfe, bis
+ * die Tafel voll ist — auch verlegte und abgesetzte, damit man es sieht,
+ * bevor man losfährt. Chronologisch, ohne Blick auf den Wochentag.
+ */
+export function tafelZeilen(teams: readonly HandballTeamView[], now: Date, zeilen = TAFEL_ZEILEN): TafelZeile[] {
+  const heute = TAG_ISO.format(now);
+  const alle: TafelZeile[] = teams.flatMap(t => t.matches.map(m => ({ t, m })));
+  const jetzt = alle.filter(x => x.m.is_live || TAG_ISO.format(new Date(x.m.starts_at)) === heute);
+  const kommend = alle
+    .filter(x => !jetzt.includes(x) && Date.parse(x.m.starts_at) > now.getTime() && x.m.status !== 'finished')
+    .sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
+  return [...jetzt, ...kommend.slice(0, Math.max(0, zeilen - jetzt.length))].sort((a, b) => a.m.starts_at.localeCompare(b.m.starts_at));
+}
+
+/**
+ * Die Abfahrtstafel (`/tafel/`): die nächsten Anwürfe aller Mannschaften wie
+ * auf einer Anzeigetafel am Bahnhof — Zeit, Mannschaft, Gegner, Halle und der
+ * Zustand (läuft, beendet, verlegt, neuer Termin). Mit `monitor` ist sie
+ * der Hallenmonitor: große Schrift, nur die Tafel, lädt sich jede Minute neu.
+ */
+export function renderTafelHtml(teams: readonly HandballTeamView[], opts: { baseUrl: string; stand: string | null; now?: Date; monitor?: boolean }): string {
+  const now = opts.now ?? new Date();
+  const erste = teams[0];
+  const spiele = tafelZeilen(teams, now);
+  // Neu angesetzt: eine erkannte Verlegung der letzten zwei Wochen.
+  const verlegt = new Set<string>();
+  for (const t of teams) {
+    for (const c of changesFor(t.team_id)) {
+      if (c.kind === 'rescheduled' && now.getTime() - Date.parse(c.detected_at) < NEUER_TERMIN_MS) verlegt.add(`${t.team_id}:${c.match_id}`);
+    }
+  }
+  const beendet = (m: TafelZeile['m']) => (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null;
+  const status = ({ t, m }: TafelZeile): string => {
+    if (m.is_live) {
+      const stand = m.live && m.live.home !== null && m.live.away !== null ? `${m.live.home}:${m.live.away}` : '';
+      return `<span class="badge live">Läuft</span>${stand ? ` <b>${stand}</b>` : ''}`;
+    }
+    if (beendet(m)) return `<b class="erg ${m.won === true ? 'w' : m.won === false ? 'l' : ''}">${standHeimGast(m)}</b><small>Beendet${m.rated ? ' (gewertet)' : ''}</small>`;
+    if (m.status === 'postponed') return '<span class="badge">Verlegt</span><small>Neuer Termin offen</small>';
+    if (m.status === 'cancelled') return '<span class="badge">Abgesetzt</span>';
+    const wann = h(inTagen(new Date(m.starts_at), now));
+    if (verlegt.has(`${t.team_id}:${m.match_id}`)) return `<span class="badge">Neuer Termin</span><small>${wann}</small>`;
+    return `<span class="muted">${wann}</span>`;
+  };
+  let tag = '';
+  const zeilen = spiele.map(x => {
+    const { t, m } = x;
+    const start = new Date(m.starts_at);
+    const iso = TAG_ISO.format(start);
+    const kopf = iso !== tag ? `<tr class="tag"><th scope="rowgroup" colspan="5">${iso === TAG_ISO.format(now) ? 'Heute · ' : ''}${h(DATUM_KURZ.format(start))}</th></tr>` : '';
+    tag = iso;
+    const name = m.venue_name?.trim() || '';
+    const adresse = m.venue_address?.trim() || '';
+    const routen = routenLinks(m);
+    const ziel = `../${encodeURIComponent(t.team_id)}/${beendet(m) ? `spiel/${encodeURIComponent(m.match_id)}` : '#naechstes'}`;
+    return `${kopf}<tr>
+      <td class="wann" data-label="Anwurf">${h(ZEIT.format(start))}<small>Uhr</small></td>
+      <td class="team" data-label="Mannschaft"><a href="${h(ziel)}">${h(t.label)}</a></td>
+      <td class="geg" data-label="Gegner">${m.is_home ? 'gegen' : 'bei'} ${h(gegnerVon(m))}<small>${h(m.competition_name)}</small></td>
+      <td class="ort" data-label="Spielort">${name || adresse ? `<b>${ico('pin')} ${name ? h(name) : h(adresse)}</b>${name && adresse ? `<small>${h(adresse)}</small>` : ''}${routen.length > 0 ? `<a href="${h(routen[0].href)}" target="_blank" rel="noopener noreferrer">${ico('route')} Route</a>` : ''}` : '<span class="muted">Halle noch nicht bekannt</span>'}</td>
+      <td class="status" data-label="Stand">${status(x)}</td>
+    </tr>`;
+  });
+  const titel = 'Nächste Anwürfe';
+  const beschreibung = spiele.length > 0
+    ? `Die nächsten ${spiele.length} Spiele aller Mannschaften, auch unter der Woche`
+    : 'Zurzeit ist kein Spiel angesetzt';
+  const logo = logoPfad(erste.team_id, `../${encodeURIComponent(erste.team_id)}/`);
+  const kopf = `<header class="hero start"><div class="wrap">
+  <a class="heim" href="../" aria-label="Zur Startseite">${logo ? `<img class="logo" src="${logo}" alt="">` : `<div class="initialen" aria-hidden="true">${h(initialenVon(erste.name))}</div>`}</a>
+  <div class="verein"><a class="heim titel" href="../"><span class="kicker">${h(clubName())}</span></a></div>
+  <div class="teaminfo">
+    <h1>${h(titel)}</h1>
+    <div class="sub">${h(beschreibung)}</div>
+  </div>
+</div></header>`;
+  const inhalt = `<p class="nur-seite"><a class="zurueck" href="../">← Zur Startseite</a></p>
+<section class="card" id="tafel">
+  ${spiele.length > 0 ? `<div class="tabelle-rahmen"><table class="heim tafel">
+    <thead><tr><th scope="col">Anwurf</th><th scope="col">Mannschaft</th><th scope="col">Gegner</th><th scope="col">Spielort</th><th scope="col">Stand</th></tr></thead>
+    <tbody>${zeilen.join('')}</tbody>
+  </table></div>` : '<p class="muted">Zurzeit ist kein Spiel angesetzt.</p>'}
+  <p class="row nur-seite" style="margin-top:14px"><a class="btn" href="./?monitor=1">Als Hallenmonitor anzeigen</a></p>
+</section>`;
+  const fuss = `<div>Daten von <a href="https://www.handball.net" target="_blank" rel="noopener noreferrer">handball.net</a>${opts.stand ? ` · Stand ${h(STAND.format(new Date(opts.stand)))} Uhr` : ''}. Spielzeiten in deutscher Ortszeit.</div>`;
+  return unterseiteHtml({
+    titel: `${titel} · ${clubName()}`, beschreibung, url: `${opts.baseUrl}tafel/`, ogBild: `${opts.baseUrl}${encodeURIComponent(erste.team_id)}/logo.png`, ogLogo: true,
+    dateien: `../${encodeURIComponent(erste.team_id)}/`, kopf, inhalt, fuss, breit: true,
+    refresh: opts.monitor ? MONITOR_REFRESH_S : undefined,
+    live: !opts.monitor && spiele.some(x => x.m.is_live || istLiveFenster(x.m, now)),
   });
 }

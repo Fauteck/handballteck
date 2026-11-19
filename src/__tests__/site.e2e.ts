@@ -32,6 +32,7 @@ const SEITEN = [
   ['start', '/'],
   ['team', `/${TEAM}/`],
   ['spiel', `/${TEAM}/spiel/m1`],
+  ['tafel', '/tafel/'],
 ] as const;
 
 /** Tap-Ziele unter 44 px, ohne Links im Fließtext (display:inline). */

@@ -529,7 +529,7 @@ function tageBis(ziel: Date, now: Date): number {
   const tag = (d: Date) => { const [y, m, t] = TAG_ISO.format(d).split('-').map(Number); return Date.UTC(y, m - 1, t) / 86400000; };
   return tag(ziel) - tag(now);
 }
-function inTagen(ziel: Date, now: Date): string {
+export function inTagen(ziel: Date, now: Date): string {
   const n = tageBis(ziel, now);
   if (n <= 0) return 'Heute';
   if (n === 1) return 'Morgen';

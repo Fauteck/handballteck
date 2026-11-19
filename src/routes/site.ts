@@ -26,7 +26,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import fs from 'node:fs';
 import { z } from 'zod';
 import { siteConfig, siteTeam, siteRootUrl, renderSiteHtml, renderStartManifest, renderFeedXml, renderSiteIcs, renderManifest, siteImagePng, wochenendePng, siteLogoPng, siteFontPath, istBildArt, siteCssText, fotoFreigegeben, istLiveFenster, SITE_SW_JS, SITE_APP_JS, SITE_THEME_JS, type SiteTeamLink } from '../lib/handballSite';
-import { renderSpielHtml, renderStartHtml } from '../lib/handballSitePages';
+import { renderSpielHtml, renderStartHtml, renderTafelHtml } from '../lib/handballSitePages';
 import { fotoJpeg } from '../lib/clubdesk';
 import { timingSafeEqual } from 'node:crypto';
 import { inhaltsHash } from '../lib/handballSiteAssets';
@@ -178,6 +178,30 @@ export async function siteRoutes(fastify: FastifyInstance) {
     reply
       .header('Content-Type', 'text/html; charset=utf-8')
       .header('Cache-Control', live ? 'public, max-age=15' : 'public, max-age=60')
+      .header('X-Robots-Tag', 'noindex, nofollow')
+      .header('ETag', s.etag);
+    if (schonDa(request, s.etag)) return reply.code(304).send();
+    return reply.send(s.html);
+  });
+
+  /**
+   * Die Abfahrtstafel: die nächsten Anwürfe aller Mannschaften, auch unter der
+   * Woche. `?monitor=1` ist der Hallenmonitor — er lädt sich jede Minute
+   * selbst neu, deshalb dasselbe Limit wie die Seiten im Live-Modus.
+   */
+  fastify.get('/tafel', limit(120), async (_request, reply) => {
+    if (!vereinDa()) return nichtDa(reply);
+    return reply.redirect('tafel/', 301);
+  });
+  fastify.get<{ Querystring: { monitor?: string } }>('/tafel/', limit(SEITEN_LIMIT), async (request, reply) => {
+    const sicht = seitenUebersicht();
+    if (!sicht.configured || !vereinDa()) return nichtDa(reply);
+    const monitor = request.query.monitor === '1';
+    const baseUrl = `${siteRootUrl()}/`;
+    const s = seite(sicht, `tafel|${baseUrl}|${monitor}`, () => renderTafelHtml(sicht.teams, { baseUrl, stand: sicht.updated_at, monitor }));
+    reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'public, max-age=30')
       .header('X-Robots-Tag', 'noindex, nofollow')
       .header('ETag', s.etag);
     if (schonDa(request, s.etag)) return reply.code(304).send();
