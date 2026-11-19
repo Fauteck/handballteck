@@ -955,3 +955,47 @@ describe('Gruppen, Vereinsname und Live-Stand', () => {
     expect(m.live!.items).toHaveLength(2);
   });
 });
+
+describe('Zahlen und Namen stimmen (Labels, maskierte Namen, Testspiele)', () => {
+  it('hängt bei gleichen Labels im selben Bereich die Liga an — auch bei von Hand gleich benannten', () => {
+    trageTeamEin('96254=D-Jugend (RTV), 96300=D-Jugend (RTV)');
+    legeSpiel({ competition_name: 'Kreisoberliga wD', championship_name: 'D-Jugend' });
+    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', competition_name: 'Kreisliga wD', championship_name: 'D-Jugend' });
+    expect(mod.handballOverview().teams.map(t => t.label)).toEqual(['D-Jugend (RTV) · Kreisoberliga wD', 'D-Jugend (RTV) · Kreisliga wD']);
+  });
+
+  it('nummeriert gleiche Labels in derselben Liga und lässt gleiche Labels verschiedener Bereiche in Ruhe', () => {
+    trageTeamEin('96254=E-Jugend, 96300=E-Jugend');
+    legeSpiel({ competition_name: 'Kreisliga E', championship_name: 'E-Jugend' });
+    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', competition_name: 'Kreisliga E', championship_name: 'E-Jugend' });
+    expect(mod.handballOverview().teams.map(t => t.label)).toEqual(['E-Jugend · Kreisliga E', 'E-Jugend · Kreisliga E (2)']);
+    dbRef.delete(schemaRef.handball_team_match).run();
+    trageTeamEin('96254=C-Jugend, 96300=C-Jugend');
+    legeSpiel({ competition_name: 'Kreisoberliga mC', championship_name: 'C-Jugend' });
+    legeSpiel({ id: '96300:m2', match_id: 'm2', team_id: '96300', home_id: '96300', competition_name: 'Oberliga weibliche Jugend C', championship_name: 'C-Jugend' });
+    expect(mod.handballOverview().teams.map(t => `${t.group}:${t.label}`)).toEqual(['jungen:C-Jugend', 'maedchen:C-Jugend']);
+  });
+
+  it('zeigt einen im Kader maskierten Namen als Rückennummer, nicht als Sternchen', () => {
+    trageTeamEin();
+    const zeile = (id: string, first: string, last: string, number: number | null) => dbRef.insert(schemaRef.handball_roster).values({
+      id: `${TEAM}:${id}`, team_id: TEAM, player_id: id, first_name: first, last_name: last, number, role: 'player', season_id: 2627, updated_at: new Date().toISOString(),
+    } as never).run();
+    zeile('p1', '*', '*', 7);
+    zeile('p2', 'David', 'Runge', 9);
+    zeile('p3', '*', '*', null);
+    expect(mod.rosterFor(TEAM).map(r => r.name)).toEqual(['Nr. 7', 'David Runge', 'Nr. ?']);
+  });
+
+  it('zählt Testspiele nicht in die Saisonbilanz — außer es gibt nur Testspiele', async () => {
+    const { textSaison, alsKlartext } = await import('../lib/handballBotTexts');
+    trageTeamEin();
+    const vor = (tage: number) => new Date(Date.now() - tage * 86_400_000).toISOString();
+    legeSpiel({ id: `${TEAM}:t1`, match_id: 't1', starts_at: vor(30), status: 'finished', competition_name: 'Testspiele Senioren m/w', score_home: 30, score_away: 10 });
+    expect(alsKlartext(textSaison(mod.handballOverview().teams[0]))[1]).toBe('1 Spiel: 1 Siege, 0 Unentschieden, 0 Niederlagen · 2:0 Punkte');
+    legeSpiel({ id: `${TEAM}:l1`, match_id: 'l1', starts_at: vor(7), status: 'finished', score_home: 20, score_away: 25 });
+    const zeilen = alsKlartext(textSaison(mod.handballOverview().teams[0]));
+    expect(zeilen[1]).toBe('1 Spiel: 0 Siege, 0 Unentschieden, 1 Niederlagen · 0:2 Punkte · ohne 1 Testspiel');
+    expect(zeilen.join(' | ')).not.toContain('Höchster Sieg');
+  });
+});

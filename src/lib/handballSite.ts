@@ -722,17 +722,107 @@ export function torfolgeText(m: HandballMatchView): string {
   return `<p class="torfolge">${teile.join(' · ')}</p>`;
 }
 
+/** Ab so vielen Toren in Folge ist es ein Lauf, der einen Satz wert ist. */
+const LAUF_AB = 4;
+/** Unter so vielen Toren erzählt die Torfolge nichts (abgebrochen, lückenhaft eingetragen). */
+const GESCHICHTE_AB_TOREN = 6;
+
+/**
+ * Das Spiel in höchstens drei Sätzen, gerechnet aus der Torfolge — ohne
+ * Namen und ohne fremden Dienst: der längste Lauf, wann die Führung zuletzt
+ * wechselte, und wie die letzten zehn Minuten ausgingen. Stände stehen wie
+ * überall Heim:Gast. Leer ohne (brauchbare) Torfolge.
+ */
+export function spielGeschichte(m: HandballMatchView): string[] {
+  const tore = (m.events ?? []).filter(e => e.goal);
+  if (tore.length < GESCHICHTE_AB_TOREN) return [];
+  const eigen = m.is_home ? m.home_name : m.away_name;
+  const gegner = gegnerVon(m);
+  const wer = (eigenes: boolean) => (eigenes ? eigen : gegner);
+  const min = (e: { minute: number | null }) => (e.minute !== null ? Math.max(1, Math.ceil(e.minute)) : null);
+  // Das Tor gehört der Seite, deren Stand gestiegen ist; `diff` ist der Vorsprung der eigenen Mannschaft danach.
+  let vorher = { home: 0, away: 0 };
+  const folge = tore.map(e => {
+    const heimTor = e.home > vorher.home;
+    const davor = vorher;
+    vorher = { home: e.home, away: e.away };
+    return { e, davor, eigenes: m.is_home ? heimTor : !heimTor, diff: m.is_home ? e.home - e.away : e.away - e.home };
+  });
+  const saetze: string[] = [];
+
+  // 1. Der längste Lauf.
+  let bester = { von: 0, bis: 0 };
+  for (let i = 0, start = 0; i < folge.length; i++) {
+    if (i > 0 && folge[i].eigenes !== folge[i - 1].eigenes) start = i;
+    if (i - start > bester.bis - bester.von) bester = { von: start, bis: i };
+  }
+  const laenge = bester.bis - bester.von + 1;
+  if (laenge >= LAUF_AB) {
+    const a = folge[bester.von]; const b = folge[bester.bis];
+    const zeit = min(a.e) !== null && min(b.e) !== null ? ` zwischen der ${min(a.e)}. und ${min(b.e)}. Minute` : '';
+    saetze.push(`Längster Lauf: ${laenge} Tore in Folge für ${wer(a.eigenes)}${zeit}, von ${a.davor.home}:${a.davor.away} auf ${b.e.home}:${b.e.away}.`);
+  }
+
+  // 2. Die Führung: wie oft sie wechselte und seit wann der Sieger vorn lag.
+  let wechsel = 0; let seite = 0;
+  for (const f of folge) {
+    const s = Math.sign(f.diff);
+    if (s !== 0 && seite !== 0 && s !== seite) wechsel++;
+    if (s !== 0) seite = s;
+  }
+  const wechselSatz = wechsel > 0 ? `Die Führung wechselte ${wechsel === 1 ? 'einmal' : `${wechsel}-mal`}. ` : '';
+  const letztes = folge[folge.length - 1];
+  const sieger = Math.sign(letztes.diff);
+  if (sieger === 0) {
+    const zeit = min(letztes.e) !== null ? ` in der ${min(letztes.e)}. Minute` : '';
+    saetze.push(`${wechselSatz}Der Ausgleich zum ${letztes.e.home}:${letztes.e.away} fiel${zeit}.`);
+  } else {
+    // Das letzte Tor, nach dem der Sieger nicht vorn lag — das Tor danach war die Führung, die hielt.
+    let zuletztNichtVorn = -1;
+    folge.forEach((f, i) => { if (Math.sign(f.diff) !== sieger) zuletztNichtVorn = i; });
+    const entscheidend = folge[zuletztNichtVorn + 1];
+    if (zuletztNichtVorn === -1) saetze.push(`${wer(sieger > 0)} lag vom ersten Tor an vorn.`);
+    else if (entscheidend) {
+      const zeit = min(entscheidend.e) !== null ? ` in der ${min(entscheidend.e)}. Minute` : '';
+      saetze.push(`${wechselSatz}${wer(sieger > 0)} ging${zeit} mit ${entscheidend.e.home}:${entscheidend.e.away} in Führung und gab sie nicht mehr ab.`);
+    }
+  }
+
+  // 3. Die letzten zehn Minuten — nur, wenn jedes Tor eine Spielminute trägt.
+  if (folge.every(f => f.e.minute !== null)) {
+    const ende = Math.max(...folge.map(f => f.e.minute as number));
+    const dauer = [40, 50, 60].find(d => d >= ende);
+    if (dauer) {
+      const schluss = folge.filter(f => (f.e.minute as number) > dauer - 10);
+      const eigene = schluss.filter(f => f.eigenes).length;
+      const fremde = schluss.length - eigene;
+      if (eigene !== fremde) saetze.push(`Die letzten zehn Minuten gingen mit ${Math.max(eigene, fremde)}:${Math.min(eigene, fremde)} Toren an ${wer(eigene > fremde)}.`);
+      else if (schluss.length > 0) saetze.push(`Die letzten zehn Minuten endeten ${eigene}:${fremde}.`);
+    }
+  }
+  return saetze;
+}
+
+/** Die Spielgeschichte als Liste unter der Kurve — leer, wenn es nichts zu erzählen gibt. */
+export function spielGeschichteHtml(m: HandballMatchView): string {
+  const saetze = spielGeschichte(m);
+  return saetze.length > 0 ? `<ul class="lines geschichte">${saetze.map(s => `<li>${h(s)}</li>`).join('')}</ul>` : '';
+}
+
 /**
  * Der Spielverlauf zu einem beendeten Spiel, aufklappbar. Er kommt ohne Namen
  * aus und steht immer da. Den Spielbericht der Quelle zeigt die Seite nicht
  * mehr — es bleibt der Verweis auf den Spielberichtsbogen (PDF). Leer, wenn
  * es keine Torfolge gibt. Immer zugeklappt, auch unter dem letzten Spiel.
+ * Die Kurve und das Spiel in drei Sätzen (`spielGeschichte`): Die Torfolge
+ * als Text (bis zu 60 Zwischenstände je Spiel) steht auf der Spielseite,
+ * nicht 25-mal im Spielplan.
  */
 function spielDetailsHtml(m: HandballMatchView): string {
   const verlauf = spielverlaufSvg(m);
   if (!verlauf) return '';
   return `<details class="more"><summary>Spielverlauf</summary>
-    <div class="verlauf">${verlauf}</div>${torfolgeText(m)}
+    <div class="verlauf">${verlauf}</div>${spielGeschichteHtml(m)}
   </details>`;
 }
 
