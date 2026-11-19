@@ -6,7 +6,7 @@
 
 import { vervollstaendigePalette } from './handballTableImage';
 import { readPalette, vereinsName, playerGames, changesFor } from './handballTeam';
-import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad, inTagen } from './handballSite';
+import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, spielGeschichteHtml, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad, inTagen } from './handballSite';
 import { inhaltsHash, SITE_THEME_JS, SITE_APP_JS } from './handballSiteAssets';
 import { type HandballTeamView, HANDBALL_GROUPS } from './handballSicht';
 import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
@@ -125,7 +125,7 @@ export function renderSpielHtml(team: HandballTeamView, matchId: string, opts: S
 </section>
 ${verlauf ? `<section class="card" id="verlauf">
   <h2>Spielverlauf</h2>
-  <div class="verlauf">${verlauf}</div>${torfolgeText(m)}
+  <div class="verlauf">${verlauf}</div>${spielGeschichteHtml(m)}${torfolgeText(m)}
 </section>` : ''}
 ${schuetzen.length > 0 ? `<section class="card" id="schuetzen">
   <h2>Torschützen</h2>

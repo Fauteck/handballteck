@@ -1061,9 +1061,11 @@ export function rosterFor(teamId: string): HandballRosterName[] {
     .map(r => {
       const m = merkmale.get(r.player_id);
       const number = r.number ?? m?.number ?? null;
+      // Die Quelle maskiert manche Namen auch im Kader („*" „*") — dann zählt die Nummer, nicht „* *".
+      const klarname = `${r.first_name} ${r.last_name}`.replace(/\*+/g, ' ').replace(/\s+/g, ' ').trim();
       return {
         playerId: r.player_id,
-        name: `${r.first_name} ${r.last_name}`.trim() || `Nr. ${number ?? '?'}`,
+        name: klarname || `Nr. ${number ?? '?'}`,
         number,
         numberSource: r.number !== null ? 'roster' as const : m ? 'lineup' as const : null,
         goalkeeper: m?.goalkeeper ?? false,

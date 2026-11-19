@@ -226,7 +226,9 @@ describe('Handball-Microsite', () => {
       expect(html).toContain('<summary>Spielverlauf</summary>');
       expect(html).toContain('aria-label="Spielverlauf: Führung je Spielminute"');
       expect(html).toContain('HZ 12:10');
-      expect(html).toContain('<b>1:1</b> (4.)');
+      // Die Torfolge als Text steht nur auf der Spielseite, nicht im Spielplan.
+      expect(html).not.toContain('class="torfolge"');
+      expect((await get(`/${TEAM}/spiel/m2`)).body).toContain('<b>1:1</b> (4.)');
       expect(html).not.toContain('Eskil Lieck traf');
       setConfig({ site_enabled: 'true' });
       html = (await get(`/${TEAM}/`)).body;

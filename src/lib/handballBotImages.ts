@@ -12,7 +12,7 @@ import {
 import { siteUrl, publicUrl } from '../config';
 import { rosterFor, playerStats, logoDataUri, playerMatchLog, playerGames, positionHistory, tendenzReferenz, readPalette, saisonVorbei, type HandballPlayerStats } from './handballTeam';
 import { type HandballMatchView, type HandballTeamView, type HandballStandingsView } from './handballSicht';
-import { aktuellesSpiel } from './handballSicht';
+import { aktuellesSpiel, ohneTestspiele } from './handballSicht';
 import { DATUM, DATUM_KURZ, ZEIT, datum, gegnerId, gegnerVon } from './handballBotTexts';
 
 /**
@@ -160,7 +160,7 @@ export function saisonName(seasonId: number | undefined): string | null {
  * Spieltagen auf Platz 1 stand bis zum 27.09.2026 „Meister" auf der Karte.
  */
 export function bildSaison(team: HandballTeamView, now = new Date()): string | null {
-  const gespielt = team.matches.filter(m => (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null);
+  const gespielt = ohneTestspiele(team.matches.filter(m => (m.status === 'finished' || m.rated) && m.score_home !== null && m.score_away !== null));
   if (gespielt.length === 0) return null;
   const eigene = (m: HandballMatchView) => (m.is_home ? m.score_home! : m.score_away!);
   const andere = (m: HandballMatchView) => (m.is_home ? m.score_away! : m.score_home!);
