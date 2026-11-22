@@ -895,7 +895,7 @@ async function antwortAufBefehl(text: string, chatId: string, name: string | nul
       const jetzt = Date.now();
       let gefunden = false;
       for (const team of teams) {
-        const laufend = team.matches.find(m => m.status === 'live'
+        const laufend = team.matches.find(m => (m.status === 'live' && jetzt - Date.parse(m.starts_at) <= LIVE_WINDOW_MS)
           || (m.status === 'scheduled' && jetzt >= Date.parse(m.starts_at) && jetzt - Date.parse(m.starts_at) <= LIVE_WINDOW_MS));
         if (!laufend) continue;
         gefunden = true;

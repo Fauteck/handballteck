@@ -434,8 +434,10 @@ function baueUebersicht(): HandballOverview {
     const name = anzeigeName(teamId, quellname);
     // „Nächstes" schließt ein laufendes Spiel ein — und lässt Verlegtes ohne
     // neuen Termin außen vor, dessen altes Datum sonst als nächstes stünde.
+    // Ein Spiel, das die Quelle nie abschließt, fällt nach derselben Frist
+    // heraus wie ein angesetztes, statt für immer „läuft“ zu bleiben.
     const naechstes = meine.find(r => (r.status === 'scheduled' || r.status === 'live')
-      && (r.status === 'live' || Date.parse(r.starts_at) + NACHFASSEN_BIS_MS > jetzt));
+      && Date.parse(r.starts_at) + NACHFASSEN_BIS_MS > jetzt);
     const phasen = [...new Set(meine.map(r => r.phase_id).filter((p): p is number => p !== null))];
     const standings = tabellen
       .filter(t => phasen.includes(t.phase_id))

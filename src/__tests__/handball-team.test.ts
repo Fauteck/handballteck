@@ -930,7 +930,9 @@ describe('Gruppen, Vereinsname und Live-Stand', () => {
 
   it('gilt ein angesetztes Spiel nach Anwurf als laufend — bis zur Frist', () => {
     const jetzt = Date.parse('2026-10-11T15:00:00Z');
-    expect(mod.laeuftGerade('live', '2026-10-11T10:00:00Z', jetzt)).toBe(true);
+    expect(mod.laeuftGerade('live', '2026-10-11T13:00:00Z', jetzt)).toBe(true);
+    // Lässt die Quelle ein Spiel stundenlang „laufen“, endet „live“ nach derselben Frist (Rückmeldung 2026-11-22).
+    expect(mod.laeuftGerade('live', '2026-10-11T11:00:00Z', jetzt)).toBe(false);
     expect(mod.laeuftGerade('scheduled', '2026-10-11T14:30:00Z', jetzt)).toBe(true);
     expect(mod.laeuftGerade('scheduled', '2026-10-11T15:30:00Z', jetzt)).toBe(false);
     expect(mod.laeuftGerade('scheduled', '2026-10-11T11:00:00Z', jetzt)).toBe(false);
