@@ -841,6 +841,28 @@ describe('Handball-Microsite', () => {
     expect(letztesSpielWochenende([], { fr: '2026-10-23', sa: '2026-10-24', so: '2026-10-25' })).toEqual({ fr: '2026-10-16', sa: '2026-10-17', so: '2026-10-18' });
   });
 
+  it('zeigt ab Freitag die Ergebnisse des laufenden Wochenendes, sobald eins steht', async () => {
+    const { ergebnisWochenende } = await import('../lib/handballSite');
+    const { handballOverview } = await import('../lib/handballSicht');
+    const vorlage = handballOverview().teams[0].matches[0];
+    const spiel = (start: string, status: string, a: number | null = null, b: number | null = null) =>
+      ({ ...vorlage, starts_at: start, status, score_home: a, score_away: b, rated: false });
+    const letztes = { fr: '2026-11-13', sa: '2026-11-14', so: '2026-11-15' };
+    const dieses = { fr: '2026-11-20', sa: '2026-11-21', so: '2026-11-22' };
+    const vorwoche = spiel('2026-11-14T15:00:00+01:00', 'finished', 25, 20);
+    const samstag = spiel('2026-11-21T15:00:00+01:00', 'finished', 12, 32);
+    const sonntag = spiel('2026-11-22T11:00:00+01:00', 'scheduled');
+    const alle = [vorwoche, samstag, sonntag];
+    // Unter der Woche: das letzte Wochenende, auch wenn das kommende schon angesetzt ist.
+    expect(ergebnisWochenende([vorwoche, spiel('2026-11-21T15:00:00+01:00', 'scheduled')], new Date('2026-11-19T10:00:00+01:00'))).toEqual(letztes);
+    // Samstagmorgen, noch kein Ergebnis: weiter das letzte.
+    expect(ergebnisWochenende([vorwoche, spiel('2026-11-21T15:00:00+01:00', 'scheduled'), sonntag], new Date('2026-11-21T09:00:00+01:00'))).toEqual(letztes);
+    // Sonntag mit dem Ergebnis von gestern: dieses Wochenende.
+    expect(ergebnisWochenende(alle, new Date('2026-11-22T10:00:00+01:00'))).toEqual(dieses);
+    // Montag danach: dasselbe Wochenende ist jetzt das letzte.
+    expect(ergebnisWochenende(alle, new Date('2026-11-23T10:00:00+01:00'))).toEqual(dieses);
+  });
+
   it('zeigt auf der Startseite Heim- und Auswärtsspiele von Freitag bis Sonntag in sortierbaren Tabellen mit Halle', async () => {
     const { renderStartHtml } = await import('../lib/handballSitePages');
     const { handballOverview } = await import('../lib/handballSicht');
@@ -1107,6 +1129,10 @@ describe('Handball-Microsite', () => {
         const wt = jetzt.getUTCDay();
         const samstagVorWoche = new Date(Date.UTC(jetzt.getUTCFullYear(), jetzt.getUTCMonth(), jetzt.getUTCDate() + (wt === 0 ? -1 : 6 - wt) - 7, 12)).toISOString();
         db.insert(schema.handball_team_match).values(heuteSpiel('lw1', samstagVorWoche, 'finished', 27, 27) as never).run();
+        // Ab Freitag zeigt der Kasten das laufende Wochenende, sobald dort ein Ergebnis steht — die Vorlage hat
+        // je nach Wochentag eins. Die Uhr steht deshalb auf dem Donnerstag davor, dann ist es sicher das letzte.
+        const { naechstesWochenende, verschiebeTag } = await import('../lib/handballSite');
+        vi.setSystemTime(new Date(`${verschiebeTag(naechstesWochenende(jetzt).fr, -1)}T10:00:00+01:00`));
         const mitLetztem = (await get('/')).body;
         expect(mitLetztem).toContain('id="letztes-wochenende"');
         expect(mitLetztem).toContain('1 Unentschieden');

@@ -6,7 +6,7 @@
 
 import { vervollstaendigePalette } from './handballTableImage';
 import { readPalette, vereinsName, playerGames, changesFor } from './handballTeam';
-import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, spielGeschichteHtml, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, letztesSpielWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad, inTagen } from './handballSite';
+import { h, ico, siteCssText, betreiberZeile, type SiteTeamLink, type SiteRenderOptions, routenLinks, statusWort, DATUM_LANG, ZEIT, spielverlaufSvg, spielGeschichteHtml, heroHtml, teilenHtml, torfolgeText, STAND, TAG_ISO, standHeimGast, gegnerVon, VIBRATION_KNOPF, DATUM_KURZ, SITE_TITEL, punkteText, verpassenHtml, gruppenKaesten, spielWochenende, naechstesWochenende, ergebnisWochenende, tagMonat, klappe, verschiebeTag, istLiveFenster, sprungleisteHtml, logoPfad, inTagen } from './handballSite';
 import { inhaltsHash, SITE_THEME_JS, SITE_APP_JS } from './handballSiteAssets';
 import { type HandballTeamView, HANDBALL_GROUPS } from './handballSicht';
 import { handballBotLink, getHandballBotUsername } from './handballBotBasis';
@@ -259,8 +259,8 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   }).join('')}</ul>
 </section>` : '';
 
-  // Letztes Wochenende: die Ergebnisse aller Mannschaften, damit man nachlesen kann, wie es war.
-  const lw = letztesSpielWochenende(alle.map(x => x.m), kommendes);
+  // Ergebnisse aller Mannschaften: ab Freitag die des laufenden Wochenendes, sobald eins steht, sonst die des letzten.
+  const lw = ergebnisWochenende(alle.map(x => x.m), now);
   const letzteTage = [lw.fr, lw.sa, lw.so];
   const letzte = alle
     .filter(x => (x.m.status === 'finished' || x.m.rated) && x.m.score_home !== null && x.m.score_away !== null
@@ -272,7 +272,7 @@ export function renderStartHtml(teams: HandballTeamView[], opts: { teams: SiteTe
   const bilanz = [siege ? `${siege} Sieg${siege === 1 ? '' : 'e'}` : '', remis ? `${remis} Unentschieden` : '', niederlagen ? `${niederlagen} Niederlage${niederlagen === 1 ? '' : 'n'}` : ''].filter(Boolean).join(' · ');
   const kLetzte = klappe('ergebnisse', `${letzte.length} Spiel${letzte.length === 1 ? '' : 'e'}: ${bilanz}`);
   const letzteHtml = letzte.length > 0 ? `<section class="card" id="letztes-wochenende"${kLetzte.attr}>
-  <h2>Ergebnisse <span class="muted small">${lw.fr === verschiebeTag(kommendes.fr, -7) ? 'letztes Wochenende' : 'letzter Spieltag'} · ${tagMonat(letzteTage[0]!)}–${tagMonat(letzteTage[2]!)}</span></h2>
+  <h2>Ergebnisse <span class="muted small">${lw.fr === kommendes.fr ? 'dieses Wochenende' : lw.fr === verschiebeTag(kommendes.fr, -7) ? 'letztes Wochenende' : 'letzter Spieltag'} · ${tagMonat(letzteTage[0]!)}–${tagMonat(letzteTage[2]!)}</span></h2>
   ${kLetzte.zeile}
   <p class="muted small bilanz">${h(bilanz)}</p>
   <ul class="plan">${letzte.map(({ t, m }) => `<li>

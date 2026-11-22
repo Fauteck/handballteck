@@ -147,7 +147,7 @@ export function standHeimGast(m: HandballMatchView): string | null {
 /** Statuswort auf Deutsch — die Quelle mischt Deutsch und Spanisch. */
 export function statusWort(m: HandballMatchView): string | null {
   switch (m.status) {
-    case 'live': return 'Live';
+    case 'live': return m.is_live ? 'Live' : null;
     case 'scheduled': if (m.is_live) return 'Live'; return m.rated ? 'Gewertet' : null;
     case 'postponed': return 'Verlegt';
     case 'cancelled': return 'Abgesetzt';
@@ -240,7 +240,9 @@ export function spielWochenende(matches: HandballMatchView[], now: Date): Wochen
 /**
  * Das Wochenende für „Ergebnisse": das letzte vor `vor` mit einem gewerteten
  * Spiel — nach den Ferien also das letzte gespielte, nicht ein leeres. Ohne
- * Ergebnis das Wochenende eine Woche vor `vor`.
+ * Ergebnis das Wochenende eine Woche vor `vor`. Die Startseite übergibt ab
+ * Freitag das Wochenende danach, damit das laufende mit seinem ersten
+ * Ergebnis drankommt (siehe `ergebnisWochenende`).
  */
 export function letztesSpielWochenende(matches: HandballMatchView[], vor: Wochenende): Wochenende {
   const letztes = matches
@@ -248,6 +250,20 @@ export function letztesSpielWochenende(matches: HandballMatchView[], vor: Wochen
       && TAG_ISO.format(new Date(m.starts_at)) < vor.fr && wochenendeVon(m) !== null)
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))[0];
   return letztes ? wochenendeVon(letztes)! : { fr: verschiebeTag(vor.fr, -7), sa: verschiebeTag(vor.sa, -7), so: verschiebeTag(vor.so, -7) };
+}
+
+/**
+ * Das Wochenende, dessen Ergebnisse die Startseite zeigt. Stichtag ist der
+ * Freitag: Ab dann zählt das laufende Wochenende, sobald dort ein Ergebnis
+ * steht — samstags sieht man also schon die Spiele vom Freitag, sonntags die
+ * vom Samstag. Vor dem ersten Ergebnis bleibt es beim letzten gespielten,
+ * damit der Kasten nicht leer ist. Montag bis Donnerstag wie bisher das letzte.
+ */
+export function ergebnisWochenende(matches: HandballMatchView[], now: Date): Wochenende {
+  const kommendes = naechstesWochenende(now);
+  if (TAG_ISO.format(now) < kommendes.fr) return letztesSpielWochenende(matches, kommendes);
+  const danach = { fr: verschiebeTag(kommendes.fr, 7), sa: verschiebeTag(kommendes.sa, 7), so: verschiebeTag(kommendes.so, 7) };
+  return letztesSpielWochenende(matches, danach);
 }
 
 /** Wie lange vor dem Anwurf sich die Seite schon selbst aktualisiert, damit sie beim Anpfiff von allein auf Live springt. */

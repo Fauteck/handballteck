@@ -114,11 +114,14 @@ export function vereinsName(quellname: string): string {
  * nicht, gilt ein angesetztes Spiel ab Anwurf als laufend — bis zur Frist, die
  * auch der Live-Takt nutzt. Eine Seite, die in dieser Zeit „Nächstes Spiel"
  * zeigt, wäre falsch, und ein Zwischenstand lässt sich nachreichen.
+ * Dieselbe Frist gilt für `live`: handball.net lässt ein Spiel manchmal
+ * stundenlang „laufen“, wenn niemand den Bericht abschließt — ein Spiel um
+ * 15 Uhr stand so um 19 Uhr noch im Live-Kasten (Rückmeldung 2026-11-22).
  */
 export function laeuftGerade(status: string, startsAt: string, now = Date.now()): boolean {
-  if (status === 'live') return true;
-  if (status !== 'scheduled' && status !== 'other') return false;
   const seit = now - Date.parse(startsAt);
+  if (status === 'live') return seit < LIVE_BIS_MS;
+  if (status !== 'scheduled' && status !== 'other') return false;
   return seit >= 0 && seit < LIVE_BIS_MS;
 }
 
